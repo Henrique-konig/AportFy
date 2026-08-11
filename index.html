@@ -579,9 +579,13 @@
               class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="transaction-date">Data</label>
-            <input required type="date" id="transaction-date"
-              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="transaction-date-trigger">Data</label>
+            <button type="button" id="transaction-date-trigger"
+              class="date-trigger w-full flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+              <span id="transaction-date-label" class="text-slate-600">Selecionar data</span>
+              <i class="ph-bold ph-calendar-blank text-slate-500 shrink-0"></i>
+            </button>
+            <input type="hidden" id="transaction-date" />
           </div>
         </div>
 
@@ -646,9 +650,13 @@
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="goal-deadline">Prazo (opcional)</label>
-          <input type="date" id="goal-deadline"
-            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="goal-deadline-trigger">Prazo (opcional)</label>
+          <button type="button" id="goal-deadline-trigger"
+            class="date-trigger w-full flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <span id="goal-deadline-label" class="text-slate-600">Sem prazo definido</span>
+            <i class="ph-bold ph-calendar-blank text-slate-500 shrink-0"></i>
+          </button>
+          <input type="hidden" id="goal-deadline" />
         </div>
 
         <button type="submit"

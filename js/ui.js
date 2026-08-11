@@ -8,6 +8,8 @@
 // conecte as ações de UI às operações reais (auth.js / db.js).
 // =========================================================
 
+import { attachDatePicker, setDatePickerValue, closeDatePicker } from "./datepicker.js";
+
 /* ---------------------------------------------------------------
    Referências de elementos
 --------------------------------------------------------------- */
@@ -974,6 +976,8 @@ export function onGoalFormSubmit(handler) {
   goalSubmitHandler = handler;
 }
 
+const GOAL_DEADLINE_PLACEHOLDER = "Sem prazo definido";
+
 export function openGoalModal(goal = null) {
   el.goalForm.reset();
   if (goal) {
@@ -982,11 +986,12 @@ export function openGoalModal(goal = null) {
     el.goalName.value = goal.name;
     el.goalCurrent.value = goal.currentAmount;
     el.goalTarget.value = goal.targetAmount;
-    el.goalDeadline.value = goal.deadline || "";
+    setDatePickerValue("goal-deadline", "goal-deadline-label", goal.deadline || null, GOAL_DEADLINE_PLACEHOLDER);
   } else {
     el.goalModalTitle.textContent = "Nova Meta";
     el.goalId.value = "";
     el.goalCurrent.value = "0";
+    setDatePickerValue("goal-deadline", "goal-deadline-label", null, GOAL_DEADLINE_PLACEHOLDER);
   }
   el.goalModal.classList.remove("hidden");
   el.goalModal.classList.add("flex");
@@ -995,6 +1000,7 @@ export function openGoalModal(goal = null) {
 export function closeGoalModal() {
   el.goalModal.classList.add("hidden");
   el.goalModal.classList.remove("flex");
+  closeDatePicker();
 }
 
 export function bindGoalModal() {
@@ -1036,6 +1042,8 @@ function setTransactionType(type) {
   });
 }
 
+const TRANSACTION_DATE_PLACEHOLDER = "Selecionar data";
+
 export function openTransactionModal(transaction = null) {
   el.transactionForm.reset();
   if (transaction) {
@@ -1043,13 +1051,13 @@ export function openTransactionModal(transaction = null) {
     el.transactionId.value = transaction.id;
     el.transactionDesc.value = transaction.description;
     el.transactionAmount.value = transaction.amount;
-    el.transactionDate.value = transaction.date;
+    setDatePickerValue("transaction-date", "transaction-date-label", transaction.date, TRANSACTION_DATE_PLACEHOLDER);
     el.transactionCategory.value = transaction.category;
     setTransactionType(transaction.type);
   } else {
     el.modalTitle.textContent = "Nova Transação";
     el.transactionId.value = "";
-    el.transactionDate.value = todayISO();
+    setDatePickerValue("transaction-date", "transaction-date-label", todayISO(), TRANSACTION_DATE_PLACEHOLDER);
     setTransactionType("income");
   }
   el.transactionModal.classList.remove("hidden");
@@ -1059,6 +1067,7 @@ export function openTransactionModal(transaction = null) {
 export function closeTransactionModal() {
   el.transactionModal.classList.add("hidden");
   el.transactionModal.classList.remove("flex");
+  closeDatePicker();
 }
 
 export function bindTransactionModal() {
@@ -1072,6 +1081,10 @@ export function bindTransactionModal() {
 
   el.transactionForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!el.transactionDate.value) {
+      showToast("Selecione uma data para a transação.", "error");
+      return;
+    }
     const data = {
       description: el.transactionDesc.value.trim(),
       amount: parseFloat(el.transactionAmount.value),
@@ -1081,6 +1094,24 @@ export function bindTransactionModal() {
     };
     const editingId = el.transactionId.value || null;
     transactionSubmitHandler?.(data, editingId);
+  });
+}
+
+/* ---------------------------------------------------------------
+   Calendário customizado (datepicker.js)
+--------------------------------------------------------------- */
+export function bindDatePickers() {
+  attachDatePicker({
+    triggerId: "transaction-date-trigger",
+    labelId: "transaction-date-label",
+    hiddenInputId: "transaction-date",
+    placeholder: TRANSACTION_DATE_PLACEHOLDER,
+  });
+  attachDatePicker({
+    triggerId: "goal-deadline-trigger",
+    labelId: "goal-deadline-label",
+    hiddenInputId: "goal-deadline",
+    placeholder: GOAL_DEADLINE_PLACEHOLDER,
   });
 }
 

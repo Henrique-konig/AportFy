@@ -47,6 +47,7 @@ function initUIBindings() {
   ui.bindTransactionModal();
   ui.bindGoalModal();
   ui.bindDeleteModal();
+  ui.bindDatePickers();
   ui.bindSearch();
   ui.bindMobileSearch();
   ui.bindTransactionFilters();
