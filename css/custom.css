@@ -1,0 +1,370 @@
+/* =========================================================
+   EcoFy — Custom CSS
+   Animações, scrollbars, glassmorphism e efeitos de tema.
+   ========================================================= */
+
+/* ---------- Base ---------- */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-image:
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.06) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* ---------- Glassmorphism ---------- */
+.glass-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(71, 85, 105, 0.8);
+}
+
+/* ---------- Ambient glow orbs ---------- */
+.glow-orb {
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.22;
+  transition: opacity 0.6s ease, background 0.6s ease;
+}
+
+.glow-orb-blue {
+  top: -120px;
+  left: -80px;
+  background: #3b82f6;
+}
+
+.glow-orb-purple {
+  bottom: -140px;
+  right: -100px;
+  background: #a855f7;
+}
+
+/* ---------- Custom Scrollbar ---------- */
+.custom-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 999px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+}
+
+/* ---------- Keyframe animations ---------- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.35s ease-out forwards;
+}
+
+#notif-dot {
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+/* ---------- Sidebar ---------- */
+#sidebar.collapsed {
+  width: 5.5rem;
+}
+
+#sidebar.collapsed .sidebar-label {
+  display: none;
+}
+
+#sidebar-collapse-btn i {
+  transition: transform 0.3s ease;
+}
+
+#sidebar.collapsed #sidebar-collapse-btn i {
+  transform: rotate(180deg);
+}
+
+/* ---------- Nav items ---------- */
+.nav-item {
+  color: #94a3b8;
+}
+
+.nav-item:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #e2e8f0;
+}
+
+.nav-item.active-nav {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(59, 130, 246, 0.05));
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+body.mode-couple .nav-item.active-nav {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.05));
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.1);
+}
+
+/* ---------- Mode toggle ---------- */
+.mode-btn {
+  color: #64748b;
+}
+
+.mode-btn[data-mode="personal"].active-mode,
+.mode-btn[data-mode="couple"].active-mode {
+  color: #fff;
+}
+
+body.mode-couple #mode-toggle-pill {
+  transform: translateX(88px);
+  background: linear-gradient(to right, #9333ea, #a855f7);
+  box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.5);
+}
+
+/* ---------- KPI cards ---------- */
+.kpi-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.kpi-card:hover .kpi-icon {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.kpi-icon {
+  transition: transform 0.3s ease;
+}
+
+/* ---------- Mode-reactive accents (personal = blue, couple = purple) ---------- */
+body.mode-couple #kpi-goals-bar,
+body.mode-couple #sidebar-logo-badge {
+  background: linear-gradient(135deg, #9333ea, #a855f7) !important;
+  box-shadow: 0 10px 20px -5px rgba(168, 85, 247, 0.4) !important;
+}
+
+body.mode-couple #new-transaction-btn {
+  background: linear-gradient(to right, #9333ea, #a855f7) !important;
+}
+
+body.mode-couple #new-transaction-btn:hover {
+  box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.5) !important;
+}
+
+body.mode-couple #mode-badge {
+  background: rgba(168, 85, 247, 0.1) !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+  color: #c084fc !important;
+}
+
+body.mode-couple #notif-dot {
+  background: #a855f7 !important;
+}
+
+body.mode-couple input:focus,
+body.mode-couple select:focus {
+  --tw-ring-color: rgba(168, 85, 247, 0.6) !important;
+  border-color: #a855f7 !important;
+}
+
+/* ---------- Transactions table ---------- */
+#transactions-tbody tr {
+  transition: background 0.2s ease, transform 0.15s ease;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.6);
+}
+
+#transactions-tbody tr:hover {
+  background: rgba(30, 41, 59, 0.45);
+}
+
+#transactions-tbody tr:last-child {
+  border-bottom: none;
+}
+
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.row-action-btn {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.row-action-btn:hover {
+  background: rgba(51, 65, 85, 0.6);
+  color: #e2e8f0;
+}
+
+.row-action-btn.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+/* ---------- Type toggle buttons (modal) ---------- */
+.type-btn {
+  color: #94a3b8;
+}
+
+.type-btn.income-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.4);
+}
+
+.type-btn.expense-active {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4);
+}
+
+/* ---------- Loading skeleton shimmer ---------- */
+.skeleton {
+  background: linear-gradient(90deg, rgba(30,41,59,0.6) 25%, rgba(51,65,85,0.6) 50%, rgba(30,41,59,0.6) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 0.5rem;
+}
+
+/* ---------- Utility animation classes referenced in HTML ---------- */
+.animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+.animate-slide-up { animation: slideUp 0.6s ease-out forwards; }
+.animate-scale-in { animation: scaleIn 0.3s ease-out forwards; }
+
+/* ---------- Responsive: collapse sidebar on small screens ---------- */
+@media (max-width: 1023px) {
+  #sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    transform: translateX(-100%);
+  }
+
+  #sidebar.mobile-open {
+    transform: translateX(0);
+  }
+}
+
+/* ---------- Full transactions table (view: Transações) ---------- */
+#transactions-full-tbody tr {
+  transition: background 0.2s ease;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.6);
+}
+
+#transactions-full-tbody tr:hover {
+  background: rgba(30, 41, 59, 0.45);
+}
+
+#transactions-full-tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* ---------- View sections ---------- */
+.view-section {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* ---------- Transaction type filter (view: Transações) ---------- */
+.txn-filter-btn {
+  color: #94a3b8;
+}
+
+.txn-filter-btn.active-filter {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+
+body.mode-couple .txn-filter-btn.active-filter {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.35);
+}
+
+/* ---------- Goal cards (view: Metas) ---------- */
+.goal-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.goal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.goal-progress-bar {
+  transition: width 0.7s ease;
+}
+
+/* ---------- Mobile sidebar backdrop ---------- */
+#sidebar-mobile-backdrop {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+

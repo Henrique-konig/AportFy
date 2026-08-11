@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcoFy — Controle Financeiro Inteligente</title>
+  <meta name="description" content="EcoFy - Plataforma de controle financeiro pessoal e de casal" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            couple: {
+              50: '#faf5ff', 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce',
+            }
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.6s ease-out forwards',
+            'slide-up': 'slideUp 0.6s ease-out forwards',
+            'scale-in': 'scaleIn 0.3s ease-out forwards',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/custom.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased overflow-x-hidden">
+
+  <!-- ============ LOGIN SCREEN ============ -->
+  <section id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 px-4">
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="glow-orb glow-orb-blue"></div>
+      <div class="glow-orb glow-orb-purple"></div>
+    </div>
+
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-8 sm:p-10 animate-fade-in">
+      <div class="flex flex-col items-center mb-8">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4">
+          <i class="ph-fill ph-leaf text-3xl text-white"></i>
+        </div>
+        <h1 class="text-2xl font-extrabold tracking-tight">EcoFy</h1>
+        <p class="text-slate-400 text-sm mt-1">Controle financeiro inteligente</p>
+      </div>
+
+      <div id="auth-error" class="hidden mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2"></div>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="login-email">E-mail</label>
+          <input required type="email" id="login-email" placeholder="voce@email.com"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="login-password">Senha</label>
+          <input required type="password" id="login-password" placeholder="••••••••" minlength="6"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+
+        <button type="submit" id="login-submit-btn"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-blue-600/30 hover:shadow-blue-500/50 active:scale-[0.98] flex items-center justify-center gap-2">
+          <span class="btn-label">Entrar</span>
+          <i class="ph-bold ph-arrow-right"></i>
+        </button>
+      </form>
+
+      <div class="flex items-center gap-3 my-6">
+        <div class="h-px flex-1 bg-slate-800"></div>
+        <span class="text-xs text-slate-500">ou</span>
+        <div class="h-px flex-1 bg-slate-800"></div>
+      </div>
+
+      <button id="toggle-auth-mode" type="button" class="w-full text-center text-sm text-slate-400 hover:text-blue-400 transition-colors">
+        Não tem uma conta? <span class="text-blue-400 font-semibold">Criar conta</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ APP SHELL ============ -->
+  <div id="app-shell" class="hidden min-h-screen">
+
+    <!-- Ambient glows -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+      <div class="glow-orb glow-orb-blue" id="ambient-glow-1"></div>
+      <div class="glow-orb glow-orb-purple opacity-0" id="ambient-glow-2"></div>
+    </div>
+
+    <div class="flex h-screen overflow-hidden">
+
+      <!-- Mobile sidebar backdrop -->
+      <div id="sidebar-mobile-backdrop" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-30 lg:hidden"></div>
+
+      <!-- ============ SIDEBAR ============ -->
+      <aside id="sidebar" class="w-72 shrink-0 border-r border-slate-800/80 bg-slate-950/60 backdrop-blur-xl flex flex-col transition-all duration-300 ease-in-out">
+        <div class="h-20 flex items-center gap-3 px-6 border-b border-slate-800/80">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0" id="sidebar-logo-badge">
+            <i class="ph-fill ph-leaf text-xl text-white"></i>
+          </div>
+          <span class="text-lg font-extrabold tracking-tight sidebar-label">EcoFy</span>
+          <button id="sidebar-collapse-btn" class="ml-auto text-slate-500 hover:text-slate-200 transition-colors sidebar-label hidden lg:block">
+            <i class="ph-bold ph-caret-line-left"></i>
+          </button>
+          <button id="sidebar-mobile-close-btn" class="ml-auto text-slate-500 hover:text-slate-200 transition-colors lg:hidden">
+            <i class="ph-bold ph-x text-xl"></i>
+          </button>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto custom-scroll">
+          <button data-view="dashboard" class="nav-item active-nav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-fill ph-squares-four text-lg shrink-0"></i>
+            <span class="sidebar-label">Dashboard</span>
+          </button>
+          <button data-view="transactions" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-arrows-left-right text-lg shrink-0"></i>
+            <span class="sidebar-label">Transações</span>
+          </button>
+          <button data-view="goals" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-target text-lg shrink-0"></i>
+            <span class="sidebar-label">Metas</span>
+          </button>
+          <button data-view="reports" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-chart-pie-slice text-lg shrink-0"></i>
+            <span class="sidebar-label">Relatórios</span>
+          </button>
+
+          <div class="pt-4 mt-4 border-t border-slate-800/80 sidebar-label">
+            <p class="px-4 text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-2">Preferências</p>
+          </div>
+          <button data-view="settings" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-gear-six text-lg shrink-0"></i>
+            <span class="sidebar-label">Configurações</span>
+          </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800/80">
+          <div class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-900/60 transition-colors cursor-pointer" id="profile-footer" data-view="settings">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shrink-0" id="profile-avatar">
+              U
+            </div>
+            <div class="min-w-0 sidebar-label">
+              <p class="text-sm font-semibold truncate" id="profile-name">Usuário</p>
+              <p class="text-xs text-slate-500 truncate" id="profile-email">usuario@email.com</p>
+            </div>
+            <button id="logout-btn" class="ml-auto text-slate-500 hover:text-red-400 transition-colors shrink-0 sidebar-label" title="Sair">
+              <i class="ph-bold ph-sign-out text-lg"></i>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ============ MAIN CONTENT ============ -->
+      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        <!-- HEADER -->
+        <header class="shrink-0 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur-xl">
+          <div class="h-20 flex items-center gap-4 px-4 sm:px-6">
+            <button id="mobile-sidebar-toggle" class="lg:hidden text-slate-400 hover:text-white shrink-0">
+              <i class="ph-bold ph-list text-xl"></i>
+            </button>
+
+            <div class="relative hidden sm:block w-full max-w-xs">
+              <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
+              <input id="search-input" type="text" placeholder="Buscar transações..."
+                class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
+            </div>
+
+            <div class="ml-auto flex items-center gap-2 sm:gap-5">
+
+              <button id="mobile-search-btn" class="sm:hidden text-slate-400 hover:text-white transition-colors" title="Buscar">
+                <i class="ph-bold ph-magnifying-glass text-xl"></i>
+              </button>
+
+              <!-- Mode Toggle -->
+              <div id="mode-toggle" class="relative flex items-center bg-slate-900/80 border border-slate-800 rounded-full p-1 cursor-pointer select-none shrink-0" title="Alternar Pessoal/Casal">
+                <div id="mode-toggle-pill" class="absolute top-1 left-1 h-8 w-[76px] sm:w-[88px] rounded-full bg-gradient-to-r from-blue-600 to-blue-500 shadow-lg shadow-blue-600/40 transition-all duration-300 ease-in-out"></div>
+                <button type="button" data-mode="personal" class="mode-btn relative z-10 flex items-center justify-center gap-1.5 h-8 w-[76px] sm:w-[88px] rounded-full text-xs font-semibold transition-colors">
+                  <i class="ph-fill ph-user text-sm"></i> <span class="hidden sm:inline">Pessoal</span>
+                </button>
+                <button type="button" data-mode="couple" class="mode-btn relative z-10 flex items-center justify-center gap-1.5 h-8 w-[76px] sm:w-[88px] rounded-full text-xs font-semibold transition-colors">
+                  <i class="ph-fill ph-heart text-sm"></i> <span class="hidden sm:inline">Casal</span>
+                </button>
+              </div>
+
+              <button class="relative text-slate-400 hover:text-white transition-colors shrink-0" id="notif-btn">
+                <i class="ph-bold ph-bell text-xl"></i>
+                <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-950" id="notif-dot"></span>
+              </button>
+
+              <button id="new-transaction-btn"
+                class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-3 sm:px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                <i class="ph-bold ph-plus text-base"></i>
+                <span class="hidden sm:inline">Nova Transação</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Mobile search row -->
+          <div id="mobile-search-row" class="hidden sm:hidden px-4 pb-3">
+            <div class="relative w-full">
+              <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
+              <input id="mobile-search-input" type="text" placeholder="Buscar transações..."
+                class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
+            </div>
+          </div>
+        </header>
+
+        <!-- SCROLLABLE CONTENT -->
+        <main class="flex-1 overflow-y-auto custom-scroll px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+          <!-- Page title (compartilhado entre views) -->
+          <div class="flex items-center justify-between animate-fade-in">
+            <div>
+              <h1 class="text-2xl font-extrabold tracking-tight" id="page-title">Dashboard</h1>
+              <p class="text-slate-500 text-sm mt-0.5" id="page-subtitle">Visão geral das suas finanças</p>
+            </div>
+            <span id="mode-badge" class="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-blue-500/10 border-blue-500/30 text-blue-400">
+              <i class="ph-fill ph-user"></i> Modo Pessoal
+            </span>
+          </div>
+
+          <!-- ======================= VIEW: DASHBOARD ======================= -->
+          <div id="view-dashboard" class="view-section space-y-6">
+
+            <!-- KPI CARDS -->
+            <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-slide-up">
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Saldo Atual</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-balance">R$ 0,00</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-blue-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-wallet text-xl text-blue-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                  <span id="kpi-balance-change" class="font-semibold text-emerald-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-up"></i> 0%</span>
+                  vs. mês anterior
+                </p>
+              </div>
+
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Receitas do Mês</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-income">R$ 0,00</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-emerald-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-trend-up text-xl text-emerald-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                  <span id="kpi-income-change" class="font-semibold text-emerald-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-up"></i> 0%</span>
+                  vs. mês anterior
+                </p>
+              </div>
+
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Despesas do Mês</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-expense">R$ 0,00</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-red-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-trend-down text-xl text-red-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                  <span id="kpi-expense-change" class="font-semibold text-red-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-down"></i> 0%</span>
+                  vs. mês anterior
+                </p>
+              </div>
+
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Progresso de Metas</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-goals">0%</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-purple-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-target text-xl text-purple-400"></i>
+                  </div>
+                </div>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full mt-3.5 overflow-hidden">
+                  <div id="kpi-goals-bar" class="h-full rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700" style="width: 0%"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- CHART + QUICK STATS -->
+            <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 animate-slide-up">
+              <div class="xl:col-span-2 glass-card rounded-2xl p-5 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 class="font-bold text-base">Fluxo de Caixa</h3>
+                    <p class="text-xs text-slate-500">Receitas x Despesas nos últimos 6 meses</p>
+                  </div>
+                  <div class="flex items-center gap-3 text-xs">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Receitas</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-600"></span> Despesas</span>
+                  </div>
+                </div>
+                <div class="h-72">
+                  <canvas id="cashflow-chart"></canvas>
+                </div>
+              </div>
+
+              <div class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col">
+                <h3 class="font-bold text-base mb-4">Despesas por Categoria</h3>
+                <div class="h-56 flex items-center justify-center">
+                  <canvas id="category-chart"></canvas>
+                </div>
+                <div id="category-legend" class="mt-4 space-y-2 text-xs"></div>
+              </div>
+            </section>
+
+            <!-- TRANSACTIONS PREVIEW TABLE -->
+            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
+              <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">
+                <h3 class="font-bold text-base">Transações Recentes</h3>
+                <button data-view="transactions" class="nav-item-link text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
+                  Ver todas <i class="ph-bold ph-arrow-right"></i>
+                </button>
+              </div>
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="px-5 sm:px-6 py-3 font-medium">Descrição</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Categoria</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Data</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Valor</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="transactions-tbody"></tbody>
+                </table>
+                <div id="transactions-empty" class="hidden flex-col items-center justify-center py-16 text-center">
+                  <i class="ph-thin ph-receipt text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm">Nenhuma transação encontrada.</p>
+                  <p class="text-slate-600 text-xs mt-1">Adicione sua primeira transação para começar.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ======================= VIEW: TRANSAÇÕES ======================= -->
+          <div id="view-transactions" class="view-section hidden space-y-6">
+            <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up">
+              <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <div class="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-xl p-1 shrink-0">
+                  <button data-filter-type="all" class="txn-filter-btn active-filter px-3.5 py-2 rounded-lg text-xs font-semibold transition-all">Todas</button>
+                  <button data-filter-type="income" class="txn-filter-btn px-3.5 py-2 rounded-lg text-xs font-semibold transition-all">Receitas</button>
+                  <button data-filter-type="expense" class="txn-filter-btn px-3.5 py-2 rounded-lg text-xs font-semibold transition-all">Despesas</button>
+                </div>
+                <select id="txn-category-filter"
+                  class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all sm:ml-auto sm:w-56">
+                  <option value="all">Todas as categorias</option>
+                  <option value="Salário">Salário</option>
+                  <option value="Freelance">Freelance</option>
+                  <option value="Investimentos">Investimentos</option>
+                  <option value="Alimentação">Alimentação</option>
+                  <option value="Transporte">Transporte</option>
+                  <option value="Moradia">Moradia</option>
+                  <option value="Lazer">Lazer</option>
+                  <option value="Saúde">Saúde</option>
+                  <option value="Educação">Educação</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+            </section>
+
+            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
+              <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">
+                <h3 class="font-bold text-base">Todas as Transações</h3>
+                <span id="txn-full-count" class="text-xs text-slate-500">0 registros</span>
+              </div>
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="px-5 sm:px-6 py-3 font-medium">Descrição</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Categoria</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Data</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Valor</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="transactions-full-tbody"></tbody>
+                </table>
+                <div id="transactions-full-empty" class="hidden flex-col items-center justify-center py-16 text-center">
+                  <i class="ph-thin ph-receipt text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm">Nenhuma transação encontrada.</p>
+                  <p class="text-slate-600 text-xs mt-1">Ajuste os filtros ou adicione uma nova transação.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ======================= VIEW: METAS ======================= -->
+          <div id="view-goals" class="view-section hidden space-y-6">
+            <section class="flex items-center justify-between animate-slide-up">
+              <p class="text-sm text-slate-500 max-w-md">Defina objetivos financeiros e acompanhe o progresso de cada um em tempo real.</p>
+              <button id="new-goal-btn"
+                class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                <i class="ph-bold ph-plus text-base"></i>
+                <span class="hidden sm:inline">Nova Meta</span>
+              </button>
+            </section>
+
+            <section id="goals-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-slide-up"></section>
+
+            <div id="goals-empty" class="hidden flex-col items-center justify-center py-20 text-center glass-card rounded-2xl">
+              <i class="ph-thin ph-target text-5xl text-slate-700 mb-3"></i>
+              <p class="text-slate-500 text-sm">Nenhuma meta cadastrada ainda.</p>
+              <p class="text-slate-600 text-xs mt-1">Crie sua primeira meta financeira para começar a acompanhar.</p>
+            </div>
+          </div>
+
+          <!-- ======================= VIEW: RELATÓRIOS ======================= -->
+          <div id="view-reports" class="view-section hidden space-y-6">
+            <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up">
+              <div class="glass-card rounded-2xl p-5">
+                <p class="text-xs font-medium text-slate-400 mb-1">Total de Receitas</p>
+                <h3 class="text-xl font-extrabold text-emerald-400" id="report-total-income">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-600 mt-1">Últimos 12 meses</p>
+              </div>
+              <div class="glass-card rounded-2xl p-5">
+                <p class="text-xs font-medium text-slate-400 mb-1">Total de Despesas</p>
+                <h3 class="text-xl font-extrabold text-red-400" id="report-total-expense">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-600 mt-1">Últimos 12 meses</p>
+              </div>
+              <div class="glass-card rounded-2xl p-5">
+                <p class="text-xs font-medium text-slate-400 mb-1">Economia Líquida</p>
+                <h3 class="text-xl font-extrabold" id="report-net">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-600 mt-1" id="report-top-category">Maior categoria: —</p>
+              </div>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1">Fluxo de Caixa Anual</h3>
+              <p class="text-xs text-slate-500 mb-4">Receitas x Despesas nos últimos 12 meses</p>
+              <div class="h-80">
+                <canvas id="reports-cashflow-chart"></canvas>
+              </div>
+            </section>
+
+            <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 animate-slide-up">
+              <div class="glass-card rounded-2xl p-5 sm:p-6">
+                <h3 class="font-bold text-base mb-4">Despesas por Categoria</h3>
+                <div class="h-64">
+                  <canvas id="reports-category-chart"></canvas>
+                </div>
+              </div>
+              <div class="glass-card rounded-2xl p-5 sm:p-6">
+                <h3 class="font-bold text-base mb-4">Maiores Despesas</h3>
+                <div id="report-top-expenses" class="space-y-3"></div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ======================= VIEW: CONFIGURAÇÕES ======================= -->
+          <div id="view-settings" class="view-section hidden space-y-6 max-w-2xl">
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-4 flex items-center gap-2"><i class="ph-bold ph-user-circle text-lg"></i> Perfil</h3>
+              <form id="settings-profile-form" class="space-y-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1.5" for="settings-name-input">Nome de exibição</label>
+                  <input type="text" id="settings-name-input" placeholder="Seu nome"
+                    class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1.5">E-mail</label>
+                  <input type="text" id="settings-email-display" disabled
+                    class="w-full bg-slate-900/40 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-500 cursor-not-allowed" />
+                </div>
+                <button type="submit" class="bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all active:scale-[0.97]">
+                  Salvar alterações
+                </button>
+              </form>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-fill ph-heart text-lg text-purple-400"></i> Espaço do Casal</h3>
+              <p class="text-xs text-slate-500 mb-4">Compartilhe o código abaixo com seu parceiro(a) para que vocês vejam as mesmas transações no Modo Casal.</p>
+
+              <label class="block text-xs font-medium text-slate-400 mb-1.5">Seu código de casal</label>
+              <div class="flex gap-2 mb-5">
+                <input type="text" id="settings-couple-id" readonly
+                  class="flex-1 bg-slate-900/40 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-400 font-mono" />
+                <button id="settings-copy-couple-btn" type="button"
+                  class="shrink-0 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 rounded-xl transition-all" title="Copiar">
+                  <i class="ph-bold ph-copy"></i>
+                </button>
+              </div>
+
+              <form id="settings-join-form" class="space-y-2">
+                <label class="block text-xs font-medium text-slate-400 mb-1.5" for="settings-join-input">Entrar no espaço de outra pessoa</label>
+                <div class="flex gap-2">
+                  <input type="text" id="settings-join-input" placeholder="Cole aqui o código do seu parceiro(a)"
+                    class="flex-1 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/60 focus:border-purple-500 transition-all" />
+                  <button type="submit" class="shrink-0 bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 rounded-xl transition-all">
+                    Entrar
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-shield-check text-lg"></i> Segurança</h3>
+              <p class="text-xs text-slate-500 mb-4">Enviaremos um e-mail com um link para você redefinir sua senha.</p>
+              <button id="settings-reset-password-btn" type="button" class="bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">
+                Enviar e-mail de redefinição
+              </button>
+            </section>
+          </div>
+
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: NOVA TRANSAÇÃO ============ -->
+  <div id="transaction-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="transaction-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="modal-title">Nova Transação</h3>
+        <button id="modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="transaction-form" class="space-y-4">
+        <input type="hidden" id="transaction-id" />
+
+        <!-- Type toggle -->
+        <div class="grid grid-cols-2 gap-2 bg-slate-900/70 border border-slate-800 rounded-xl p-1">
+          <button type="button" data-type="income" class="type-btn income-active px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5">
+            <i class="ph-bold ph-arrow-down-left"></i> Receita
+          </button>
+          <button type="button" data-type="expense" class="type-btn px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5">
+            <i class="ph-bold ph-arrow-up-right"></i> Despesa
+          </button>
+        </div>
+        <input type="hidden" id="transaction-type" value="income" />
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="transaction-desc">Descrição</label>
+          <input required type="text" id="transaction-desc" placeholder="Ex: Salário, Supermercado..."
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="transaction-amount">Valor (R$)</label>
+            <input required type="number" step="0.01" min="0.01" id="transaction-amount" placeholder="0,00"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="transaction-date">Data</label>
+            <input required type="date" id="transaction-date"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="transaction-category">Categoria</label>
+          <select id="transaction-category"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="Salário">Salário</option>
+            <option value="Freelance">Freelance</option>
+            <option value="Investimentos">Investimentos</option>
+            <option value="Alimentação">Alimentação</option>
+            <option value="Transporte">Transporte</option>
+            <option value="Moradia">Moradia</option>
+            <option value="Lazer">Lazer</option>
+            <option value="Saúde">Saúde</option>
+            <option value="Educação">Educação</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+
+        <button type="submit" id="transaction-submit-btn"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar Transação</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: NOVA META ============ -->
+  <div id="goal-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="goal-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="goal-modal-title">Nova Meta</h3>
+        <button id="goal-modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="goal-form" class="space-y-4">
+        <input type="hidden" id="goal-id" />
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="goal-name">Nome da meta</label>
+          <input required type="text" id="goal-name" placeholder="Ex: Viagem, Reserva de emergência..."
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="goal-current">Valor atual (R$)</label>
+            <input required type="number" step="0.01" min="0" id="goal-current" placeholder="0,00"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="goal-target">Valor alvo (R$)</label>
+            <input required type="number" step="0.01" min="0.01" id="goal-target" placeholder="0,00"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="goal-deadline">Prazo (opcional)</label>
+          <input type="date" id="goal-deadline"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+
+        <button type="submit"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar Meta</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CONFIRMAR EXCLUSÃO (genérico) ============ -->
+  <div id="delete-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="delete-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-sm glass-card rounded-3xl p-6 sm:p-7 animate-scale-in text-center">
+      <div class="w-14 h-14 rounded-2xl bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+        <i class="ph-fill ph-trash text-2xl text-red-400"></i>
+      </div>
+      <h3 class="text-lg font-bold mb-1.5" id="delete-modal-title">Excluir transação?</h3>
+      <p class="text-sm text-slate-400 mb-6" id="delete-modal-desc">Essa ação não pode ser desfeita. Deseja continuar?</p>
+      <div class="flex gap-3">
+        <button id="delete-cancel-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">Cancelar</button>
+        <button id="delete-confirm-btn" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST CONTAINER ============ -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-[60] flex flex-col gap-2.5"></div>
+
+  <!-- App Scripts (ES Modules) -->
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/db.js"></script>
+  <script type="module" src="js/ui.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
