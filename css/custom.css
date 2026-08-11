@@ -6,6 +6,7 @@
 /* ---------- Base ---------- */
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
 }
 
 body {
@@ -366,5 +367,74 @@ body.mode-couple .txn-filter-btn.active-filter {
 /* ---------- Mobile sidebar backdrop ---------- */
 #sidebar-mobile-backdrop {
   animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* =========================================================
+   Controles de formulário nativos (date, select, number)
+   `color-scheme: dark` (definido no <html>) já escurece o
+   popup do calendário e a lista do <select> no Chrome/Edge/
+   Firefox; aqui só refinamos ícones, setas e o "tato" ao usar.
+   ========================================================= */
+
+/* ---------- Inputs de texto/número/data/e-mail/senha ---------- */
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus) {
+  border-color: rgba(100, 116, 139, 0.7);
+}
+
+/* ---------- Date picker ---------- */
+input[type="date"] {
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.55) brightness(1.6) saturate(0);
+  opacity: 0.85;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 3px;
+  margin-right: -2px;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background-color: rgba(148, 163, 184, 0.18);
+}
+
+body.mode-couple input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(168, 85, 247, 0.22);
+}
+
+/* ---------- Select (seta customizada, sem o cromo padrão do navegador) ---------- */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 13px;
+  padding-right: 2.5rem !important;
+}
+
+select:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+/* ---------- Remove os spinners feios de inputs numéricos ---------- */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 
