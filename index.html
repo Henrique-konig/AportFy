@@ -137,6 +137,10 @@
             <i class="ph-bold ph-target text-lg shrink-0"></i>
             <span class="sidebar-label">Metas</span>
           </button>
+          <button data-view="investments" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-chart-line-up text-lg shrink-0"></i>
+            <span class="sidebar-label">Investimentos</span>
+          </button>
           <button data-view="reports" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-chart-pie-slice text-lg shrink-0"></i>
             <span class="sidebar-label">Relatórios</span>
@@ -436,6 +440,160 @@
             </div>
           </div>
 
+          <!-- ======================= VIEW: INVESTIMENTOS ======================= -->
+          <div id="view-investments" class="view-section hidden space-y-6">
+
+            <!-- Toolbar: busca, filtros, ações -->
+            <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up">
+              <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+                <div class="relative w-full lg:max-w-xs">
+                  <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                  <input id="inv-search-input" type="text" placeholder="Buscar por nome ou ticker..."
+                    class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
+                </div>
+
+                <select id="inv-category-filter"
+                  class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all lg:w-52">
+                  <option value="all">Todas as categorias</option>
+                  <option value="Ações">Ações</option>
+                  <option value="FIIs">FIIs</option>
+                  <option value="Renda Fixa">Renda Fixa</option>
+                  <option value="Criptomoedas">Criptomoedas</option>
+                  <option value="Tesouro">Tesouro</option>
+                  <option value="Imóveis">Imóveis</option>
+                  <option value="Outros">Outros</option>
+                </select>
+
+                <select id="inv-sort-select"
+                  class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all lg:w-56">
+                  <option value="recent">Mais recente</option>
+                  <option value="profit">Maior rentabilidade</option>
+                  <option value="balance">Maior saldo</option>
+                </select>
+
+                <div class="flex items-center gap-2 lg:ml-auto">
+                  <button id="refresh-quotes-btn"
+                    class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                    <i id="refresh-quotes-icon" class="ph-bold ph-arrows-clockwise text-base"></i>
+                    <span class="hidden sm:inline">Atualizar Cotações</span>
+                  </button>
+                  <button id="new-investment-btn"
+                    class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                    <i class="ph-bold ph-plus text-base"></i>
+                    <span class="hidden sm:inline">Novo Ativo</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- KPIs -->
+            <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-slide-up">
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Patrimônio Total</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="inv-kpi-total">R$ 0,00</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-blue-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-chart-line-up text-xl text-blue-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 text-slate-500">Valor de mercado da carteira hoje</p>
+              </div>
+
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Rendimento Total</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="inv-kpi-profit">R$ 0,00</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-emerald-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-trend-up text-xl text-emerald-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                  <span id="inv-kpi-profit-pct" class="font-semibold text-emerald-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-up"></i> 0%</span>
+                  vs. capital investido
+                </p>
+              </div>
+
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Rendimento do Mês</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="inv-kpi-month">0%</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-purple-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-calendar-check text-xl text-purple-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 text-slate-500">Ativos comprados neste mês</p>
+              </div>
+
+              <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-medium text-slate-400 mb-1">Melhor Performance</p>
+                    <h3 class="text-2xl font-extrabold tracking-tight" id="inv-kpi-best-ticker">—</h3>
+                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-amber-500/15 flex items-center justify-center kpi-icon">
+                    <i class="ph-fill ph-trophy text-xl text-amber-400"></i>
+                  </div>
+                </div>
+                <p class="text-xs mt-3 font-semibold text-emerald-400" id="inv-kpi-best-pct">0%</p>
+              </div>
+            </section>
+
+            <!-- Gráficos -->
+            <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 animate-slide-up">
+              <div class="xl:col-span-2 glass-card rounded-2xl p-5 sm:p-6">
+                <h3 class="font-bold text-base mb-1">Capital Investido</h3>
+                <p class="text-xs text-slate-500 mb-4">Evolução do total aportado nos últimos 6 meses</p>
+                <div class="h-72">
+                  <canvas id="inv-evolution-chart"></canvas>
+                </div>
+              </div>
+
+              <div class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col">
+                <h3 class="font-bold text-base mb-4">Alocação por Categoria</h3>
+                <div class="h-56 flex items-center justify-center">
+                  <canvas id="inv-allocation-chart"></canvas>
+                </div>
+                <div id="inv-allocation-legend" class="mt-4 space-y-2 text-xs"></div>
+              </div>
+            </section>
+
+            <!-- Tabela de ativos -->
+            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
+              <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">
+                <h3 class="font-bold text-base">Carteira de Ativos</h3>
+                <span id="inv-count" class="text-xs text-slate-500">0 ativos</span>
+              </div>
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="px-5 sm:px-6 py-3 font-medium">Ativo</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Categoria</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Preço Médio</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Preço Atual</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Qtd.</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Saldo Total</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Rentabilidade</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="investments-tbody"></tbody>
+                </table>
+                <div id="investments-empty" class="hidden flex-col items-center justify-center py-16 text-center">
+                  <i class="ph-thin ph-chart-line-up text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm">Nenhum ativo cadastrado ainda.</p>
+                  <p class="text-slate-600 text-xs mt-1">Adicione seu primeiro investimento para começar a acompanhar.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
           <!-- ======================= VIEW: RELATÓRIOS ======================= -->
           <div id="view-reports" class="view-section hidden space-y-6">
             <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up">
@@ -663,6 +821,107 @@
           class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
           <i class="ph-bold ph-check-circle"></i>
           <span>Salvar Meta</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: NOVO INVESTIMENTO ============ -->
+  <div id="investment-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="investment-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold">Novo Ativo</h3>
+        <button id="investment-modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="investment-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="investment-ticker">Nome / Ticker</label>
+          <input required type="text" id="investment-ticker" placeholder="Ex: PETR4, HGLG11, Bitcoin..."
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          <p class="text-[11px] text-slate-600 mt-1.5">Ações e FIIs com ticker da B3 recebem cotação automática ao clicar em "Atualizar Cotações".</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="investment-category">Categoria</label>
+          <select id="investment-category"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="Ações">Ações</option>
+            <option value="FIIs">FIIs</option>
+            <option value="Renda Fixa">Renda Fixa</option>
+            <option value="Criptomoedas">Criptomoedas</option>
+            <option value="Tesouro">Tesouro</option>
+            <option value="Imóveis">Imóveis</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="investment-date-trigger">Data da compra</label>
+          <button type="button" id="investment-date-trigger"
+            class="date-trigger w-full flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <span id="investment-date-label" class="text-slate-600">Selecionar data</span>
+            <i class="ph-bold ph-calendar-blank text-slate-500 shrink-0"></i>
+          </button>
+          <input type="hidden" id="investment-date" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="investment-quantity">Quantidade</label>
+            <input required type="number" step="0.00000001" min="0.00000001" id="investment-quantity" placeholder="0"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="investment-price">Preço de compra (R$)</label>
+            <input required type="number" step="0.01" min="0.01" id="investment-price" placeholder="0,00"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+        </div>
+
+        <p class="text-[11px] text-slate-600">Se você já tem esse ativo na carteira, a nova compra é somada e o preço médio recalculado automaticamente.</p>
+
+        <button type="submit"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar Investimento</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: EDITAR PREÇO ATUAL ============ -->
+  <div id="price-edit-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="price-edit-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-sm glass-card rounded-3xl p-6 sm:p-7 animate-scale-in">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold">Editar Preço Atual</h3>
+        <button id="price-edit-modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="price-edit-form" class="space-y-4">
+        <input type="hidden" id="price-edit-id" />
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5">Ativo</label>
+          <input type="text" id="price-edit-ticker-display" disabled
+            class="w-full bg-slate-900/40 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-400 cursor-not-allowed" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="price-edit-value">Novo preço atual (R$)</label>
+          <input required type="number" step="0.01" min="0" id="price-edit-value" placeholder="0,00"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <button type="submit"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar Preço</span>
         </button>
       </form>
     </div>

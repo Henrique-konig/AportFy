@@ -202,3 +202,84 @@ export async function deleteGoal(mode, id, goalId) {
   const docRef = doc(db, path, goalId);
   return deleteDoc(docRef);
 }
+
+/* ---------------------------------------------------------------
+   Investimentos (carteira de ativos)
+   Coleções:
+     users/{userId}/investments      -> modo Pessoal
+     couples/{coupleId}/investments  -> modo Casal
+
+   Cada documento representa uma POSIÇÃO consolidada por ativo
+   (ticker/nome). Uma nova compra do mesmo ativo não cria um novo
+   documento: quantidade e preço médio são recalculados e o
+   documento existente é atualizado (ver mergeInvestmentPurchase
+   em app.js, que decide se cria ou atualiza).
+--------------------------------------------------------------- */
+
+function getInvestmentsCollection(mode, id) {
+  const path = mode === "couple" ? `couples/${id}/investments` : `users/${id}/investments`;
+  return collection(db, path);
+}
+
+/**
+ * Escuta em tempo real os ativos da carteira ativa.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {(investments: Array<Object>) => void} callback
+ * @returns {() => void} função para cancelar a escuta (unsubscribe)
+ */
+export function listenToInvestments(mode, id, callback) {
+  const colRef = getInvestmentsCollection(mode, id);
+  const q = query(colRef, orderBy("purchaseDate", "desc"));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const investments = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(investments);
+    },
+    (error) => {
+      console.error("Erro ao escutar investimentos:", error);
+      callback([], error);
+    }
+  );
+}
+
+/**
+ * Cria uma nova posição de investimento.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {{ticker:string, name:string, category:string, quantity:number, avgPrice:number, currentPrice:number, purchaseDate:string}} investment
+ */
+export async function addInvestment(mode, id, investment) {
+  const colRef = getInvestmentsCollection(mode, id);
+  return addDoc(colRef, {
+    ...investment,
+    createdAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Atualiza uma posição existente (nova compra mesclada, preço atual, etc).
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} investmentId
+ * @param {Object} updates
+ */
+export async function updateInvestment(mode, id, investmentId, updates) {
+  const path = mode === "couple" ? `couples/${id}/investments` : `users/${id}/investments`;
+  const docRef = doc(db, path, investmentId);
+  return updateDoc(docRef, updates);
+}
+
+/**
+ * Remove uma posição de investimento.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} investmentId
+ */
+export async function deleteInvestment(mode, id, investmentId) {
+  const path = mode === "couple" ? `couples/${id}/investments` : `users/${id}/investments`;
+  const docRef = doc(db, path, investmentId);
+  return deleteDoc(docRef);
+}

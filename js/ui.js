@@ -139,6 +139,46 @@ const el = {
   deleteCancelBtn: document.getElementById("delete-cancel-btn"),
   deleteConfirmBtn: document.getElementById("delete-confirm-btn"),
 
+  // Investments view (toolbar, KPIs, gráficos, tabela)
+  invSearchInput: document.getElementById("inv-search-input"),
+  invCategoryFilter: document.getElementById("inv-category-filter"),
+  invSortSelect: document.getElementById("inv-sort-select"),
+  refreshQuotesBtn: document.getElementById("refresh-quotes-btn"),
+  refreshQuotesIcon: document.getElementById("refresh-quotes-icon"),
+  newInvestmentBtn: document.getElementById("new-investment-btn"),
+  invKpiTotal: document.getElementById("inv-kpi-total"),
+  invKpiProfit: document.getElementById("inv-kpi-profit"),
+  invKpiProfitPct: document.getElementById("inv-kpi-profit-pct"),
+  invKpiMonth: document.getElementById("inv-kpi-month"),
+  invKpiBestTicker: document.getElementById("inv-kpi-best-ticker"),
+  invKpiBestPct: document.getElementById("inv-kpi-best-pct"),
+  invEvolutionCanvas: document.getElementById("inv-evolution-chart"),
+  invAllocationCanvas: document.getElementById("inv-allocation-chart"),
+  invAllocationLegend: document.getElementById("inv-allocation-legend"),
+  investmentsTbody: document.getElementById("investments-tbody"),
+  investmentsEmpty: document.getElementById("investments-empty"),
+  invCount: document.getElementById("inv-count"),
+
+  // Investment modal (novo ativo)
+  investmentModal: document.getElementById("investment-modal"),
+  investmentModalBackdrop: document.getElementById("investment-modal-backdrop"),
+  investmentModalCloseBtn: document.getElementById("investment-modal-close-btn"),
+  investmentForm: document.getElementById("investment-form"),
+  investmentTicker: document.getElementById("investment-ticker"),
+  investmentCategory: document.getElementById("investment-category"),
+  investmentDate: document.getElementById("investment-date"),
+  investmentQuantity: document.getElementById("investment-quantity"),
+  investmentPrice: document.getElementById("investment-price"),
+
+  // Price edit modal (editar preço atual)
+  priceEditModal: document.getElementById("price-edit-modal"),
+  priceEditModalBackdrop: document.getElementById("price-edit-modal-backdrop"),
+  priceEditModalCloseBtn: document.getElementById("price-edit-modal-close-btn"),
+  priceEditForm: document.getElementById("price-edit-form"),
+  priceEditId: document.getElementById("price-edit-id"),
+  priceEditTickerDisplay: document.getElementById("price-edit-ticker-display"),
+  priceEditValue: document.getElementById("price-edit-value"),
+
   // Toasts
   toastContainer: document.getElementById("toast-container"),
 };
@@ -153,10 +193,13 @@ let lastGoals = [];
 let pendingDeleteId = null;
 let pendingDeleteType = "transaction";
 let txnTypeFilter = "all";
+let lastInvestments = [];
 let cashflowChart = null;
 let categoryChart = null;
 let reportsCashflowChart = null;
 let reportsCategoryChart = null;
+let invEvolutionChart = null;
+let invAllocationChart = null;
 
 const CATEGORY_COLORS = {
   "Salário": "#3b82f6",
@@ -171,10 +214,23 @@ const CATEGORY_COLORS = {
   "Outros": "#64748b",
 };
 
+const INVESTMENT_CATEGORY_COLORS = {
+  "Ações": "#3b82f6",
+  "FIIs": "#f97316",
+  "Renda Fixa": "#34d399",
+  "Criptomoedas": "#eab308",
+  "Tesouro": "#6366f1",
+  "Imóveis": "#ec4899",
+  "Outros": "#64748b",
+};
+
+const B3_CATEGORIES = ["Ações", "FIIs"];
+
 const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Visão geral das suas finanças" },
   transactions: { title: "Transações", subtitle: "Histórico completo de receitas e despesas" },
   goals: { title: "Metas", subtitle: "Acompanhe o progresso dos seus objetivos financeiros" },
+  investments: { title: "Investimentos", subtitle: "Acompanhe o rendimento da sua carteira de ativos" },
   reports: { title: "Relatórios", subtitle: "Análise detalhada do seu fluxo de caixa" },
   settings: { title: "Configurações", subtitle: "Preferências da sua conta EcoFy" },
 };
@@ -182,6 +238,7 @@ const VIEW_META = {
 const DELETE_META = {
   transaction: { title: "Excluir transação?", desc: "Essa ação não pode ser desfeita. Deseja continuar?" },
   goal: { title: "Excluir meta?", desc: "O progresso dessa meta será perdido. Deseja continuar?" },
+  investment: { title: "Excluir ativo?", desc: "O histórico dessa posição será perdido. Deseja continuar?" },
 };
 
 /* ---------------------------------------------------------------
@@ -368,6 +425,7 @@ export function setActiveMode(mode) {
   // Re-renderiza gráficos e cards com a cor do novo modo
   updateCharts(lastTransactions);
   renderGoals(lastGoals);
+  renderInvestments(lastInvestments);
 }
 
 export function onModeToggle(handler) {
@@ -1022,6 +1080,390 @@ export function bindGoalModal() {
 }
 
 /* ---------------------------------------------------------------
+   Investimentos (view: Investimentos)
+
+   Fórmulas:
+   - Preço médio ao somar uma nova compra do mesmo ativo (calculado
+     em app.js, não aqui): novoPM = (qtdAntiga*pmAntigo + qtdNova*precoNovo) / (qtdAntiga+qtdNova)
+   - Saldo Total (valor de mercado hoje):  precoAtual * quantidade
+   - Custo (capital investido no ativo):   precoMedio * quantidade
+   - Rendimento em R$:                     saldoTotal - custo
+   - Rentabilidade %:                      ((precoAtual - precoMedio) / precoMedio) * 100
+--------------------------------------------------------------- */
+let invTypeSort = "recent";
+
+function calcInvestmentMetrics(inv) {
+  const quantity = Number(inv.quantity) || 0;
+  const avgPrice = Number(inv.avgPrice) || 0;
+  const currentPrice = Number(inv.currentPrice) || 0;
+  const costBasis = avgPrice * quantity;
+  const totalValue = currentPrice * quantity;
+  const profitValue = totalValue - costBasis;
+  const profitPct = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
+  return { quantity, avgPrice, currentPrice, costBasis, totalValue, profitValue, profitPct };
+}
+
+function formatQuantity(n) {
+  return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 8 });
+}
+
+let editInvestmentPriceHandler = null;
+
+export function onEditInvestmentPrice(handler) {
+  editInvestmentPriceHandler = handler;
+}
+
+function renderInvestmentsTable(investments) {
+  const term = (el.invSearchInput.value || "").toLowerCase().trim();
+  const categoryFilter = el.invCategoryFilter.value;
+
+  let filtered = investments;
+  if (categoryFilter !== "all") filtered = filtered.filter((inv) => inv.category === categoryFilter);
+  if (term) {
+    filtered = filtered.filter(
+      (inv) => inv.ticker.toLowerCase().includes(term) || (inv.name || "").toLowerCase().includes(term)
+    );
+  }
+
+  const withMetrics = filtered.map((inv) => ({ inv, m: calcInvestmentMetrics(inv) }));
+
+  if (invTypeSort === "profit") withMetrics.sort((a, b) => b.m.profitPct - a.m.profitPct);
+  else if (invTypeSort === "balance") withMetrics.sort((a, b) => b.m.totalValue - a.m.totalValue);
+  else withMetrics.sort((a, b) => (b.inv.purchaseDate || "").localeCompare(a.inv.purchaseDate || ""));
+
+  el.invCount.textContent = `${withMetrics.length} ativo${withMetrics.length === 1 ? "" : "s"}`;
+
+  if (withMetrics.length === 0) {
+    el.investmentsTbody.innerHTML = "";
+    el.investmentsEmpty.classList.remove("hidden");
+    el.investmentsEmpty.classList.add("flex");
+    return;
+  }
+
+  el.investmentsEmpty.classList.add("hidden");
+  el.investmentsEmpty.classList.remove("flex");
+
+  el.investmentsTbody.innerHTML = withMetrics
+    .map(({ inv, m }) => {
+      const color = INVESTMENT_CATEGORY_COLORS[inv.category] || INVESTMENT_CATEGORY_COLORS["Outros"];
+      const positive = m.profitPct >= 0;
+      const isB3 = B3_CATEGORIES.includes(inv.category);
+      const warningIcon = inv.lastQuoteError
+        ? `<i class="ph-fill ph-warning-circle text-amber-400 ml-1.5" title="Não foi possível atualizar a cotação agora. Mostrando o último preço salvo."></i>`
+        : "";
+      const b3Badge = isB3
+        ? `<i class="ph-fill ph-globe text-slate-600 ml-1.5" title="Cotação automática via B3 (Brapi)"></i>`
+        : "";
+      return `
+        <tr class="animate-fade-in" data-id="${inv.id}">
+          <td class="px-5 sm:px-6 py-4 font-medium">
+            <div class="flex items-center gap-3">
+              <span class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold" style="background:${color}22; color:${color};">
+                ${escapeHtml((inv.ticker || "?").slice(0, 2).toUpperCase())}
+              </span>
+              <div class="min-w-0">
+                <p class="truncate max-w-[140px] flex items-center">${escapeHtml(inv.ticker)}${b3Badge}${warningIcon}</p>
+                ${inv.name && inv.name !== inv.ticker ? `<p class="text-[11px] text-slate-500 truncate max-w-[140px]">${escapeHtml(inv.name)}</p>` : ""}
+              </div>
+            </div>
+          </td>
+          <td class="px-5 sm:px-6 py-4">
+            <span class="category-badge">
+              <span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>
+              ${escapeHtml(inv.category)}
+            </span>
+          </td>
+          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${formatCurrency(m.avgPrice)}</td>
+          <td class="px-5 sm:px-6 py-4 text-right">
+            <button class="edit-price-btn hover:text-blue-400 transition-colors" data-id="${inv.id}" title="Editar preço atual">
+              ${formatCurrency(m.currentPrice)} <i class="ph-bold ph-pencil-simple text-xs ml-0.5"></i>
+            </button>
+          </td>
+          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${formatQuantity(m.quantity)}</td>
+          <td class="px-5 sm:px-6 py-4 text-right font-semibold">${formatCurrency(m.totalValue)}</td>
+          <td class="px-5 sm:px-6 py-4 text-right font-semibold ${positive ? "text-emerald-400" : "text-red-400"}">
+            <div class="flex items-center justify-end gap-1">
+              <i class="ph-bold ${positive ? "ph-trend-up" : "ph-trend-down"}"></i>
+              ${positive ? "+" : ""}${m.profitPct.toFixed(2)}%
+            </div>
+          </td>
+          <td class="px-5 sm:px-6 py-4">
+            <div class="flex items-center justify-end gap-1.5">
+              <button class="row-action-btn delete-btn delete-investment-btn" data-id="${inv.id}" title="Excluir">
+                <i class="ph-bold ph-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    })
+    .join("");
+
+  el.investmentsTbody.querySelectorAll(".edit-price-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const inv = investments.find((i) => i.id === btn.dataset.id);
+      if (inv) openPriceEditModal(inv);
+    });
+  });
+  el.investmentsTbody.querySelectorAll(".delete-investment-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "investment"));
+  });
+}
+
+function updateInvestmentKPIs(investments) {
+  const withMetrics = investments.map((inv) => ({ inv, m: calcInvestmentMetrics(inv) }));
+
+  const totalValue = withMetrics.reduce((sum, x) => sum + x.m.totalValue, 0);
+  const totalCost = withMetrics.reduce((sum, x) => sum + x.m.costBasis, 0);
+  const totalProfit = totalValue - totalCost;
+  const totalProfitPct = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+
+  el.invKpiTotal.textContent = formatCurrency(totalValue);
+  el.invKpiProfit.textContent = formatCurrency(totalProfit);
+  el.invKpiProfit.classList.toggle("text-emerald-400", totalProfit >= 0);
+  el.invKpiProfit.classList.toggle("text-red-400", totalProfit < 0);
+  renderChangeBadge(el.invKpiProfitPct, totalProfitPct);
+
+  // Rendimento do mês: apenas ativos comprados no mês atual (mede como as
+  // compras recentes estão performando, já que não guardamos histórico
+  // diário de preços para recalcular o patrimônio em datas passadas).
+  const now = new Date();
+  const monthPositions = withMetrics.filter((x) => {
+    const d = new Date(`${x.inv.purchaseDate}T00:00:00`);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+  const monthCost = monthPositions.reduce((sum, x) => sum + x.m.costBasis, 0);
+  const monthProfit = monthPositions.reduce((sum, x) => sum + x.m.profitValue, 0);
+  const monthPct = monthCost > 0 ? (monthProfit / monthCost) * 100 : 0;
+  el.invKpiMonth.textContent = `${monthPct >= 0 ? "+" : ""}${monthPct.toFixed(1)}%`;
+  el.invKpiMonth.classList.toggle("text-emerald-400", monthPct >= 0 && monthPositions.length > 0);
+  el.invKpiMonth.classList.toggle("text-red-400", monthPct < 0);
+
+  if (withMetrics.length === 0) {
+    el.invKpiBestTicker.textContent = "—";
+    el.invKpiBestPct.textContent = "0%";
+    return;
+  }
+
+  const best = withMetrics.reduce((a, b) => (b.m.profitPct > a.m.profitPct ? b : a));
+  el.invKpiBestTicker.textContent = best.inv.ticker;
+  el.invKpiBestPct.textContent = `${best.m.profitPct >= 0 ? "+" : ""}${best.m.profitPct.toFixed(2)}%`;
+  el.invKpiBestPct.classList.toggle("text-emerald-400", best.m.profitPct >= 0);
+  el.invKpiBestPct.classList.toggle("text-red-400", best.m.profitPct < 0);
+}
+
+export function initInvestmentCharts() {
+  invEvolutionChart = new Chart(el.invEvolutionCanvas.getContext("2d"), {
+    type: "line",
+    data: { labels: [], datasets: [] },
+    options: baseLineOptions,
+  });
+
+  invAllocationChart = new Chart(el.invAllocationCanvas.getContext("2d"), {
+    type: "doughnut",
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "72%",
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: "#0f172a", borderColor: "#334155", borderWidth: 1, padding: 10 },
+      },
+    },
+  });
+}
+
+function updateInvestmentCharts(investments) {
+  if (!invEvolutionChart || !invAllocationChart) return;
+
+  // Capital investido acumulado por mês (custo de aquisição, não valor de
+  // mercado — não temos preço histórico diário para reconstruir isso).
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
+  }
+
+  const monthlyCost = months.map(() => 0);
+  investments.forEach((inv) => {
+    const d = new Date(`${inv.purchaseDate}T00:00:00`);
+    const idx = months.findIndex((m) => m.year === d.getFullYear() && m.month === d.getMonth());
+    if (idx === -1) return;
+    monthlyCost[idx] += (Number(inv.avgPrice) || 0) * (Number(inv.quantity) || 0);
+  });
+
+  let running = 0;
+  const cumulative = monthlyCost.map((v) => (running += v));
+  const modeColor = getModeColor();
+
+  const ctx = el.invEvolutionCanvas.getContext("2d");
+  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+  gradient.addColorStop(0, hexToRgba(modeColor, 0.35));
+  gradient.addColorStop(1, hexToRgba(modeColor, 0));
+
+  invEvolutionChart.data.labels = months.map((m) => m.label);
+  invEvolutionChart.data.datasets = [
+    {
+      label: "Capital investido",
+      data: cumulative,
+      borderColor: modeColor,
+      backgroundColor: gradient,
+      fill: true,
+      tension: 0.4,
+      pointRadius: 3,
+      pointBackgroundColor: modeColor,
+      pointBorderColor: "#0f172a",
+      pointBorderWidth: 2,
+      borderWidth: 2.5,
+    },
+  ];
+  invEvolutionChart.update();
+
+  const totals = {};
+  investments.forEach((inv) => {
+    const m = calcInvestmentMetrics(inv);
+    totals[inv.category] = (totals[inv.category] || 0) + m.totalValue;
+  });
+
+  const labels = Object.keys(totals);
+  const values = Object.values(totals);
+  const colors = labels.map((c) => INVESTMENT_CATEGORY_COLORS[c] || INVESTMENT_CATEGORY_COLORS["Outros"]);
+
+  invAllocationChart.data.labels = labels;
+  invAllocationChart.data.datasets = [
+    {
+      data: values.length ? values : [1],
+      backgroundColor: values.length ? colors : ["#1e293b"],
+      borderColor: "#0f172a",
+      borderWidth: 3,
+      hoverOffset: 6,
+    },
+  ];
+  invAllocationChart.update();
+
+  const total = values.reduce((a, b) => a + b, 0);
+  el.invAllocationLegend.innerHTML = labels.length
+    ? labels
+        .map((label, i) => {
+          const pct = total > 0 ? ((values[i] / total) * 100).toFixed(0) : 0;
+          return `
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-2 text-slate-400">
+              <span class="w-2.5 h-2.5 rounded-full" style="background:${colors[i]};"></span>
+              ${escapeHtml(label)}
+            </span>
+            <span class="font-semibold text-slate-300">${pct}%</span>
+          </div>`;
+        })
+        .join("")
+    : `<p class="text-slate-600 text-center">Sem ativos cadastrados.</p>`;
+}
+
+export function renderInvestments(investments) {
+  lastInvestments = investments;
+  renderInvestmentsTable(investments);
+  updateInvestmentKPIs(investments);
+  updateInvestmentCharts(investments);
+}
+
+export function setQuotesLoading(loading) {
+  el.refreshQuotesBtn.disabled = loading;
+  el.refreshQuotesBtn.classList.toggle("opacity-60", loading);
+  el.refreshQuotesIcon.classList.toggle("animate-spin", loading);
+}
+
+export function bindInvestmentFilters() {
+  el.invSearchInput.addEventListener("input", () => renderInvestmentsTable(lastInvestments));
+  el.invCategoryFilter.addEventListener("change", () => renderInvestmentsTable(lastInvestments));
+  el.invSortSelect.addEventListener("change", () => {
+    invTypeSort = el.invSortSelect.value;
+    renderInvestmentsTable(lastInvestments);
+  });
+}
+
+/* ---------------------------------------------------------------
+   Modal: Novo Investimento
+--------------------------------------------------------------- */
+let investmentSubmitHandler = null;
+
+export function onInvestmentFormSubmit(handler) {
+  investmentSubmitHandler = handler;
+}
+
+const INVESTMENT_DATE_PLACEHOLDER = "Selecionar data";
+
+export function openInvestmentModal() {
+  el.investmentForm.reset();
+  setDatePickerValue("investment-date", "investment-date-label", todayISO(), INVESTMENT_DATE_PLACEHOLDER);
+  el.investmentModal.classList.remove("hidden");
+  el.investmentModal.classList.add("flex");
+}
+
+export function closeInvestmentModal() {
+  el.investmentModal.classList.add("hidden");
+  el.investmentModal.classList.remove("flex");
+  closeDatePicker();
+}
+
+export function bindInvestmentModal() {
+  el.newInvestmentBtn?.addEventListener("click", () => openInvestmentModal());
+  el.investmentModalCloseBtn?.addEventListener("click", closeInvestmentModal);
+  el.investmentModalBackdrop?.addEventListener("click", closeInvestmentModal);
+
+  el.investmentForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!el.investmentDate.value) {
+      showToast("Selecione a data da compra.", "error");
+      return;
+    }
+    const data = {
+      ticker: el.investmentTicker.value.trim(),
+      category: el.investmentCategory.value,
+      purchaseDate: el.investmentDate.value,
+      quantity: parseFloat(el.investmentQuantity.value),
+      price: parseFloat(el.investmentPrice.value),
+    };
+    investmentSubmitHandler?.(data);
+  });
+}
+
+/* ---------------------------------------------------------------
+   Modal: Editar Preço Atual
+--------------------------------------------------------------- */
+let priceEditSubmitHandler = null;
+
+export function onPriceEditSubmit(handler) {
+  priceEditSubmitHandler = handler;
+}
+
+export function openPriceEditModal(investment) {
+  el.priceEditId.value = investment.id;
+  el.priceEditTickerDisplay.value = investment.ticker;
+  el.priceEditValue.value = investment.currentPrice;
+  el.priceEditModal.classList.remove("hidden");
+  el.priceEditModal.classList.add("flex");
+}
+
+export function closePriceEditModal() {
+  el.priceEditModal.classList.add("hidden");
+  el.priceEditModal.classList.remove("flex");
+}
+
+export function bindPriceEditModal() {
+  el.priceEditModalCloseBtn?.addEventListener("click", closePriceEditModal);
+  el.priceEditModalBackdrop?.addEventListener("click", closePriceEditModal);
+
+  el.priceEditForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const id = el.priceEditId.value;
+    const price = parseFloat(el.priceEditValue.value);
+    priceEditSubmitHandler?.(id, price);
+    closePriceEditModal();
+  });
+}
+
+/* ---------------------------------------------------------------
    Modal: Nova / Editar Transação
 --------------------------------------------------------------- */
 let transactionSubmitHandler = null;
@@ -1112,6 +1554,12 @@ export function bindDatePickers() {
     labelId: "goal-deadline-label",
     hiddenInputId: "goal-deadline",
     placeholder: GOAL_DEADLINE_PLACEHOLDER,
+  });
+  attachDatePicker({
+    triggerId: "investment-date-trigger",
+    labelId: "investment-date-label",
+    hiddenInputId: "investment-date",
+    placeholder: INVESTMENT_DATE_PLACEHOLDER,
   });
 }
 

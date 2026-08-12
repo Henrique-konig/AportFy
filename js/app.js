@@ -22,10 +22,15 @@ import {
   addGoal,
   updateGoal,
   deleteGoal,
+  listenToInvestments,
+  addInvestment,
+  updateInvestment,
+  deleteInvestment,
   getUserProfile,
   upsertUserProfile,
   joinCouple,
 } from "./db.js";
+import { fetchQuotes, B3_CATEGORIES } from "./api.js";
 import * as ui from "./ui.js";
 
 /* ---------------------------------------------------------------
@@ -33,11 +38,14 @@ import * as ui from "./ui.js";
 --------------------------------------------------------------- */
 let unsubscribeTransactions = null;
 let unsubscribeGoals = null;
+let unsubscribeInvestments = null;
 let activeUser = null;
 let activeMode = "personal";
 let activeCoupleId = null;
 let latestTransactions = [];
 let latestGoals = [];
+let latestInvestments = [];
+let quotesInFlight = false;
 
 /* ---------------------------------------------------------------
    Inicialização de bindings de UI (executados uma única vez)
@@ -46,14 +54,20 @@ function initUIBindings() {
   ui.bindSidebarToggle();
   ui.bindTransactionModal();
   ui.bindGoalModal();
+  ui.bindInvestmentModal();
+  ui.bindPriceEditModal();
   ui.bindDeleteModal();
   ui.bindDatePickers();
   ui.bindSearch();
   ui.bindMobileSearch();
   ui.bindTransactionFilters();
+  ui.bindInvestmentFilters();
   ui.bindSettingsForms();
 
-  ui.onNavChange((view) => ui.setActiveView(view));
+  ui.onNavChange((view) => {
+    ui.setActiveView(view);
+    if (view === "investments") refreshQuotes({ silent: true });
+  });
   ui.onModeToggle((mode) => switchMode(mode));
 
   ui.onLogoutClick(async () => {
@@ -105,6 +119,64 @@ function initUIBindings() {
 
   ui.onEditGoal((goal) => ui.openGoalModal(goal));
 
+  /* -------------------- Investimentos -------------------- */
+  ui.onInvestmentFormSubmit(async (data) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+
+      // Mesmo ativo já existe na carteira? Mescla a compra em vez de
+      // criar uma posição duplicada, recalculando o preço médio:
+      //   novoPM = (qtdAntiga*pmAntigo + qtdNova*precoNovo) / (qtdAntiga+qtdNova)
+      const existing = latestInvestments.find(
+        (inv) => inv.ticker.toUpperCase() === data.ticker.toUpperCase()
+      );
+
+      if (existing) {
+        const oldQty = Number(existing.quantity) || 0;
+        const oldAvg = Number(existing.avgPrice) || 0;
+        const newQty = oldQty + data.quantity;
+        const newAvg = (oldQty * oldAvg + data.quantity * data.price) / newQty;
+
+        await updateInvestment(activeMode, id, existing.id, {
+          quantity: newQty,
+          avgPrice: newAvg,
+          category: data.category,
+          purchaseDate: data.purchaseDate > existing.purchaseDate ? data.purchaseDate : existing.purchaseDate,
+        });
+        ui.showToast(`Compra somada à posição de ${existing.ticker}. Preço médio recalculado.`, "success");
+      } else {
+        await addInvestment(activeMode, id, {
+          ticker: data.ticker,
+          category: data.category,
+          quantity: data.quantity,
+          avgPrice: data.price,
+          currentPrice: data.price,
+          purchaseDate: data.purchaseDate,
+          lastQuoteAt: null,
+          lastQuoteError: false,
+        });
+        ui.showToast("Investimento adicionado com sucesso!", "success");
+      }
+      ui.closeInvestmentModal();
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao salvar investimento.", "error");
+    }
+  });
+
+  ui.onPriceEditSubmit(async (investmentId, price) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      await updateInvestment(activeMode, id, investmentId, { currentPrice: price, lastQuoteError: false });
+      ui.showToast("Preço atualizado com sucesso!", "success");
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao atualizar preço.", "error");
+    }
+  });
+
+  ui.elements.refreshQuotesBtn?.addEventListener("click", () => refreshQuotes({ silent: false }));
+
   /* -------------------- Exclusão genérica -------------------- */
   ui.onDeleteConfirm(async (id, type) => {
     try {
@@ -112,6 +184,9 @@ function initUIBindings() {
       if (type === "goal") {
         await deleteGoal(activeMode, collectionId, id);
         ui.showToast("Meta excluída.", "success");
+      } else if (type === "investment") {
+        await deleteInvestment(activeMode, collectionId, id);
+        ui.showToast("Ativo excluído.", "success");
       } else {
         await deleteTransaction(activeMode, collectionId, id);
         ui.showToast("Transação excluída.", "success");
@@ -184,6 +259,63 @@ function initUIBindings() {
 
   ui.initCharts();
   ui.initReportsCharts();
+  ui.initInvestmentCharts();
+}
+
+/* ---------------------------------------------------------------
+   Cotações automáticas da B3 (Brapi)
+--------------------------------------------------------------- */
+async function refreshQuotes({ silent }) {
+  if (quotesInFlight) return;
+
+  const eligible = latestInvestments.filter((inv) => B3_CATEGORIES.includes(inv.category));
+  if (eligible.length === 0) {
+    if (!silent) ui.showToast("Nenhum ativo da B3 (Ações/FIIs) para atualizar.", "info");
+    return;
+  }
+
+  quotesInFlight = true;
+  ui.setQuotesLoading(true);
+
+  try {
+    const tickers = eligible.map((inv) => inv.ticker);
+    const { prices, failedTickers, networkError } = await fetchQuotes(tickers);
+    const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+
+    let updated = 0;
+    await Promise.all(
+      eligible.map(async (inv) => {
+        const price = prices[inv.ticker.toUpperCase()];
+        if (typeof price === "number") {
+          await updateInvestment(activeMode, id, inv.id, {
+            currentPrice: price,
+            lastQuoteAt: new Date().toISOString(),
+            lastQuoteError: false,
+          });
+          updated++;
+        } else {
+          // Falha nesse ticker específico: mantém o último currentPrice
+          // salvo e só sinaliza o alerta visual na linha do ativo.
+          await updateInvestment(activeMode, id, inv.id, { lastQuoteError: true });
+        }
+      })
+    );
+
+    if (networkError) {
+      ui.showToast("Não foi possível conectar à B3 agora. Mantendo os últimos preços salvos.", "error");
+    } else if (updated > 0) {
+      const failMsg = failedTickers.length ? ` (${failedTickers.length} ticker(s) não encontrado(s))` : "";
+      ui.showToast(`${updated} cotação(ões) atualizada(s)${failMsg}.`, "success");
+    } else {
+      ui.showToast("Não foi possível atualizar nenhuma cotação. Mantendo os últimos preços salvos.", "error");
+    }
+  } catch (err) {
+    console.error(err);
+    ui.showToast("Erro ao buscar cotações da B3.", "error");
+  } finally {
+    quotesInFlight = false;
+    ui.setQuotesLoading(false);
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -206,6 +338,10 @@ function subscribeToActiveCollection() {
     unsubscribeGoals();
     unsubscribeGoals = null;
   }
+  if (unsubscribeInvestments) {
+    unsubscribeInvestments();
+    unsubscribeInvestments = null;
+  }
 
   const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
   if (!id) return;
@@ -227,6 +363,15 @@ function subscribeToActiveCollection() {
     latestGoals = goals;
     ui.renderGoals(goals);
     ui.updateKPIs(latestTransactions, latestGoals);
+  });
+
+  unsubscribeInvestments = listenToInvestments(activeMode, id, (investments, error) => {
+    if (error) {
+      ui.showToast("Erro ao carregar investimentos em tempo real.", "error");
+      return;
+    }
+    latestInvestments = investments;
+    ui.renderInvestments(investments);
   });
 }
 
@@ -279,6 +424,7 @@ onAuthChange(async (user) => {
     activeCoupleId = null;
     latestTransactions = [];
     latestGoals = [];
+    latestInvestments = [];
     if (unsubscribeTransactions) {
       unsubscribeTransactions();
       unsubscribeTransactions = null;
@@ -286,6 +432,10 @@ onAuthChange(async (user) => {
     if (unsubscribeGoals) {
       unsubscribeGoals();
       unsubscribeGoals = null;
+    }
+    if (unsubscribeInvestments) {
+      unsubscribeInvestments();
+      unsubscribeInvestments = null;
     }
     ui.showLoginScreen();
   }
