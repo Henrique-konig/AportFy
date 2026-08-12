@@ -9,6 +9,7 @@
 // =========================================================
 
 import { attachDatePicker, setDatePickerValue, closeDatePicker } from "./datepicker.js";
+import { enhanceSelect, refreshDropdown } from "./dropdown.js";
 
 /* ---------------------------------------------------------------
    Referências de elementos
@@ -169,6 +170,9 @@ const el = {
   investmentDate: document.getElementById("investment-date"),
   investmentQuantity: document.getElementById("investment-quantity"),
   investmentPrice: document.getElementById("investment-price"),
+  investmentFetchPriceBtn: document.getElementById("investment-fetch-price-btn"),
+  investmentFetchPriceIcon: document.getElementById("investment-fetch-price-icon"),
+  investmentPriceHint: document.getElementById("investment-price-hint"),
 
   // Price edit modal (editar preço atual)
   priceEditModal: document.getElementById("price-edit-modal"),
@@ -1392,10 +1396,14 @@ export function onInvestmentFormSubmit(handler) {
 }
 
 const INVESTMENT_DATE_PLACEHOLDER = "Selecionar data";
+let priceManuallyEdited = false;
 
 export function openInvestmentModal() {
   el.investmentForm.reset();
   setDatePickerValue("investment-date", "investment-date-label", todayISO(), INVESTMENT_DATE_PLACEHOLDER);
+  refreshDropdown("investment-category");
+  priceManuallyEdited = false;
+  el.investmentPriceHint.classList.add("hidden");
   el.investmentModal.classList.remove("hidden");
   el.investmentModal.classList.add("flex");
 }
@@ -1406,10 +1414,72 @@ export function closeInvestmentModal() {
   closeDatePicker();
 }
 
+/* -------- Busca automática do preço atual na B3 (Ações/FIIs) -------- */
+let fetchB3PriceHandler = null;
+
+/** Registra o handler que efetivamente consulta a Brapi (implementado em app.js). */
+export function onFetchB3Price(handler) {
+  fetchB3PriceHandler = handler;
+}
+
+export function setB3PriceFetchLoading(loading) {
+  el.investmentFetchPriceBtn.disabled = loading;
+  el.investmentFetchPriceIcon.classList.toggle("animate-spin", loading);
+}
+
+/** Preenche o campo de preço com a cotação buscada (não conta como edição manual). */
+export function fillInvestmentPrice(price) {
+  el.investmentPrice.value = price.toFixed(2);
+  showInvestmentPriceHint(`Preço atual da B3: ${formatCurrency(price)}`, false);
+}
+
+export function showInvestmentPriceHint(message, isError) {
+  el.investmentPriceHint.textContent = message;
+  el.investmentPriceHint.classList.remove("hidden");
+  el.investmentPriceHint.classList.toggle("text-red-400", isError);
+  el.investmentPriceHint.classList.toggle("text-emerald-400", !isError);
+}
+
+function triggerB3PriceFetch() {
+  const ticker = el.investmentTicker.value.trim();
+  const category = el.investmentCategory.value;
+  if (!ticker || !B3_CATEGORIES.includes(category)) return;
+  if (priceManuallyEdited) return;
+  fetchB3PriceHandler?.(ticker, category);
+}
+
 export function bindInvestmentModal() {
   el.newInvestmentBtn?.addEventListener("click", () => openInvestmentModal());
   el.investmentModalCloseBtn?.addEventListener("click", closeInvestmentModal);
   el.investmentModalBackdrop?.addEventListener("click", closeInvestmentModal);
+
+  // Digitou o ticker ou trocou a categoria para Ações/FIIs: busca o preço
+  // atual sozinho, sem esperar o usuário clicar em nada.
+  el.investmentTicker?.addEventListener("blur", triggerB3PriceFetch);
+  el.investmentCategory?.addEventListener("change", triggerB3PriceFetch);
+
+  // Botão explícito sempre busca de novo, mesmo que o preço já tenha sido
+  // editado manualmente (ação intencional do usuário sobrepõe o valor).
+  el.investmentFetchPriceBtn?.addEventListener("click", () => {
+    const ticker = el.investmentTicker.value.trim();
+    const category = el.investmentCategory.value;
+    if (!ticker) {
+      showInvestmentPriceHint("Digite o ticker antes de buscar.", true);
+      return;
+    }
+    if (!B3_CATEGORIES.includes(category)) {
+      showInvestmentPriceHint("Essa categoria não é negociada na B3 — informe o preço manualmente.", true);
+      return;
+    }
+    priceManuallyEdited = false;
+    fetchB3PriceHandler?.(ticker, category);
+  });
+
+  // Se o usuário digitar um valor à mão, o próximo blur do ticker não
+  // deve sobrescrever silenciosamente o que ele já escreveu.
+  el.investmentPrice?.addEventListener("input", () => {
+    priceManuallyEdited = true;
+  });
 
   el.investmentForm?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1502,6 +1572,7 @@ export function openTransactionModal(transaction = null) {
     setDatePickerValue("transaction-date", "transaction-date-label", todayISO(), TRANSACTION_DATE_PLACEHOLDER);
     setTransactionType("income");
   }
+  refreshDropdown("transaction-category");
   el.transactionModal.classList.remove("hidden");
   el.transactionModal.classList.add("flex");
 }
@@ -1561,6 +1632,12 @@ export function bindDatePickers() {
     hiddenInputId: "investment-date",
     placeholder: INVESTMENT_DATE_PLACEHOLDER,
   });
+}
+
+export function bindCustomDropdowns() {
+  ["transaction-category", "investment-category", "txn-category-filter", "inv-category-filter", "inv-sort-select"].forEach(
+    enhanceSelect
+  );
 }
 
 /* ---------------------------------------------------------------

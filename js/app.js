@@ -58,6 +58,7 @@ function initUIBindings() {
   ui.bindPriceEditModal();
   ui.bindDeleteModal();
   ui.bindDatePickers();
+  ui.bindCustomDropdowns();
   ui.bindSearch();
   ui.bindMobileSearch();
   ui.bindTransactionFilters();
@@ -176,6 +177,26 @@ function initUIBindings() {
   });
 
   ui.elements.refreshQuotesBtn?.addEventListener("click", () => refreshQuotes({ silent: false }));
+
+  ui.onFetchB3Price(async (ticker, category) => {
+    ui.setB3PriceFetchLoading(true);
+    try {
+      const { prices, networkError } = await fetchQuotes([ticker]);
+      const price = prices[ticker.toUpperCase()];
+      if (typeof price === "number") {
+        ui.fillInvestmentPrice(price);
+      } else if (networkError) {
+        ui.showInvestmentPriceHint("Sem conexão com a B3 agora. Informe o preço manualmente.", true);
+      } else {
+        ui.showInvestmentPriceHint(
+          `Não foi possível buscar "${ticker}" na B3${category === "FIIs" ? " (FIIs exigem token da Brapi)" : ""}. Informe o preço manualmente.`,
+          true
+        );
+      }
+    } finally {
+      ui.setB3PriceFetchLoading(false);
+    }
+  });
 
   /* -------------------- Exclusão genérica -------------------- */
   ui.onDeleteConfirm(async (id, type) => {

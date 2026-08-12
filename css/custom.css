@@ -498,3 +498,50 @@ body.mode-couple .dp-day-selected {
   box-shadow: 0 4px 12px -2px rgba(168, 85, 247, 0.5);
 }
 
+/* =========================================================
+   Dropdown customizado (dropdown.js)
+   Substitui a lista de opções nativa do <select> por um popup
+   no mesmo estilo glass-card do resto do app.
+   ========================================================= */
+
+.sr-only-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+#dropdown-popup {
+  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.65);
+}
+
+.dd-option {
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.dd-option:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+body.mode-couple .dd-option:hover {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.dd-option-selected {
+  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+body.mode-couple .dd-option-selected {
+  background: linear-gradient(135deg, #9333ea, #a855f7) !important;
+}
+
