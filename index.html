@@ -645,11 +645,18 @@
                 <h3 class="font-bold text-lg">Proventos</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Dividendos, JCP e rendimentos recebidos — respeita o filtro de ativo acima.</p>
               </div>
-              <button id="new-dividend-btn"
-                class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
-                <i class="ph-bold ph-plus text-base"></i>
-                <span class="hidden sm:inline">Registrar Provento</span>
-              </button>
+              <div class="flex items-center gap-2">
+                <button id="import-dividends-btn" title="Importa da B3 o histórico de dividendos/JCP das suas Ações (FIIs exigem token pago na Brapi)"
+                  class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                  <i id="import-dividends-icon" class="ph-bold ph-download-simple text-base"></i>
+                  <span class="hidden sm:inline">Importar da B3</span>
+                </button>
+                <button id="new-dividend-btn"
+                  class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                  <i class="ph-bold ph-plus text-base"></i>
+                  <span class="hidden sm:inline">Registrar Provento</span>
+                </button>
+              </div>
             </section>
 
             <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up">

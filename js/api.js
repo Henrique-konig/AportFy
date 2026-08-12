@@ -98,3 +98,52 @@ export async function fetchQuotes(tickers) {
 
   return { prices, failedTickers, networkError };
 }
+
+const DIVIDEND_LABEL_MAP = {
+  "DIVIDENDO": "Dividendo",
+  "JCP": "JCP",
+  "JUROS SOBRE CAPITAL PRÓPRIO": "JCP",
+  "RENDIMENTO": "Rendimento",
+};
+
+function normalizeDividendType(label) {
+  const key = (label || "").trim().toUpperCase();
+  return DIVIDEND_LABEL_MAP[key] || "Outro";
+}
+
+/**
+ * Busca o histórico de proventos (dividendos/JCP) de um ticker na Brapi.
+ * Só funciona sem token para Ações — FIIs retornam 401 nesse endpoint no
+ * plano gratuito (mesma limitação de cotação já tratada em fetchQuotes).
+ * @param {string} ticker
+ * @returns {Promise<{ dividends: Array<{amount:number, date:string, type:string}>, ok: boolean }>}
+ */
+export async function fetchDividendHistory(ticker) {
+  try {
+    const symbol = ticker.toUpperCase().trim();
+    const url = BRAPI_TOKEN
+      ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true&token=${encodeURIComponent(BRAPI_TOKEN)}`
+      : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true`;
+    const res = await fetch(url);
+    if (!res.ok) return { dividends: [], ok: false };
+
+    const data = await res.json();
+    const cashDividends = data.results?.[0]?.dividendsData?.cashDividends || [];
+    const today = new Date().toISOString().slice(0, 10);
+
+    const dividends = cashDividends
+      .filter((d) => typeof d.rate === "number" && d.paymentDate)
+      .map((d) => ({
+        amount: d.rate,
+        date: d.paymentDate.slice(0, 10),
+        type: normalizeDividendType(d.label),
+      }))
+      // Só proventos já pagos — os anunciados para o futuro ainda não caíram na conta.
+      .filter((d) => d.date <= today);
+
+    return { dividends, ok: true };
+  } catch (err) {
+    console.warn(`Falha ao buscar histórico de proventos de ${ticker} na Brapi:`, err.message);
+    return { dividends: [], ok: false };
+  }
+}

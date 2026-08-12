@@ -79,7 +79,17 @@ function ensurePopup() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && activeField) closeDatePicker();
   });
-  window.addEventListener("scroll", () => { if (activeField) closeDatePicker(); }, true);
+  // Rolar dentro do próprio popup não deve fechá-lo — só fecha quando o
+  // scroll acontece fora dele (ex: a página ou um modal por trás dele).
+  window.addEventListener(
+    "scroll",
+    (e) => {
+      if (!activeField) return;
+      if (popupEl.contains(e.target)) return;
+      closeDatePicker();
+    },
+    true
+  );
   window.addEventListener("resize", () => { if (activeField) closeDatePicker(); });
 
   return popupEl;
@@ -199,10 +209,9 @@ export function closeDatePicker() {
 function openDatePickerFor(field) {
   ensurePopup();
 
-  if (activeField?.triggerBtn === field.triggerBtn) {
-    closeDatePicker();
-    return;
-  }
+  const wasOpenForSameField = activeField?.triggerBtn === field.triggerBtn;
+  closeDatePicker(); // fecha o calendário anterior (se houver) antes de trocar
+  if (wasOpenForSameField) return;
 
   activeField = field;
   const parsed = parseISO(field.hiddenInput.value) || todayParts();

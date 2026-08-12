@@ -29,7 +29,17 @@ function ensurePopup() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && activeField) closeDropdown();
   });
-  window.addEventListener("scroll", () => { if (activeField) closeDropdown(); }, true);
+  // Rolar a própria lista de opções não deve fechá-la — só fecha quando o
+  // scroll acontece fora do popup (ex: a página ou um modal por trás dele).
+  window.addEventListener(
+    "scroll",
+    (e) => {
+      if (!activeField) return;
+      if (popupEl.contains(e.target)) return;
+      closeDropdown();
+    },
+    true
+  );
   window.addEventListener("resize", () => { if (activeField) closeDropdown(); });
 
   return popupEl;
@@ -91,10 +101,9 @@ export function closeDropdown() {
 function openDropdownFor(field) {
   ensurePopup();
 
-  if (activeField?.triggerBtn === field.triggerBtn) {
-    closeDropdown();
-    return;
-  }
+  const wasOpenForSameField = activeField?.triggerBtn === field.triggerBtn;
+  closeDropdown(); // fecha o dropdown anterior (se houver) antes de trocar
+  if (wasOpenForSameField) return;
 
   activeField = field;
   renderOptions();

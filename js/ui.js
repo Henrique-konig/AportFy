@@ -176,6 +176,8 @@ const el = {
 
   // Proventos
   newDividendBtn: document.getElementById("new-dividend-btn"),
+  importDividendsBtn: document.getElementById("import-dividends-btn"),
+  importDividendsIcon: document.getElementById("import-dividends-icon"),
   divKpiTotal: document.getElementById("div-kpi-total"),
   divKpiMonth: document.getElementById("div-kpi-month"),
   divKpiYield: document.getElementById("div-kpi-yield"),
@@ -1752,6 +1754,23 @@ export function bindDividendModal() {
     };
     dividendSubmitHandler?.(data);
   });
+}
+
+/* -------- Importar proventos automaticamente da B3 -------- */
+let importDividendsHandler = null;
+
+export function onImportDividends(handler) {
+  importDividendsHandler = handler;
+}
+
+export function setImportDividendsLoading(loading) {
+  el.importDividendsBtn.disabled = loading;
+  el.importDividendsBtn.classList.toggle("opacity-60", loading);
+  el.importDividendsIcon.classList.toggle("animate-spin", loading);
+}
+
+export function bindImportDividends() {
+  el.importDividendsBtn?.addEventListener("click", () => importDividendsHandler?.());
 }
 
 /* ---------------------------------------------------------------

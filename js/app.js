@@ -33,7 +33,7 @@ import {
   upsertUserProfile,
   joinCouple,
 } from "./db.js";
-import { fetchQuotes, B3_CATEGORIES } from "./api.js";
+import { fetchQuotes, fetchDividendHistory, B3_CATEGORIES } from "./api.js";
 import * as ui from "./ui.js";
 
 /* ---------------------------------------------------------------
@@ -81,6 +81,7 @@ function initUIBindings() {
   ui.bindInvestmentModal();
   ui.bindPriceEditModal();
   ui.bindDividendModal();
+  ui.bindImportDividends();
   ui.bindDeleteModal();
   ui.bindDatePickers();
   ui.bindCustomDropdowns();
@@ -234,6 +235,8 @@ function initUIBindings() {
       ui.showToast("Erro ao registrar provento.", "error");
     }
   });
+
+  ui.onImportDividends(() => importDividendsFromB3());
 
   ui.elements.refreshQuotesBtn?.addEventListener("click", () => refreshQuotes({ silent: false }));
 
@@ -401,6 +404,75 @@ async function refreshQuotes({ silent }) {
   } finally {
     quotesInFlight = false;
     ui.setQuotesLoading(false);
+  }
+}
+
+/* ---------------------------------------------------------------
+   Importação automática de proventos da B3 (Brapi)
+--------------------------------------------------------------- */
+
+// FIIs exigem token pago na Brapi para o histórico de rendimentos —
+// só Ações têm esse endpoint liberado no plano gratuito.
+const DIVIDEND_IMPORT_CATEGORIES = ["Ações"];
+
+async function importDividendsFromB3() {
+  const eligible = latestInvestments.filter((inv) => DIVIDEND_IMPORT_CATEGORIES.includes(inv.category));
+  if (eligible.length === 0) {
+    ui.showToast("Nenhuma ação cadastrada para importar proventos (FIIs exigem token pago na Brapi).", "info");
+    return;
+  }
+
+  ui.setImportDividendsLoading(true);
+
+  try {
+    const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+    // Evita reimportar o mesmo provento a cada clique.
+    const existingKeys = new Set(latestDividends.map((d) => `${d.ticker}|${d.date}|${d.type}`));
+
+    let imported = 0;
+    let importedTotal = 0;
+    let anyFetchFailed = false;
+
+    for (const inv of eligible) {
+      const { dividends, ok } = await fetchDividendHistory(inv.ticker);
+      if (!ok) {
+        anyFetchFailed = true;
+        continue;
+      }
+
+      for (const d of dividends) {
+        // Só proventos pagos depois da compra: antes disso o usuário ainda
+        // não era dono do ativo na data-base do provento.
+        if (d.date < inv.purchaseDate) continue;
+
+        const key = `${inv.ticker}|${d.date}|${d.type}`;
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
+
+        // Aproximação: usa a quantidade de cotas atual do usuário, já que
+        // não guardamos quantas cotas ele tinha exatamente em cada data-base.
+        const amount = d.amount * (Number(inv.quantity) || 0);
+        await addDividend(activeMode, id, { ticker: inv.ticker, type: d.type, amount, date: d.date });
+        imported++;
+        importedTotal += amount;
+      }
+    }
+
+    if (imported > 0) {
+      ui.showToast(
+        `${imported} provento(s) importado(s) da B3 (R$ ${importedTotal.toFixed(2).replace(".", ",")} no total).`,
+        "success"
+      );
+    } else if (anyFetchFailed) {
+      ui.showToast("Não foi possível buscar proventos na B3 agora.", "error");
+    } else {
+      ui.showToast("Nenhum provento novo encontrado na B3 para importar.", "info");
+    }
+  } catch (err) {
+    console.error(err);
+    ui.showToast("Erro ao importar proventos da B3.", "error");
+  } finally {
+    ui.setImportDividendsLoading(false);
   }
 }
 
