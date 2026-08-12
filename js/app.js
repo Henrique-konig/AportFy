@@ -26,6 +26,9 @@ import {
   addInvestment,
   updateInvestment,
   deleteInvestment,
+  listenToDividends,
+  addDividend,
+  deleteDividend,
   getUserProfile,
   upsertUserProfile,
   joinCouple,
@@ -39,13 +42,34 @@ import * as ui from "./ui.js";
 let unsubscribeTransactions = null;
 let unsubscribeGoals = null;
 let unsubscribeInvestments = null;
+let unsubscribeDividends = null;
 let activeUser = null;
 let activeMode = "personal";
 let activeCoupleId = null;
 let latestTransactions = [];
 let latestGoals = [];
 let latestInvestments = [];
+let latestDividends = [];
 let quotesInFlight = false;
+
+/** Últimos N pontos de preço mantidos por ativo (evita crescimento infinito do documento). */
+const PRICE_HISTORY_LIMIT = 24;
+
+/**
+ * Anexa (ou atualiza, se já houver um ponto hoje) uma nova leitura de
+ * preço ao histórico do ativo — é isso que alimenta o mini-gráfico de
+ * "evolução do ativo" no card de detalhe.
+ */
+function buildPriceHistory(investment, price) {
+  const today = new Date().toISOString().slice(0, 10);
+  const history = Array.isArray(investment.priceHistory) ? [...investment.priceHistory] : [];
+  if (history.length && history[history.length - 1].date === today) {
+    history[history.length - 1] = { date: today, price };
+  } else {
+    history.push({ date: today, price });
+  }
+  return history.slice(-PRICE_HISTORY_LIMIT);
+}
 
 /* ---------------------------------------------------------------
    Inicialização de bindings de UI (executados uma única vez)
@@ -56,6 +80,7 @@ function initUIBindings() {
   ui.bindGoalModal();
   ui.bindInvestmentModal();
   ui.bindPriceEditModal();
+  ui.bindDividendModal();
   ui.bindDeleteModal();
   ui.bindDatePickers();
   ui.bindCustomDropdowns();
@@ -121,42 +146,56 @@ function initUIBindings() {
   ui.onEditGoal((goal) => ui.openGoalModal(goal));
 
   /* -------------------- Investimentos -------------------- */
-  ui.onInvestmentFormSubmit(async (data) => {
+  ui.onInvestmentFormSubmit(async (data, editingId) => {
     try {
       const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
 
-      // Mesmo ativo já existe na carteira? Mescla a compra em vez de
-      // criar uma posição duplicada, recalculando o preço médio:
-      //   novoPM = (qtdAntiga*pmAntigo + qtdNova*precoNovo) / (qtdAntiga+qtdNova)
-      const existing = latestInvestments.find(
-        (inv) => inv.ticker.toUpperCase() === data.ticker.toUpperCase()
-      );
-
-      if (existing) {
-        const oldQty = Number(existing.quantity) || 0;
-        const oldAvg = Number(existing.avgPrice) || 0;
-        const newQty = oldQty + data.quantity;
-        const newAvg = (oldQty * oldAvg + data.quantity * data.price) / newQty;
-
-        await updateInvestment(activeMode, id, existing.id, {
-          quantity: newQty,
-          avgPrice: newAvg,
-          category: data.category,
-          purchaseDate: data.purchaseDate > existing.purchaseDate ? data.purchaseDate : existing.purchaseDate,
-        });
-        ui.showToast(`Compra somada à posição de ${existing.ticker}. Preço médio recalculado.`, "success");
-      } else {
-        await addInvestment(activeMode, id, {
+      if (editingId) {
+        // Edição direta: substitui os dados da posição (ticker, categoria,
+        // quantidade, preço médio, data) pelos valores informados — sem
+        // mesclar com nenhuma outra compra.
+        await updateInvestment(activeMode, id, editingId, {
           ticker: data.ticker,
           category: data.category,
           quantity: data.quantity,
           avgPrice: data.price,
-          currentPrice: data.price,
           purchaseDate: data.purchaseDate,
-          lastQuoteAt: null,
-          lastQuoteError: false,
         });
-        ui.showToast("Investimento adicionado com sucesso!", "success");
+        ui.showToast("Ativo atualizado com sucesso!", "success");
+      } else {
+        // Mesmo ativo já existe na carteira? Mescla a compra em vez de
+        // criar uma posição duplicada, recalculando o preço médio:
+        //   novoPM = (qtdAntiga*pmAntigo + qtdNova*precoNovo) / (qtdAntiga+qtdNova)
+        const existing = latestInvestments.find(
+          (inv) => inv.ticker.toUpperCase() === data.ticker.toUpperCase()
+        );
+
+        if (existing) {
+          const oldQty = Number(existing.quantity) || 0;
+          const oldAvg = Number(existing.avgPrice) || 0;
+          const newQty = oldQty + data.quantity;
+          const newAvg = (oldQty * oldAvg + data.quantity * data.price) / newQty;
+
+          await updateInvestment(activeMode, id, existing.id, {
+            quantity: newQty,
+            avgPrice: newAvg,
+            category: data.category,
+            purchaseDate: data.purchaseDate > existing.purchaseDate ? data.purchaseDate : existing.purchaseDate,
+          });
+          ui.showToast(`Compra somada à posição de ${existing.ticker}. Preço médio recalculado.`, "success");
+        } else {
+          await addInvestment(activeMode, id, {
+            ticker: data.ticker,
+            category: data.category,
+            quantity: data.quantity,
+            avgPrice: data.price,
+            currentPrice: data.price,
+            purchaseDate: data.purchaseDate,
+            lastQuoteAt: null,
+            lastQuoteError: false,
+          });
+          ui.showToast("Investimento adicionado com sucesso!", "success");
+        }
       }
       ui.closeInvestmentModal();
     } catch (err) {
@@ -165,14 +204,34 @@ function initUIBindings() {
     }
   });
 
+  ui.onEditInvestment((investment) => ui.openInvestmentModal(investment));
+
   ui.onPriceEditSubmit(async (investmentId, price) => {
     try {
       const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
-      await updateInvestment(activeMode, id, investmentId, { currentPrice: price, lastQuoteError: false });
+      const investment = latestInvestments.find((inv) => inv.id === investmentId);
+      await updateInvestment(activeMode, id, investmentId, {
+        currentPrice: price,
+        lastQuoteError: false,
+        priceHistory: investment ? buildPriceHistory(investment, price) : [{ date: new Date().toISOString().slice(0, 10), price }],
+      });
       ui.showToast("Preço atualizado com sucesso!", "success");
     } catch (err) {
       console.error(err);
       ui.showToast("Erro ao atualizar preço.", "error");
+    }
+  });
+
+  /* -------------------- Proventos -------------------- */
+  ui.onDividendFormSubmit(async (data) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      await addDividend(activeMode, id, data);
+      ui.showToast("Provento registrado com sucesso!", "success");
+      ui.closeDividendModal();
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao registrar provento.", "error");
     }
   });
 
@@ -208,6 +267,9 @@ function initUIBindings() {
       } else if (type === "investment") {
         await deleteInvestment(activeMode, collectionId, id);
         ui.showToast("Ativo excluído.", "success");
+      } else if (type === "dividend") {
+        await deleteDividend(activeMode, collectionId, id);
+        ui.showToast("Provento excluído.", "success");
       } else {
         await deleteTransaction(activeMode, collectionId, id);
         ui.showToast("Transação excluída.", "success");
@@ -281,6 +343,8 @@ function initUIBindings() {
   ui.initCharts();
   ui.initReportsCharts();
   ui.initInvestmentCharts();
+  ui.initAssetDetailChart();
+  ui.initDividendsChart();
 }
 
 /* ---------------------------------------------------------------
@@ -312,6 +376,7 @@ async function refreshQuotes({ silent }) {
             currentPrice: price,
             lastQuoteAt: new Date().toISOString(),
             lastQuoteError: false,
+            priceHistory: buildPriceHistory(inv, price),
           });
           updated++;
         } else {
@@ -363,6 +428,10 @@ function subscribeToActiveCollection() {
     unsubscribeInvestments();
     unsubscribeInvestments = null;
   }
+  if (unsubscribeDividends) {
+    unsubscribeDividends();
+    unsubscribeDividends = null;
+  }
 
   const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
   if (!id) return;
@@ -393,6 +462,15 @@ function subscribeToActiveCollection() {
     }
     latestInvestments = investments;
     ui.renderInvestments(investments);
+  });
+
+  unsubscribeDividends = listenToDividends(activeMode, id, (dividends, error) => {
+    if (error) {
+      ui.showToast("Erro ao carregar proventos em tempo real.", "error");
+      return;
+    }
+    latestDividends = dividends;
+    ui.renderDividendsData(dividends);
   });
 }
 
@@ -446,6 +524,7 @@ onAuthChange(async (user) => {
     latestTransactions = [];
     latestGoals = [];
     latestInvestments = [];
+    latestDividends = [];
     if (unsubscribeTransactions) {
       unsubscribeTransactions();
       unsubscribeTransactions = null;
@@ -457,6 +536,10 @@ onAuthChange(async (user) => {
     if (unsubscribeInvestments) {
       unsubscribeInvestments();
       unsubscribeInvestments = null;
+    }
+    if (unsubscribeDividends) {
+      unsubscribeDividends();
+      unsubscribeDividends = null;
     }
     ui.showLoginScreen();
   }

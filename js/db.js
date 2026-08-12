@@ -283,3 +283,65 @@ export async function deleteInvestment(mode, id, investmentId) {
   const docRef = doc(db, path, investmentId);
   return deleteDoc(docRef);
 }
+
+/* ---------------------------------------------------------------
+   Proventos (dividendos, JCP, rendimentos de FIIs)
+   Coleções:
+     users/{userId}/dividends      -> modo Pessoal
+     couples/{coupleId}/dividends  -> modo Casal
+--------------------------------------------------------------- */
+
+function getDividendsCollection(mode, id) {
+  const path = mode === "couple" ? `couples/${id}/dividends` : `users/${id}/dividends`;
+  return collection(db, path);
+}
+
+/**
+ * Escuta em tempo real os proventos registrados.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {(dividends: Array<Object>) => void} callback
+ * @returns {() => void} função para cancelar a escuta (unsubscribe)
+ */
+export function listenToDividends(mode, id, callback) {
+  const colRef = getDividendsCollection(mode, id);
+  const q = query(colRef, orderBy("date", "desc"));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const dividends = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(dividends);
+    },
+    (error) => {
+      console.error("Erro ao escutar proventos:", error);
+      callback([], error);
+    }
+  );
+}
+
+/**
+ * Registra um novo provento recebido.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {{ticker:string, type:string, amount:number, date:string}} dividend
+ */
+export async function addDividend(mode, id, dividend) {
+  const colRef = getDividendsCollection(mode, id);
+  return addDoc(colRef, {
+    ...dividend,
+    createdAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Remove um provento.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} dividendId
+ */
+export async function deleteDividend(mode, id, dividendId) {
+  const path = mode === "couple" ? `couples/${id}/dividends` : `users/${id}/dividends`;
+  const docRef = doc(db, path, dividendId);
+  return deleteDoc(docRef);
+}

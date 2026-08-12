@@ -144,6 +144,7 @@ const el = {
   invSearchInput: document.getElementById("inv-search-input"),
   invCategoryFilter: document.getElementById("inv-category-filter"),
   invSortSelect: document.getElementById("inv-sort-select"),
+  invAssetFilter: document.getElementById("inv-asset-filter"),
   refreshQuotesBtn: document.getElementById("refresh-quotes-btn"),
   refreshQuotesIcon: document.getElementById("refresh-quotes-icon"),
   newInvestmentBtn: document.getElementById("new-investment-btn"),
@@ -154,17 +155,52 @@ const el = {
   invKpiBestTicker: document.getElementById("inv-kpi-best-ticker"),
   invKpiBestPct: document.getElementById("inv-kpi-best-pct"),
   invEvolutionCanvas: document.getElementById("inv-evolution-chart"),
+  invEvolutionLegend: document.getElementById("inv-evolution-legend"),
   invAllocationCanvas: document.getElementById("inv-allocation-chart"),
   invAllocationLegend: document.getElementById("inv-allocation-legend"),
   investmentsTbody: document.getElementById("investments-tbody"),
   investmentsEmpty: document.getElementById("investments-empty"),
   invCount: document.getElementById("inv-count"),
 
-  // Investment modal (novo ativo)
+  // Detalhe do ativo (reage ao filtro de ativo)
+  assetDetailCard: document.getElementById("asset-detail-card"),
+  assetDetailIcon: document.getElementById("asset-detail-icon"),
+  assetDetailTicker: document.getElementById("asset-detail-ticker"),
+  assetDetailCategory: document.getElementById("asset-detail-category"),
+  assetDetailQty: document.getElementById("asset-detail-qty"),
+  assetDetailAvg: document.getElementById("asset-detail-avg"),
+  assetDetailTotal: document.getElementById("asset-detail-total"),
+  assetDetailDividends: document.getElementById("asset-detail-dividends"),
+  assetDetailCanvas: document.getElementById("asset-detail-chart"),
+  assetDetailEmptyHint: document.getElementById("asset-detail-empty-hint"),
+
+  // Proventos
+  newDividendBtn: document.getElementById("new-dividend-btn"),
+  divKpiTotal: document.getElementById("div-kpi-total"),
+  divKpiMonth: document.getElementById("div-kpi-month"),
+  divKpiYield: document.getElementById("div-kpi-yield"),
+  divChartCanvas: document.getElementById("div-chart"),
+  dividendsTbody: document.getElementById("dividends-tbody"),
+  dividendsEmpty: document.getElementById("dividends-empty"),
+  divCount: document.getElementById("div-count"),
+
+  // Modal: Registrar Provento
+  dividendModal: document.getElementById("dividend-modal"),
+  dividendModalBackdrop: document.getElementById("dividend-modal-backdrop"),
+  dividendModalCloseBtn: document.getElementById("dividend-modal-close-btn"),
+  dividendForm: document.getElementById("dividend-form"),
+  dividendTicker: document.getElementById("dividend-ticker"),
+  dividendType: document.getElementById("dividend-type"),
+  dividendAmount: document.getElementById("dividend-amount"),
+  dividendDate: document.getElementById("dividend-date"),
+
+  // Investment modal (novo ativo / editar ativo)
   investmentModal: document.getElementById("investment-modal"),
   investmentModalBackdrop: document.getElementById("investment-modal-backdrop"),
+  investmentModalTitle: document.getElementById("investment-modal-title"),
   investmentModalCloseBtn: document.getElementById("investment-modal-close-btn"),
   investmentForm: document.getElementById("investment-form"),
+  investmentId: document.getElementById("investment-id"),
   investmentTicker: document.getElementById("investment-ticker"),
   investmentCategory: document.getElementById("investment-category"),
   investmentDate: document.getElementById("investment-date"),
@@ -173,6 +209,8 @@ const el = {
   investmentFetchPriceBtn: document.getElementById("investment-fetch-price-btn"),
   investmentFetchPriceIcon: document.getElementById("investment-fetch-price-icon"),
   investmentPriceHint: document.getElementById("investment-price-hint"),
+  investmentMergeHint: document.getElementById("investment-merge-hint"),
+  investmentSubmitLabel: document.getElementById("investment-submit-label"),
 
   // Price edit modal (editar preço atual)
   priceEditModal: document.getElementById("price-edit-modal"),
@@ -198,12 +236,16 @@ let pendingDeleteId = null;
 let pendingDeleteType = "transaction";
 let txnTypeFilter = "all";
 let lastInvestments = [];
+let lastDividends = [];
+let invAssetFilterValue = "all";
 let cashflowChart = null;
 let categoryChart = null;
 let reportsCashflowChart = null;
 let reportsCategoryChart = null;
 let invEvolutionChart = null;
 let invAllocationChart = null;
+let assetDetailChart = null;
+let divChart = null;
 
 const CATEGORY_COLORS = {
   "Salário": "#3b82f6",
@@ -243,6 +285,14 @@ const DELETE_META = {
   transaction: { title: "Excluir transação?", desc: "Essa ação não pode ser desfeita. Deseja continuar?" },
   goal: { title: "Excluir meta?", desc: "O progresso dessa meta será perdido. Deseja continuar?" },
   investment: { title: "Excluir ativo?", desc: "O histórico dessa posição será perdido. Deseja continuar?" },
+  dividend: { title: "Excluir provento?", desc: "Esse registro não pode ser recuperado. Deseja continuar?" },
+};
+
+const DIVIDEND_TYPE_COLORS = {
+  "Dividendo": "#3b82f6",
+  "JCP": "#a855f7",
+  "Rendimento": "#f97316",
+  "Outro": "#64748b",
 };
 
 /* ---------------------------------------------------------------
@@ -1122,6 +1172,7 @@ function renderInvestmentsTable(investments) {
   const categoryFilter = el.invCategoryFilter.value;
 
   let filtered = investments;
+  if (invAssetFilterValue !== "all") filtered = filtered.filter((inv) => inv.ticker === invAssetFilterValue);
   if (categoryFilter !== "all") filtered = filtered.filter((inv) => inv.category === categoryFilter);
   if (term) {
     filtered = filtered.filter(
@@ -1193,6 +1244,9 @@ function renderInvestmentsTable(investments) {
           </td>
           <td class="px-5 sm:px-6 py-4">
             <div class="flex items-center justify-end gap-1.5">
+              <button class="row-action-btn edit-investment-btn" data-id="${inv.id}" title="Editar ativo">
+                <i class="ph-bold ph-pencil-simple"></i>
+              </button>
               <button class="row-action-btn delete-btn delete-investment-btn" data-id="${inv.id}" title="Excluir">
                 <i class="ph-bold ph-trash"></i>
               </button>
@@ -1206,6 +1260,12 @@ function renderInvestmentsTable(investments) {
     btn.addEventListener("click", () => {
       const inv = investments.find((i) => i.id === btn.dataset.id);
       if (inv) openPriceEditModal(inv);
+    });
+  });
+  el.investmentsTbody.querySelectorAll(".edit-investment-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const inv = investments.find((i) => i.id === btn.dataset.id);
+      if (inv) editInvestmentHandler?.(inv);
     });
   });
   el.investmentsTbody.querySelectorAll(".delete-investment-btn").forEach((btn) => {
@@ -1280,8 +1340,9 @@ export function initInvestmentCharts() {
 function updateInvestmentCharts(investments) {
   if (!invEvolutionChart || !invAllocationChart) return;
 
-  // Capital investido acumulado por mês (custo de aquisição, não valor de
-  // mercado — não temos preço histórico diário para reconstruir isso).
+  // Capital investido acumulado por mês, segmentado por categoria (custo
+  // de aquisição, não valor de mercado — não há preço histórico diário
+  // para reconstruir a evolução real de mercado no passado).
   const months = [];
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
@@ -1289,40 +1350,51 @@ function updateInvestmentCharts(investments) {
     months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
   }
 
-  const monthlyCost = months.map(() => 0);
-  investments.forEach((inv) => {
-    const d = new Date(`${inv.purchaseDate}T00:00:00`);
-    const idx = months.findIndex((m) => m.year === d.getFullYear() && m.month === d.getMonth());
-    if (idx === -1) return;
-    monthlyCost[idx] += (Number(inv.avgPrice) || 0) * (Number(inv.quantity) || 0);
+  const categoriesPresent = [...new Set(investments.map((inv) => inv.category))];
+
+  const evolutionDatasets = categoriesPresent.map((category) => {
+    const color = INVESTMENT_CATEGORY_COLORS[category] || INVESTMENT_CATEGORY_COLORS["Outros"];
+    const monthlyCost = months.map(() => 0);
+
+    investments
+      .filter((inv) => inv.category === category)
+      .forEach((inv) => {
+        const d = new Date(`${inv.purchaseDate}T00:00:00`);
+        const idx = months.findIndex((m) => m.year === d.getFullYear() && m.month === d.getMonth());
+        if (idx === -1) return;
+        monthlyCost[idx] += (Number(inv.avgPrice) || 0) * (Number(inv.quantity) || 0);
+      });
+
+    let running = 0;
+    const cumulative = monthlyCost.map((v) => (running += v));
+
+    return {
+      label: category,
+      data: cumulative,
+      borderColor: color,
+      backgroundColor: hexToRgba(color, 0.08),
+      fill: false,
+      tension: 0.4,
+      pointRadius: 2.5,
+      pointBackgroundColor: color,
+      pointBorderColor: "#0f172a",
+      pointBorderWidth: 1.5,
+      borderWidth: 2.25,
+    };
   });
 
-  let running = 0;
-  const cumulative = monthlyCost.map((v) => (running += v));
-  const modeColor = getModeColor();
-
-  const ctx = el.invEvolutionCanvas.getContext("2d");
-  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-  gradient.addColorStop(0, hexToRgba(modeColor, 0.35));
-  gradient.addColorStop(1, hexToRgba(modeColor, 0));
-
   invEvolutionChart.data.labels = months.map((m) => m.label);
-  invEvolutionChart.data.datasets = [
-    {
-      label: "Capital investido",
-      data: cumulative,
-      borderColor: modeColor,
-      backgroundColor: gradient,
-      fill: true,
-      tension: 0.4,
-      pointRadius: 3,
-      pointBackgroundColor: modeColor,
-      pointBorderColor: "#0f172a",
-      pointBorderWidth: 2,
-      borderWidth: 2.5,
-    },
-  ];
+  invEvolutionChart.data.datasets = evolutionDatasets;
   invEvolutionChart.update();
+
+  el.invEvolutionLegend.innerHTML = categoriesPresent.length
+    ? categoriesPresent
+        .map((c) => {
+          const color = INVESTMENT_CATEGORY_COLORS[c] || INVESTMENT_CATEGORY_COLORS["Outros"];
+          return `<span class="flex items-center gap-1.5 text-slate-400"><span class="w-2.5 h-2.5 rounded-full" style="background:${color};"></span>${escapeHtml(c)}</span>`;
+        })
+        .join("")
+    : `<p class="text-slate-600">Sem ativos cadastrados.</p>`;
 
   const totals = {};
   investments.forEach((inv) => {
@@ -1364,11 +1436,247 @@ function updateInvestmentCharts(investments) {
     : `<p class="text-slate-600 text-center">Sem ativos cadastrados.</p>`;
 }
 
+/* ---------------------------------------------------------------
+   Filtro por ativo (compartilhado entre tabela, detalhe e proventos)
+--------------------------------------------------------------- */
+function populateAssetFilter(investments) {
+  const tickers = [...new Set(investments.map((inv) => inv.ticker))].sort();
+  const current = el.invAssetFilter.value;
+
+  el.invAssetFilter.innerHTML =
+    `<option value="all">Todos os ativos</option>` +
+    tickers.map((t) => `<option value="${t.replace(/"/g, "&quot;")}">${escapeHtml(t)}</option>`).join("");
+
+  el.invAssetFilter.value = tickers.includes(current) ? current : "all";
+  invAssetFilterValue = el.invAssetFilter.value;
+  refreshDropdown("inv-asset-filter");
+}
+
+function populateDividendTickerSelect(investments) {
+  const tickers = [...new Set(investments.map((inv) => inv.ticker))].sort();
+  const current = el.dividendTicker.value;
+
+  el.dividendTicker.innerHTML = tickers.length
+    ? tickers.map((t) => `<option value="${t.replace(/"/g, "&quot;")}">${escapeHtml(t)}</option>`).join("")
+    : `<option value="">Cadastre um ativo primeiro</option>`;
+
+  if (tickers.includes(current)) el.dividendTicker.value = current;
+  refreshDropdown("dividend-ticker");
+}
+
+/* ---------------------------------------------------------------
+   Detalhe do ativo selecionado (evolução de preço + proventos)
+--------------------------------------------------------------- */
+export function initAssetDetailChart() {
+  assetDetailChart = new Chart(el.assetDetailCanvas.getContext("2d"), {
+    type: "line",
+    data: { labels: [], datasets: [] },
+    options: baseLineOptions,
+  });
+}
+
+function renderAssetDetail(investments, dividends) {
+  if (invAssetFilterValue === "all") {
+    el.assetDetailCard.classList.add("hidden");
+    return;
+  }
+
+  const inv = investments.find((i) => i.ticker === invAssetFilterValue);
+  if (!inv) {
+    el.assetDetailCard.classList.add("hidden");
+    return;
+  }
+
+  el.assetDetailCard.classList.remove("hidden");
+
+  const m = calcInvestmentMetrics(inv);
+  const color = INVESTMENT_CATEGORY_COLORS[inv.category] || INVESTMENT_CATEGORY_COLORS["Outros"];
+
+  el.assetDetailIcon.style.background = `${color}22`;
+  el.assetDetailIcon.style.color = color;
+  el.assetDetailIcon.textContent = (inv.ticker || "?").slice(0, 2).toUpperCase();
+  el.assetDetailTicker.textContent = inv.ticker;
+  el.assetDetailCategory.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>${escapeHtml(inv.category)}`;
+  el.assetDetailQty.textContent = formatQuantity(m.quantity);
+  el.assetDetailAvg.textContent = formatCurrency(m.avgPrice);
+  el.assetDetailTotal.textContent = formatCurrency(m.totalValue);
+
+  const tickerDividends = dividends.filter((d) => d.ticker === inv.ticker);
+  const totalDividends = tickerDividends.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  el.assetDetailDividends.textContent = formatCurrency(totalDividends);
+
+  const history = Array.isArray(inv.priceHistory) ? inv.priceHistory : [];
+  if (!assetDetailChart) return;
+
+  if (history.length < 2) {
+    el.assetDetailCanvas.classList.add("hidden");
+    el.assetDetailEmptyHint.classList.remove("hidden");
+    return;
+  }
+  el.assetDetailCanvas.classList.remove("hidden");
+  el.assetDetailEmptyHint.classList.add("hidden");
+
+  const ctx = el.assetDetailCanvas.getContext("2d");
+  const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, hexToRgba(color, 0.3));
+  gradient.addColorStop(1, hexToRgba(color, 0));
+
+  assetDetailChart.data.labels = history.map((h) => formatDate(h.date));
+  assetDetailChart.data.datasets = [
+    {
+      label: inv.ticker,
+      data: history.map((h) => h.price),
+      borderColor: color,
+      backgroundColor: gradient,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 3,
+      pointBackgroundColor: color,
+      pointBorderColor: "#0f172a",
+      pointBorderWidth: 2,
+      borderWidth: 2.25,
+    },
+  ];
+  assetDetailChart.update();
+}
+
+/* ---------------------------------------------------------------
+   Proventos (dividendos, JCP, rendimentos)
+--------------------------------------------------------------- */
+export function initDividendsChart() {
+  divChart = new Chart(el.divChartCanvas.getContext("2d"), {
+    type: "bar",
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: "#0f172a", borderColor: "#334155", borderWidth: 1, padding: 10 },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 } } },
+        y: {
+          grid: { color: "rgba(51,65,85,0.35)" },
+          ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => "R$ " + v },
+        },
+      },
+    },
+  });
+}
+
+function renderDividends(dividends, investments) {
+  const filtered = invAssetFilterValue === "all" ? dividends : dividends.filter((d) => d.ticker === invAssetFilterValue);
+
+  el.divCount.textContent = `${filtered.length} registro${filtered.length === 1 ? "" : "s"}`;
+
+  if (filtered.length === 0) {
+    el.dividendsTbody.innerHTML = "";
+    el.dividendsEmpty.classList.remove("hidden");
+    el.dividendsEmpty.classList.add("flex");
+  } else {
+    el.dividendsEmpty.classList.add("hidden");
+    el.dividendsEmpty.classList.remove("flex");
+
+    el.dividendsTbody.innerHTML = filtered
+      .map((d) => {
+        const color = DIVIDEND_TYPE_COLORS[d.type] || DIVIDEND_TYPE_COLORS["Outro"];
+        return `
+          <tr class="animate-fade-in" data-id="${d.id}">
+            <td class="px-5 sm:px-6 py-4 font-medium">${escapeHtml(d.ticker)}</td>
+            <td class="px-5 sm:px-6 py-4">
+              <span class="category-badge">
+                <span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>
+                ${escapeHtml(d.type)}
+              </span>
+            </td>
+            <td class="px-5 sm:px-6 py-4 text-slate-400">${formatDate(d.date)}</td>
+            <td class="px-5 sm:px-6 py-4 text-right font-semibold text-emerald-400">${formatCurrency(Number(d.amount) || 0)}</td>
+            <td class="px-5 sm:px-6 py-4">
+              <div class="flex items-center justify-end gap-1.5">
+                <button class="row-action-btn delete-btn delete-dividend-btn" data-id="${d.id}" title="Excluir">
+                  <i class="ph-bold ph-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`;
+      })
+      .join("");
+
+    el.dividendsTbody.querySelectorAll(".delete-dividend-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "dividend"));
+    });
+  }
+
+  // KPIs (sempre calculados sobre o conjunto filtrado pelo ativo selecionado)
+  const now = new Date();
+  const totalReceived = filtered.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const monthReceived = filtered
+    .filter((d) => {
+      const dt = new Date(`${d.date}T00:00:00`);
+      return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+    })
+    .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+  const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+  const last12mReceived = filtered
+    .filter((d) => new Date(`${d.date}T00:00:00`) >= twelveMonthsAgo)
+    .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+  const relevantInvestments =
+    invAssetFilterValue === "all" ? investments : investments.filter((inv) => inv.ticker === invAssetFilterValue);
+  const totalCost = relevantInvestments.reduce((sum, inv) => sum + calcInvestmentMetrics(inv).costBasis, 0);
+  const yieldOnCost = totalCost > 0 ? (last12mReceived / totalCost) * 100 : 0;
+
+  el.divKpiTotal.textContent = formatCurrency(totalReceived);
+  el.divKpiMonth.textContent = formatCurrency(monthReceived);
+  el.divKpiYield.textContent = `${yieldOnCost.toFixed(2)}%`;
+
+  // Gráfico: proventos por mês (últimos 6 meses)
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
+  }
+  const monthlyTotals = months.map(() => 0);
+  filtered.forEach((d) => {
+    const dt = new Date(`${d.date}T00:00:00`);
+    const idx = months.findIndex((m) => m.year === dt.getFullYear() && m.month === dt.getMonth());
+    if (idx !== -1) monthlyTotals[idx] += Number(d.amount) || 0;
+  });
+
+  if (divChart) {
+    const modeColor = getModeColor();
+    divChart.data.labels = months.map((m) => m.label);
+    divChart.data.datasets = [
+      {
+        label: "Proventos",
+        data: monthlyTotals,
+        backgroundColor: hexToRgba(modeColor, 0.7),
+        borderRadius: 6,
+        barThickness: 28,
+      },
+    ];
+    divChart.update();
+  }
+}
+
+/** Chamado pelo app.js sempre que os proventos mudam em tempo real. */
+export function renderDividendsData(dividends) {
+  lastDividends = dividends;
+  renderDividends(dividends, lastInvestments);
+  renderAssetDetail(lastInvestments, dividends);
+}
+
 export function renderInvestments(investments) {
   lastInvestments = investments;
   renderInvestmentsTable(investments);
   updateInvestmentKPIs(investments);
   updateInvestmentCharts(investments);
+  populateAssetFilter(investments);
+  populateDividendTickerSelect(investments);
+  renderAssetDetail(investments, lastDividends);
+  renderDividends(lastDividends, investments);
 }
 
 export function setQuotesLoading(loading) {
@@ -1384,6 +1692,66 @@ export function bindInvestmentFilters() {
     invTypeSort = el.invSortSelect.value;
     renderInvestmentsTable(lastInvestments);
   });
+  el.invAssetFilter.addEventListener("change", () => {
+    invAssetFilterValue = el.invAssetFilter.value;
+    renderInvestmentsTable(lastInvestments);
+    renderAssetDetail(lastInvestments, lastDividends);
+    renderDividends(lastDividends, lastInvestments);
+  });
+}
+
+/* ---------------------------------------------------------------
+   Modal: Registrar Provento
+--------------------------------------------------------------- */
+let dividendSubmitHandler = null;
+
+export function onDividendFormSubmit(handler) {
+  dividendSubmitHandler = handler;
+}
+
+const DIVIDEND_DATE_PLACEHOLDER = "Selecionar data";
+
+export function openDividendModal() {
+  el.dividendForm.reset();
+  populateDividendTickerSelect(lastInvestments);
+  if (invAssetFilterValue !== "all") {
+    el.dividendTicker.value = invAssetFilterValue;
+    refreshDropdown("dividend-ticker");
+  }
+  setDatePickerValue("dividend-date", "dividend-date-label", todayISO(), DIVIDEND_DATE_PLACEHOLDER);
+  el.dividendModal.classList.remove("hidden");
+  el.dividendModal.classList.add("flex");
+}
+
+export function closeDividendModal() {
+  el.dividendModal.classList.add("hidden");
+  el.dividendModal.classList.remove("flex");
+  closeDatePicker();
+}
+
+export function bindDividendModal() {
+  el.newDividendBtn?.addEventListener("click", () => openDividendModal());
+  el.dividendModalCloseBtn?.addEventListener("click", closeDividendModal);
+  el.dividendModalBackdrop?.addEventListener("click", closeDividendModal);
+
+  el.dividendForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!el.dividendTicker.value) {
+      showToast("Cadastre um ativo antes de registrar proventos.", "error");
+      return;
+    }
+    if (!el.dividendDate.value) {
+      showToast("Selecione a data do provento.", "error");
+      return;
+    }
+    const data = {
+      ticker: el.dividendTicker.value,
+      type: el.dividendType.value,
+      amount: parseFloat(el.dividendAmount.value),
+      date: el.dividendDate.value,
+    };
+    dividendSubmitHandler?.(data);
+  });
 }
 
 /* ---------------------------------------------------------------
@@ -1398,11 +1766,38 @@ export function onInvestmentFormSubmit(handler) {
 const INVESTMENT_DATE_PLACEHOLDER = "Selecionar data";
 let priceManuallyEdited = false;
 
-export function openInvestmentModal() {
+let editInvestmentHandler = null;
+
+export function onEditInvestment(handler) {
+  editInvestmentHandler = handler;
+}
+
+export function openInvestmentModal(investment = null) {
   el.investmentForm.reset();
-  setDatePickerValue("investment-date", "investment-date-label", todayISO(), INVESTMENT_DATE_PLACEHOLDER);
+
+  if (investment) {
+    el.investmentModalTitle.textContent = "Editar Ativo";
+    el.investmentSubmitLabel.textContent = "Salvar Alterações";
+    el.investmentMergeHint.textContent = "Você está editando esta posição diretamente — quantidade e preço médio serão substituídos pelos valores informados.";
+    el.investmentId.value = investment.id;
+    el.investmentTicker.value = investment.ticker;
+    el.investmentCategory.value = investment.category;
+    el.investmentQuantity.value = investment.quantity;
+    el.investmentPrice.value = investment.avgPrice;
+    setDatePickerValue("investment-date", "investment-date-label", investment.purchaseDate, INVESTMENT_DATE_PLACEHOLDER);
+    // Evita que um blur acidental no ticker sobrescreva o preço médio já
+    // registrado com a cotação atual — só o botão manual faz isso na edição.
+    priceManuallyEdited = true;
+  } else {
+    el.investmentModalTitle.textContent = "Novo Ativo";
+    el.investmentSubmitLabel.textContent = "Salvar Investimento";
+    el.investmentMergeHint.textContent = "Se você já tem esse ativo na carteira, a nova compra é somada e o preço médio recalculado automaticamente.";
+    el.investmentId.value = "";
+    setDatePickerValue("investment-date", "investment-date-label", todayISO(), INVESTMENT_DATE_PLACEHOLDER);
+    priceManuallyEdited = false;
+  }
+
   refreshDropdown("investment-category");
-  priceManuallyEdited = false;
   el.investmentPriceHint.classList.add("hidden");
   el.investmentModal.classList.remove("hidden");
   el.investmentModal.classList.add("flex");
@@ -1494,7 +1889,8 @@ export function bindInvestmentModal() {
       quantity: parseFloat(el.investmentQuantity.value),
       price: parseFloat(el.investmentPrice.value),
     };
-    investmentSubmitHandler?.(data);
+    const editingId = el.investmentId.value || null;
+    investmentSubmitHandler?.(data, editingId);
   });
 }
 
@@ -1632,12 +2028,25 @@ export function bindDatePickers() {
     hiddenInputId: "investment-date",
     placeholder: INVESTMENT_DATE_PLACEHOLDER,
   });
+  attachDatePicker({
+    triggerId: "dividend-date-trigger",
+    labelId: "dividend-date-label",
+    hiddenInputId: "dividend-date",
+    placeholder: DIVIDEND_DATE_PLACEHOLDER,
+  });
 }
 
 export function bindCustomDropdowns() {
-  ["transaction-category", "investment-category", "txn-category-filter", "inv-category-filter", "inv-sort-select"].forEach(
-    enhanceSelect
-  );
+  [
+    "transaction-category",
+    "investment-category",
+    "txn-category-filter",
+    "inv-category-filter",
+    "inv-sort-select",
+    "inv-asset-filter",
+    "dividend-ticker",
+    "dividend-type",
+  ].forEach(enhanceSelect);
 }
 
 /* ---------------------------------------------------------------

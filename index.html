@@ -475,6 +475,11 @@
                   <option value="balance">Maior saldo</option>
                 </select>
 
+                <select id="inv-asset-filter"
+                  class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all lg:w-52">
+                  <option value="all">Todos os ativos</option>
+                </select>
+
                 <div class="flex items-center gap-2 lg:ml-auto">
                   <button id="refresh-quotes-btn"
                     class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
@@ -488,6 +493,42 @@
                   </button>
                 </div>
               </div>
+            </section>
+
+            <!-- Detalhe do ativo selecionado no filtro (oculto quando "Todos os ativos") -->
+            <section id="asset-detail-card" class="hidden glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                <div class="flex items-center gap-3">
+                  <span id="asset-detail-icon" class="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"></span>
+                  <div>
+                    <h3 class="font-bold text-base" id="asset-detail-ticker">—</h3>
+                    <span id="asset-detail-category" class="category-badge mt-1"></span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-right">
+                  <div>
+                    <p class="text-[11px] text-slate-500">Quantidade</p>
+                    <p class="text-sm font-bold" id="asset-detail-qty">—</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-slate-500">Preço Médio</p>
+                    <p class="text-sm font-bold" id="asset-detail-avg">—</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-slate-500">Saldo Total</p>
+                    <p class="text-sm font-bold" id="asset-detail-total">—</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-slate-500">Proventos Recebidos</p>
+                    <p class="text-sm font-bold text-emerald-400" id="asset-detail-dividends">—</p>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mb-2">Evolução do preço registrada a cada atualização de cotação</p>
+              <div class="h-52">
+                <canvas id="asset-detail-chart"></canvas>
+              </div>
+              <p id="asset-detail-empty-hint" class="hidden text-xs text-slate-600 text-center py-10">Ainda não há histórico de preço para este ativo — atualize as cotações ou edite o preço para começar a registrar.</p>
             </section>
 
             <!-- KPIs -->
@@ -551,11 +592,12 @@
             <!-- Gráficos -->
             <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 animate-slide-up">
               <div class="xl:col-span-2 glass-card rounded-2xl p-5 sm:p-6">
-                <h3 class="font-bold text-base mb-1">Capital Investido</h3>
-                <p class="text-xs text-slate-500 mb-4">Evolução do total aportado nos últimos 6 meses</p>
+                <h3 class="font-bold text-base mb-1">Evolução por Categoria</h3>
+                <p class="text-xs text-slate-500 mb-4">Capital aportado por categoria nos últimos 6 meses</p>
                 <div class="h-72">
                   <canvas id="inv-evolution-chart"></canvas>
                 </div>
+                <div id="inv-evolution-legend" class="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-[11px]"></div>
               </div>
 
               <div class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col">
@@ -593,6 +635,71 @@
                   <i class="ph-thin ph-chart-line-up text-5xl text-slate-700 mb-3"></i>
                   <p class="text-slate-500 text-sm">Nenhum ativo cadastrado ainda.</p>
                   <p class="text-slate-600 text-xs mt-1">Adicione seu primeiro investimento para começar a acompanhar.</p>
+                </div>
+              </div>
+            </section>
+
+            <!-- Proventos -->
+            <section class="flex items-center justify-between animate-slide-up">
+              <div>
+                <h3 class="font-bold text-lg">Proventos</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Dividendos, JCP e rendimentos recebidos — respeita o filtro de ativo acima.</p>
+              </div>
+              <button id="new-dividend-btn"
+                class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                <i class="ph-bold ph-plus text-base"></i>
+                <span class="hidden sm:inline">Registrar Provento</span>
+              </button>
+            </section>
+
+            <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up">
+              <div class="glass-card rounded-2xl p-5">
+                <p class="text-xs font-medium text-slate-400 mb-1">Total Recebido</p>
+                <h3 class="text-xl font-extrabold text-emerald-400" id="div-kpi-total">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-600 mt-1">Histórico completo</p>
+              </div>
+              <div class="glass-card rounded-2xl p-5">
+                <p class="text-xs font-medium text-slate-400 mb-1">Recebido no Mês</p>
+                <h3 class="text-xl font-extrabold" id="div-kpi-month">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-600 mt-1">Mês atual</p>
+              </div>
+              <div class="glass-card rounded-2xl p-5">
+                <p class="text-xs font-medium text-slate-400 mb-1">Yield on Cost</p>
+                <h3 class="text-xl font-extrabold" id="div-kpi-yield">0%</h3>
+                <p class="text-[11px] text-slate-600 mt-1">Proventos (12m) / capital investido</p>
+              </div>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1">Proventos por Mês</h3>
+              <p class="text-xs text-slate-500 mb-4">Últimos 6 meses</p>
+              <div class="h-56">
+                <canvas id="div-chart"></canvas>
+              </div>
+            </section>
+
+            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
+              <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">
+                <h3 class="font-bold text-base">Histórico de Proventos</h3>
+                <span id="div-count" class="text-xs text-slate-500">0 registros</span>
+              </div>
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="px-5 sm:px-6 py-3 font-medium">Ativo</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Tipo</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Data</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Valor</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dividends-tbody"></tbody>
+                </table>
+                <div id="dividends-empty" class="hidden flex-col items-center justify-center py-16 text-center">
+                  <i class="ph-thin ph-coins text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm">Nenhum provento registrado ainda.</p>
+                  <p class="text-slate-600 text-xs mt-1">Registre dividendos, JCP ou rendimentos recebidos dos seus ativos.</p>
                 </div>
               </div>
             </section>
@@ -836,13 +943,14 @@
 
     <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
       <div class="flex items-center justify-between mb-6">
-        <h3 class="text-lg font-bold">Novo Ativo</h3>
+        <h3 class="text-lg font-bold" id="investment-modal-title">Novo Ativo</h3>
         <button id="investment-modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
           <i class="ph-bold ph-x text-xl"></i>
         </button>
       </div>
 
       <form id="investment-form" class="space-y-4">
+        <input type="hidden" id="investment-id" />
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1.5" for="investment-ticker">Nome / Ticker</label>
           <input required type="text" id="investment-ticker" placeholder="Ex: PETR4, HGLG11, Bitcoin..."
@@ -895,12 +1003,12 @@
 
         <p id="investment-price-hint" class="hidden text-[11px]"></p>
 
-        <p class="text-[11px] text-slate-600">Se você já tem esse ativo na carteira, a nova compra é somada e o preço médio recalculado automaticamente.</p>
+        <p id="investment-merge-hint" class="text-[11px] text-slate-600">Se você já tem esse ativo na carteira, a nova compra é somada e o preço médio recalculado automaticamente.</p>
 
         <button type="submit"
           class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
           <i class="ph-bold ph-check-circle"></i>
-          <span>Salvar Investimento</span>
+          <span id="investment-submit-label">Salvar Investimento</span>
         </button>
       </form>
     </div>
@@ -934,6 +1042,63 @@
           class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
           <i class="ph-bold ph-check-circle"></i>
           <span>Salvar Preço</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: REGISTRAR PROVENTO ============ -->
+  <div id="dividend-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="dividend-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold">Registrar Provento</h3>
+        <button id="dividend-modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <form id="dividend-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="dividend-ticker">Ativo</label>
+          <select id="dividend-ticker"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="dividend-type">Tipo</label>
+          <select id="dividend-type"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="Dividendo">Dividendo</option>
+            <option value="JCP">JCP</option>
+            <option value="Rendimento">Rendimento</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="dividend-amount">Valor (R$)</label>
+            <input required type="number" step="0.01" min="0.01" id="dividend-amount" placeholder="0,00"
+              class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="dividend-date-trigger">Data</label>
+            <button type="button" id="dividend-date-trigger"
+              class="date-trigger w-full flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+              <span id="dividend-date-label" class="text-slate-600">Selecionar data</span>
+              <i class="ph-bold ph-calendar-blank text-slate-500 shrink-0"></i>
+            </button>
+            <input type="hidden" id="dividend-date" />
+          </div>
+        </div>
+
+        <button type="submit"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar Provento</span>
         </button>
       </form>
     </div>
