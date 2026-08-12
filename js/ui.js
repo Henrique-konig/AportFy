@@ -179,8 +179,11 @@ const el = {
   importDividendsBtn: document.getElementById("import-dividends-btn"),
   importDividendsIcon: document.getElementById("import-dividends-icon"),
   divKpiTotal: document.getElementById("div-kpi-total"),
-  divKpiMonth: document.getElementById("div-kpi-month"),
+  divKpiYear: document.getElementById("div-kpi-year"),
+  divKpiYearLabel: document.getElementById("div-kpi-year-label"),
+  divKpi12m: document.getElementById("div-kpi-12m"),
   divKpiYield: document.getElementById("div-kpi-yield"),
+  divMonthFilter: document.getElementById("div-month-filter"),
   divChartCanvas: document.getElementById("div-chart"),
   dividendsTbody: document.getElementById("dividends-tbody"),
   dividendsEmpty: document.getElementById("dividends-empty"),
@@ -240,6 +243,7 @@ let txnTypeFilter = "all";
 let lastInvestments = [];
 let lastDividends = [];
 let invAssetFilterValue = "all";
+let divMonthFilterValue = "all";
 let cashflowChart = null;
 let categoryChart = null;
 let reportsCashflowChart = null;
@@ -1567,12 +1571,43 @@ export function initDividendsChart() {
   });
 }
 
+const MONTHS_PT_FULL = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+function formatMonthLabel(yyyyMm) {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  return `${MONTHS_PT_FULL[m - 1]} de ${y}`;
+}
+
+/** Repopula o filtro de mês com os meses realmente presentes no conjunto (já filtrado por ativo). */
+function populateDividendMonthFilter(dividendsForAsset) {
+  const months = [...new Set(dividendsForAsset.map((d) => d.date.slice(0, 7)))].sort().reverse();
+  const current = el.divMonthFilter.value;
+
+  el.divMonthFilter.innerHTML =
+    `<option value="all">Todos os meses</option>` + months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
+
+  el.divMonthFilter.value = months.includes(current) ? current : "all";
+  divMonthFilterValue = el.divMonthFilter.value;
+  refreshDropdown("div-month-filter");
+}
+
 function renderDividends(dividends, investments) {
+  // Filtrado só pelo ativo — base para os KPIs, o gráfico e a lista de
+  // meses disponíveis (não deve depender do filtro de mês, senão o
+  // dropdown de mês encolheria conforme o próprio usuário filtra).
   const filtered = invAssetFilterValue === "all" ? dividends : dividends.filter((d) => d.ticker === invAssetFilterValue);
 
-  el.divCount.textContent = `${filtered.length} registro${filtered.length === 1 ? "" : "s"}`;
+  populateDividendMonthFilter(filtered);
 
-  if (filtered.length === 0) {
+  // Filtrado por ativo + mês — só para a tabela de histórico.
+  const tableRows = divMonthFilterValue === "all" ? filtered : filtered.filter((d) => d.date.slice(0, 7) === divMonthFilterValue);
+
+  el.divCount.textContent = `${tableRows.length} registro${tableRows.length === 1 ? "" : "s"}`;
+
+  if (tableRows.length === 0) {
     el.dividendsTbody.innerHTML = "";
     el.dividendsEmpty.classList.remove("hidden");
     el.dividendsEmpty.classList.add("flex");
@@ -1580,7 +1615,7 @@ function renderDividends(dividends, investments) {
     el.dividendsEmpty.classList.add("hidden");
     el.dividendsEmpty.classList.remove("flex");
 
-    el.dividendsTbody.innerHTML = filtered
+    el.dividendsTbody.innerHTML = tableRows
       .map((d) => {
         const color = DIVIDEND_TYPE_COLORS[d.type] || DIVIDEND_TYPE_COLORS["Outro"];
         return `
@@ -1610,14 +1645,13 @@ function renderDividends(dividends, investments) {
     });
   }
 
-  // KPIs (sempre calculados sobre o conjunto filtrado pelo ativo selecionado)
+  // KPIs (sempre calculados sobre o conjunto filtrado só pelo ativo — o
+  // filtro de mês afeta apenas a lista abaixo, não esses totais fixos)
   const now = new Date();
   const totalReceived = filtered.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
-  const monthReceived = filtered
-    .filter((d) => {
-      const dt = new Date(`${d.date}T00:00:00`);
-      return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
-    })
+
+  const yearReceived = filtered
+    .filter((d) => new Date(`${d.date}T00:00:00`).getFullYear() === now.getFullYear())
     .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
   const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
@@ -1631,7 +1665,9 @@ function renderDividends(dividends, investments) {
   const yieldOnCost = totalCost > 0 ? (last12mReceived / totalCost) * 100 : 0;
 
   el.divKpiTotal.textContent = formatCurrency(totalReceived);
-  el.divKpiMonth.textContent = formatCurrency(monthReceived);
+  el.divKpiYear.textContent = formatCurrency(yearReceived);
+  el.divKpiYearLabel.textContent = `Ano atual (${now.getFullYear()})`;
+  el.divKpi12m.textContent = formatCurrency(last12mReceived);
   el.divKpiYield.textContent = `${yieldOnCost.toFixed(2)}%`;
 
   // Gráfico: proventos por mês (últimos 6 meses)
@@ -1698,6 +1734,10 @@ export function bindInvestmentFilters() {
     invAssetFilterValue = el.invAssetFilter.value;
     renderInvestmentsTable(lastInvestments);
     renderAssetDetail(lastInvestments, lastDividends);
+    renderDividends(lastDividends, lastInvestments);
+  });
+  el.divMonthFilter.addEventListener("change", () => {
+    divMonthFilterValue = el.divMonthFilter.value;
     renderDividends(lastDividends, lastInvestments);
   });
 }
@@ -2063,6 +2103,7 @@ export function bindCustomDropdowns() {
     "inv-category-filter",
     "inv-sort-select",
     "inv-asset-filter",
+    "div-month-filter",
     "dividend-ticker",
     "dividend-type",
   ].forEach(enhanceSelect);
