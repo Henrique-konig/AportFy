@@ -5,38 +5,64 @@
 // o app — sempre retorna um resultado parcial utilizável.
 // =========================================================
 
-const BRAPI_BASE = "https://brapi.dev/api/quote";
+const BRAPI_QUOTE_BASE = "https://brapi.dev/api/quote";
+const BRAPI_LIST_BASE = "https://brapi.dev/api/quote/list";
 
 // Opcional: cole aqui sua chave gratuita da Brapi (cadastro em brapi.dev)
-// para liberar cotações de FIIs, que o plano sem token não retorna.
-// Ações comuns (ex: PETR4) funcionam mesmo com este campo vazio.
+// para acelerar/priorizar a busca. Não é obrigatória: Ações usam o
+// endpoint /quote direto e FIIs caem automaticamente no endpoint
+// /quote/list (ambos liberados sem token no plano gratuito).
 const BRAPI_TOKEN = "";
 
 /** Categorias de investimento que têm ticker negociado na B3. */
 export const B3_CATEGORIES = ["Ações", "FIIs"];
 
 /**
- * Busca a cotação de um único ticker na Brapi.
+ * Tenta o endpoint direto /quote/{ticker}. Funciona sem token para Ações;
+ * FIIs retornam 401 (MISSING_TOKEN) nesse endpoint no plano gratuito.
+ */
+async function fetchViaQuoteEndpoint(symbol) {
+  const url = BRAPI_TOKEN
+    ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?token=${encodeURIComponent(BRAPI_TOKEN)}`
+    : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const price = data.results?.[0]?.regularMarketPrice;
+  return typeof price === "number" ? price : null;
+}
+
+/**
+ * Fallback para FIIs (e qualquer ticker que o endpoint direto rejeite sem
+ * token): /quote/list é um endpoint de busca/listagem que a Brapi libera
+ * sem token mesmo para fundos imobiliários, retornando o preço de
+ * fechamento mais recente no campo `close`.
+ */
+async function fetchViaListEndpoint(symbol) {
+  const res = await fetch(`${BRAPI_LIST_BASE}?search=${encodeURIComponent(symbol)}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const match = (data.stocks || []).find((s) => s.stock === symbol);
+  return typeof match?.close === "number" ? match.close : null;
+}
+
+/**
+ * Busca a cotação de um único ticker na Brapi, tentando o endpoint direto
+ * primeiro (mais rápido/preciso) e caindo para o endpoint de listagem se
+ * o primeiro não retornar preço (caso típico de FIIs sem token).
  * @param {string} symbol
  * @returns {Promise<{ symbol: string, price: number|null, networkError: boolean }>}
  */
 async function fetchOneQuote(symbol) {
   try {
-    const url = BRAPI_TOKEN
-      ? `${BRAPI_BASE}/${encodeURIComponent(symbol)}?token=${encodeURIComponent(BRAPI_TOKEN)}`
-      : `${BRAPI_BASE}/${encodeURIComponent(symbol)}`;
-    const res = await fetch(url);
+    const direct = await fetchViaQuoteEndpoint(symbol);
+    if (typeof direct === "number") return { symbol, price: direct, networkError: false };
 
-    if (!res.ok) {
-      // Ticker inválido, limite de requisições ou (no plano gratuito da
-      // Brapi) exigência de token para consultas em lote — nunca lança,
-      // apenas reporta esse símbolo como falho.
-      return { symbol, price: null, networkError: false };
-    }
+    const viaList = await fetchViaListEndpoint(symbol);
+    if (typeof viaList === "number") return { symbol, price: viaList, networkError: false };
 
-    const data = await res.json();
-    const price = data.results?.[0]?.regularMarketPrice;
-    return { symbol, price: typeof price === "number" ? price : null, networkError: false };
+    // Ticker realmente não encontrado em nenhum dos dois endpoints.
+    return { symbol, price: null, networkError: false };
   } catch (err) {
     // Sem internet, CORS bloqueado, timeout, etc.
     console.warn(`Falha ao buscar cotação de ${symbol} na Brapi:`, err.message);
