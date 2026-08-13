@@ -145,6 +145,10 @@
             <i class="ph-bold ph-chart-line-up text-lg shrink-0"></i>
             <span class="sidebar-label">Investimentos</span>
           </button>
+          <button data-view="news" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-newspaper text-lg shrink-0"></i>
+            <span class="sidebar-label">Notícias</span>
+          </button>
           <button data-view="reports" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-chart-pie-slice text-lg shrink-0"></i>
             <span class="sidebar-label">Relatórios</span>
@@ -721,6 +725,40 @@
                 </div>
               </div>
             </section>
+          </div>
+
+          <!-- ======================= VIEW: NOTÍCIAS ======================= -->
+          <div id="view-news" class="view-section hidden space-y-6">
+            <section class="glass-card rounded-2xl p-1.5 inline-flex items-center gap-1.5 animate-slide-up">
+              <button data-news-tab="portfolio" class="news-tab-btn active-news-tab px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2">
+                <i class="ph-bold ph-briefcase text-base"></i> Minha Carteira
+              </button>
+              <button data-news-tab="market" class="news-tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2">
+                <i class="ph-bold ph-globe-hemisphere-west text-base"></i> Mercado Diário
+              </button>
+            </section>
+
+            <!-- Sub-aba: Minha Carteira -->
+            <div id="news-panel-portfolio" class="news-panel space-y-4">
+              <p class="text-xs text-slate-500">Notícias que mencionam os ativos da sua carteira atual.</p>
+              <section id="news-portfolio-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-slide-up"></section>
+              <div id="news-portfolio-empty" class="hidden flex-col items-center justify-center py-16 text-center glass-card rounded-2xl">
+                <i class="ph-thin ph-newspaper text-5xl text-slate-700 mb-3"></i>
+                <p class="text-slate-500 text-sm" id="news-portfolio-empty-title">Nenhuma notícia encontrada para os ativos da sua carteira.</p>
+                <p class="text-slate-600 text-xs mt-1" id="news-portfolio-empty-desc">Adicione ativos em Investimentos para ver notícias específicas aqui.</p>
+              </div>
+            </div>
+
+            <!-- Sub-aba: Mercado Diário -->
+            <div id="news-panel-market" class="news-panel hidden space-y-4">
+              <p class="text-xs text-slate-500">Principais manchetes de economia, finanças e mercado global.</p>
+              <section id="news-market-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-slide-up"></section>
+              <div id="news-market-empty" class="hidden flex-col items-center justify-center py-16 text-center glass-card rounded-2xl">
+                <i class="ph-thin ph-newspaper text-5xl text-slate-700 mb-3"></i>
+                <p class="text-slate-500 text-sm" id="news-market-empty-title">Nenhuma notícia disponível no momento.</p>
+                <p class="text-slate-600 text-xs mt-1" id="news-market-empty-desc">Tente novamente mais tarde.</p>
+              </div>
+            </div>
           </div>
 
           <!-- ======================= VIEW: RELATÓRIOS ======================= -->
