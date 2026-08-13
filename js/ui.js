@@ -172,6 +172,7 @@ const el = {
   assetDetailTotal: document.getElementById("asset-detail-total"),
   assetDetailDividends: document.getElementById("asset-detail-dividends"),
   assetDetailCanvas: document.getElementById("asset-detail-chart"),
+  assetDetailChartWrap: document.getElementById("asset-detail-chart-wrap"),
   assetDetailEmptyHint: document.getElementById("asset-detail-empty-hint"),
 
   // Proventos
@@ -1515,11 +1516,11 @@ function renderAssetDetail(investments, dividends) {
   if (!assetDetailChart) return;
 
   if (history.length < 2) {
-    el.assetDetailCanvas.classList.add("hidden");
+    el.assetDetailChartWrap.classList.add("hidden");
     el.assetDetailEmptyHint.classList.remove("hidden");
     return;
   }
-  el.assetDetailCanvas.classList.remove("hidden");
+  el.assetDetailChartWrap.classList.remove("hidden");
   el.assetDetailEmptyHint.classList.add("hidden");
 
   const ctx = el.assetDetailCanvas.getContext("2d");
