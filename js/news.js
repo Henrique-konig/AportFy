@@ -1,25 +1,39 @@
 // =========================================================
 // EcoFy — news.js
-// Busca de notícias financeiras via Alpha Vantage (NEWS_SENTIMENT).
-// Não depende de Firebase; falha de rede ou limite de API nunca
-// devem quebrar o app — sempre retorna um resultado tratável pela UI.
+// Duas fontes, uma por sub-aba:
+// - "Minha Carteira": Alpha Vantage (NEWS_SENTIMENT), filtrada por
+//   ticker dos ativos do usuário.
+// - "Mercado Diário": RSS do Google News em pt-BR (via proxy CORS
+//   público), porque a Alpha Vantage não tem cobertura de mercado
+//   brasileiro (testado: retorna 0 resultado até para ADRs grandes
+//   como Petrobras/Vale — só cobre bem ticker americano).
+// Nenhuma depende de Firebase; falha de rede ou limite de API nunca
+// devem quebrar o app — sempre retornam um resultado tratável pela UI.
 // =========================================================
 
 const ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query";
 
 // Cole aqui sua chave gratuita da Alpha Vantage (cadastro em
-// alphavantage.co/support/#api-key). Sem ela, os dois feeds de
-// notícias voltam vazios com reason:"no_key" — a UI mostra o aviso.
+// alphavantage.co/support/#api-key). Sem ela, "Minha Carteira" volta
+// vazia com reason:"no_key" — a UI mostra o aviso.
 const ALPHA_VANTAGE_KEY = "3MAPSBYUQHHK9BYH";
 
 // Plano gratuito é limitado (25 requisições/dia) — cache local evita
 // gastar a cota toda vez que o usuário troca de aba.
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 horas
 
-// Alpha Vantage cobre majoritariamente tickers negociados nos EUA;
-// tickers da B3 (ex: PETR4, MXRF11) raramente retornam resultado —
-// isso é esperado, não é bug (a UI trata como card vazio).
-const MARKET_TOPICS = "financial_markets,economy_macro";
+// news.google.com/rss não libera CORS para fetch direto do navegador
+// (testado: "Failed to fetch"). r.jina.ai é um proxy leitor público e
+// gratuito que resolve isso, devolvendo a página convertida em Markdown —
+// sem chave, sem limite diário fixo, mas é um serviço de terceiro sem
+// SLA: se ele cair, o feed de Mercado Diário cai junto (a UI mostra o
+// aviso, não quebra o app).
+const READER_PROXY = "https://r.jina.ai/";
+const GOOGLE_NEWS_BASE = "https://news.google.com/rss/search";
+
+// r.jina.ai converte a página em Markdown; cada manchete do RSS do
+// Google News aparece como "### [Título - Fonte](url)".
+const HEADLINE_RE = /^### \[(.+?) - ([^\]]+)\]\((https:\/\/news\.google\.com\/rss\/articles\/[^)]+)\)/gm;
 
 /* ---------------------------------------------------------------
    Cache local (localStorage)
@@ -45,7 +59,7 @@ function writeCache(key, data) {
 }
 
 /* ---------------------------------------------------------------
-   Normalização da resposta da Alpha Vantage
+   Minha Carteira — Alpha Vantage (NEWS_SENTIMENT)
 --------------------------------------------------------------- */
 function formatTimePublished(raw) {
   // Formato da API: "20250101T120000"
@@ -55,7 +69,7 @@ function formatTimePublished(raw) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function normalizeFeedItem(item) {
+function normalizeAlphaVantageItem(item) {
   return {
     title: item.title || "Sem título",
     url: item.url || "#",
@@ -64,35 +78,6 @@ function normalizeFeedItem(item) {
     image: item.banner_image || null,
     tickers: Array.isArray(item.ticker_sentiment) ? item.ticker_sentiment.map((t) => t.ticker) : [],
   };
-}
-
-/**
- * Chama o endpoint NEWS_SENTIMENT da Alpha Vantage.
- * @returns {Promise<{ items: object[], ok: boolean, reason: string|null }>}
- */
-async function fetchNewsFeed(params) {
-  if (!ALPHA_VANTAGE_KEY) {
-    return { items: [], ok: false, reason: "no_key" };
-  }
-
-  const url = `${ALPHA_VANTAGE_BASE}?function=NEWS_SENTIMENT&apikey=${encodeURIComponent(ALPHA_VANTAGE_KEY)}&${params}`;
-
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return { items: [], ok: false, reason: "network_error" };
-
-    const data = await res.json();
-    // Limite de requisições ou chave inválida: a API responde 200 com
-    // "Note"/"Information" em vez do array `feed`.
-    if (data.Note || data.Information || !Array.isArray(data.feed)) {
-      return { items: [], ok: false, reason: "rate_limited" };
-    }
-
-    return { items: data.feed.map(normalizeFeedItem), ok: true, reason: null };
-  } catch (err) {
-    console.warn("Falha ao buscar notícias na Alpha Vantage:", err.message);
-    return { items: [], ok: false, reason: "network_error" };
-  }
 }
 
 /**
@@ -108,13 +93,71 @@ export async function fetchPortfolioNews(tickers) {
   const cached = readCache(cacheKey);
   if (cached) return { items: cached, ok: true, reason: null };
 
-  const result = await fetchNewsFeed(`tickers=${encodeURIComponent(symbols.join(","))}`);
-  if (result.ok) writeCache(cacheKey, result.items);
-  return result;
+  if (!ALPHA_VANTAGE_KEY) return { items: [], ok: false, reason: "no_key" };
+
+  const url = `${ALPHA_VANTAGE_BASE}?function=NEWS_SENTIMENT&apikey=${encodeURIComponent(ALPHA_VANTAGE_KEY)}&tickers=${encodeURIComponent(symbols.join(","))}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { items: [], ok: false, reason: "network_error" };
+
+    const data = await res.json();
+    // Limite de requisições ou chave inválida: a API responde 200 com
+    // "Note"/"Information" em vez do array `feed`.
+    if (data.Note || data.Information || !Array.isArray(data.feed)) {
+      return { items: [], ok: false, reason: "rate_limited" };
+    }
+
+    const items = data.feed.map(normalizeAlphaVantageItem);
+    writeCache(cacheKey, items);
+    return { items, ok: true, reason: null };
+  } catch (err) {
+    console.warn("Falha ao buscar notícias na Alpha Vantage:", err.message);
+    return { items: [], ok: false, reason: "network_error" };
+  }
+}
+
+/* ---------------------------------------------------------------
+   Mercado Diário — RSS do Google News (via proxy CORS)
+--------------------------------------------------------------- */
+function buildGoogleNewsUrl(query) {
+  const params = new URLSearchParams({ q: query, hl: "pt-BR", gl: "BR", ceid: "BR:pt-BR" });
+  return `${GOOGLE_NEWS_BASE}?${params.toString()}`;
+}
+
+async function fetchGoogleNewsRss(query, limit) {
+  const proxiedUrl = `${READER_PROXY}${buildGoogleNewsUrl(query)}`;
+
+  try {
+    const res = await fetch(proxiedUrl);
+    if (!res.ok) return { items: [], ok: false };
+
+    const text = await res.text();
+    const items = [];
+    HEADLINE_RE.lastIndex = 0;
+    let match;
+    while (items.length < limit && (match = HEADLINE_RE.exec(text))) {
+      const [, title, source, url] = match;
+      items.push({
+        title: title.trim(),
+        url,
+        source: source.trim(),
+        publishedAt: null, // Não disponível no Markdown extraído pelo reader — o card omite a data nesse caso.
+        image: null, // RSS do Google News não traz imagem de capa — o card usa o ícone padrão.
+        tickers: [],
+      });
+    }
+
+    return { items, ok: true };
+  } catch (err) {
+    console.warn("Falha ao buscar RSS do Google News:", err.message);
+    return { items: [], ok: false };
+  }
 }
 
 /**
- * Feed geral de notícias de mercado (Ibovespa, economia, mercado global).
+ * Feed geral de notícias de mercado — majoritariamente Brasil (Ibovespa,
+ * economia, mercado financeiro nacional), com uma parcela menor de fora.
  * @returns {Promise<{ items: object[], ok: boolean, reason: string|null }>}
  */
 export async function fetchMarketNews() {
@@ -122,7 +165,16 @@ export async function fetchMarketNews() {
   const cached = readCache(cacheKey);
   if (cached) return { items: cached, ok: true, reason: null };
 
-  const result = await fetchNewsFeed(`topics=${encodeURIComponent(MARKET_TOPICS)}`);
-  if (result.ok) writeCache(cacheKey, result.items);
-  return result;
+  const [brasil, global] = await Promise.all([
+    fetchGoogleNewsRss('Ibovespa OR "mercado financeiro" OR economia Brasil', 9),
+    fetchGoogleNewsRss("mercado financeiro internacional OR Wall Street OR economia global", 3),
+  ]);
+
+  const items = [...brasil.items, ...global.items];
+  if (items.length === 0) {
+    return { items: [], ok: false, reason: "network_error" };
+  }
+
+  writeCache(cacheKey, items);
+  return { items, ok: true, reason: null };
 }
