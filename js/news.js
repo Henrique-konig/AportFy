@@ -161,7 +161,10 @@ async function fetchGoogleNewsRss(query, limit) {
  * @returns {Promise<{ items: object[], ok: boolean, reason: string|null }>}
  */
 export async function fetchMarketNews() {
-  const cacheKey = "ecofy_news_market";
+  // Sufixo "_v2" pra não colidir com cache antigo salvo no navegador de
+  // quem visitou antes da troca de fonte (Alpha Vantage -> Google News) —
+  // sem isso, o formato velho ficava valendo por até 3h após o deploy.
+  const cacheKey = "ecofy_news_market_v2";
   const cached = readCache(cacheKey);
   if (cached) return { items: cached, ok: true, reason: null };
 
