@@ -322,6 +322,9 @@ function initUIBindings() {
     }
   });
 
+  ui.onExportBackup(() => exportBackup());
+  ui.onImportBackup((file) => importBackup(file));
+
   /* -------------------- Auth screen -------------------- */
   ui.elements.toggleAuthModeBtn.addEventListener("click", () => ui.toggleAuthMode());
 
@@ -407,6 +410,103 @@ async function refreshQuotes({ silent }) {
   } finally {
     quotesInFlight = false;
     ui.setQuotesLoading(false);
+  }
+}
+
+/* ---------------------------------------------------------------
+   Backup e Restauração
+--------------------------------------------------------------- */
+function serializeForBackup(items) {
+  return items.map((item) => {
+    const clean = { ...item };
+    // createdAt vem como Timestamp do Firestore — vira ISO pra ficar
+    // legível/portável no JSON exportado.
+    if (clean.createdAt && typeof clean.createdAt.toDate === "function") {
+      clean.createdAt = clean.createdAt.toDate().toISOString();
+    }
+    return clean;
+  });
+}
+
+function exportBackup() {
+  const payload = {
+    app: "EcoFy",
+    backupVersion: 1,
+    exportedAt: new Date().toISOString(),
+    mode: activeMode,
+    transactions: serializeForBackup(latestTransactions),
+    goals: serializeForBackup(latestGoals),
+    investments: serializeForBackup(latestInvestments),
+    dividends: serializeForBackup(latestDividends),
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ecofy-backup-${activeMode}-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  ui.showToast("Backup baixado com sucesso!", "success");
+}
+
+// Mapeia cada categoria do backup pra função de escrita já existente —
+// reimportar cria documentos novos (id e createdAt são regenerados).
+const BACKUP_IMPORTERS = {
+  transactions: addTransaction,
+  goals: addGoal,
+  investments: addInvestment,
+  dividends: addDividend,
+};
+
+async function importBackup(file) {
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    ui.showToast("Arquivo inválido — não é um JSON de backup do EcoFy.", "error");
+    return;
+  }
+
+  const counts = Object.fromEntries(
+    Object.keys(BACKUP_IMPORTERS).map((key) => [key, Array.isArray(data[key]) ? data[key].length : 0])
+  );
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total === 0) {
+    ui.showToast("Nenhum registro encontrado nesse arquivo.", "error");
+    return;
+  }
+
+  const modeLabel = activeMode === "couple" ? "Casal" : "Pessoal";
+  const confirmed = window.confirm(
+    `Restaurar vai ADICIONAR ${counts.transactions} transação(ões), ${counts.goals} meta(s), ${counts.investments} ativo(s) e ${counts.dividends} provento(s) aos dados atuais do modo ${modeLabel}. Isso não apaga nada existente. Continuar?`
+  );
+  if (!confirmed) return;
+
+  const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+  let imported = 0;
+  let failed = 0;
+
+  for (const [key, addFn] of Object.entries(BACKUP_IMPORTERS)) {
+    for (const item of data[key] || []) {
+      try {
+        const { id: _discardId, createdAt: _discardCreatedAt, ...rest } = item;
+        await addFn(activeMode, id, rest);
+        imported++;
+      } catch (err) {
+        console.error(err);
+        failed++;
+      }
+    }
+  }
+
+  if (failed === 0) {
+    ui.showToast(`Backup restaurado: ${imported} registro(s) adicionado(s).`, "success");
+  } else {
+    ui.showToast(`Restaurado ${imported} registro(s), ${failed} falharam.`, "error");
   }
 }
 

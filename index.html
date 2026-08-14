@@ -852,6 +852,23 @@
             </section>
 
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-database text-lg"></i> Backup e Restauração</h3>
+              <p class="text-xs text-slate-500 mb-4">Baixe uma cópia de transações, metas, investimentos e proventos em um arquivo .json. Guarde em local seguro — se o Firebase cair ou a conta se perder, você restaura tudo a partir desse arquivo.</p>
+              <div class="flex flex-col sm:flex-row gap-2.5">
+                <button id="settings-export-backup-btn" type="button"
+                  class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all active:scale-[0.97]">
+                  <i class="ph-bold ph-download-simple text-base"></i> Baixar backup (.json)
+                </button>
+                <button id="settings-import-backup-btn" type="button"
+                  class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all active:scale-[0.97]">
+                  <i class="ph-bold ph-upload-simple text-base"></i> Restaurar de um backup
+                </button>
+                <input id="settings-import-backup-input" type="file" accept="application/json,.json" class="hidden" />
+              </div>
+              <p class="text-[11px] text-slate-600 mt-3">Restaurar <strong>adiciona</strong> os registros do arquivo aos dados atuais do modo ativo (Pessoal ou Casal) — não apaga nada existente. Prefira restaurar com a base vazia, pra não duplicar.</p>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
               <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-shield-check text-lg"></i> Segurança</h3>
               <p class="text-xs text-slate-500 mb-4">Enviaremos um e-mail com um link para você redefinir sua senha.</p>
               <button id="settings-reset-password-btn" type="button" class="bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">

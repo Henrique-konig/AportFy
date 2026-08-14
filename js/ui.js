@@ -104,6 +104,9 @@ const el = {
   settingsJoinForm: document.getElementById("settings-join-form"),
   settingsJoinInput: document.getElementById("settings-join-input"),
   settingsResetPasswordBtn: document.getElementById("settings-reset-password-btn"),
+  settingsExportBackupBtn: document.getElementById("settings-export-backup-btn"),
+  settingsImportBackupBtn: document.getElementById("settings-import-backup-btn"),
+  settingsImportBackupInput: document.getElementById("settings-import-backup-input"),
 
   // Transaction modal
   transactionModal: document.getElementById("transaction-modal"),
@@ -2279,6 +2282,8 @@ export function renderCoupleSettings(coupleId) {
 let profileUpdateHandler = null;
 let joinCoupleHandler = null;
 let passwordResetHandler = null;
+let exportBackupHandler = null;
+let importBackupHandler = null;
 
 export function onProfileUpdate(handler) {
   profileUpdateHandler = handler;
@@ -2290,6 +2295,14 @@ export function onJoinCouple(handler) {
 
 export function onPasswordReset(handler) {
   passwordResetHandler = handler;
+}
+
+export function onExportBackup(handler) {
+  exportBackupHandler = handler;
+}
+
+export function onImportBackup(handler) {
+  importBackupHandler = handler;
 }
 
 export function bindSettingsForms() {
@@ -2317,6 +2330,15 @@ export function bindSettingsForms() {
   });
 
   el.settingsResetPasswordBtn?.addEventListener("click", () => passwordResetHandler?.());
+
+  el.settingsExportBackupBtn?.addEventListener("click", () => exportBackupHandler?.());
+
+  el.settingsImportBackupBtn?.addEventListener("click", () => el.settingsImportBackupInput?.click());
+  el.settingsImportBackupInput?.addEventListener("change", () => {
+    const file = el.settingsImportBackupInput.files?.[0];
+    el.settingsImportBackupInput.value = ""; // permite escolher o mesmo arquivo de novo depois
+    if (file) importBackupHandler?.(file);
+  });
 }
 
 export { el as elements };
