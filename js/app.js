@@ -40,6 +40,8 @@ import {
   upsertUserProfile,
   joinCouple,
   createCoupleSpace,
+  getCoupleDoc,
+  addCoupleMember,
 } from "./db.js";
 import { fetchQuotes, fetchDividendHistory, B3_CATEGORIES } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
@@ -825,12 +827,24 @@ function subscribeToActiveCollection() {
  */
 async function ensureCoupleId(user) {
   const profile = await getUserProfile(user.uid);
-  if (profile?.coupleId) return profile.coupleId;
+  const coupleId = profile?.coupleId || user.uid;
 
-  const newCoupleId = user.uid;
-  await createCoupleSpace(newCoupleId, user.uid);
-  await upsertUserProfile(user.uid, { coupleId: newCoupleId, email: user.email });
-  return newCoupleId;
+  // Migração: quem já usava o Modo Casal antes do doc raiz couples/{id}
+  // existir (ou o parceiro que ainda não está no array "members" desse
+  // doc) é corrigido automaticamente aqui, no login — sem isso, as
+  // regras do Firestore baseadas em "members" bloqueariam o acesso dele.
+  const coupleDoc = await getCoupleDoc(coupleId);
+  if (!coupleDoc) {
+    await createCoupleSpace(coupleId, user.uid);
+  } else if (!coupleDoc.members?.includes(user.uid)) {
+    await addCoupleMember(coupleId, user.uid);
+  }
+
+  if (!profile?.coupleId) {
+    await upsertUserProfile(user.uid, { coupleId, email: user.email });
+  }
+
+  return coupleId;
 }
 
 async function switchMode(mode) {

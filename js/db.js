@@ -144,6 +144,17 @@ export async function createCoupleSpace(coupleId, ownerUid) {
 }
 
 /**
+ * Adiciona um membro ao espaço de casal (upsert idempotente — não faz
+ * nada de errado se o uid já estiver na lista, arrayUnion não duplica).
+ * @param {string} coupleId
+ * @param {string} uid
+ */
+export async function addCoupleMember(coupleId, uid) {
+  const ref = doc(db, "couples", coupleId);
+  return updateDoc(ref, { members: arrayUnion(uid) });
+}
+
+/**
  * Associa o usuário ao espaço de casal de outra pessoa a partir de um
  * código de casal (coupleId) compartilhado. Valida que o espaço existe
  * antes de entrar — sem isso, qualquer string era aceita silenciosamente.
@@ -156,8 +167,7 @@ export async function joinCouple(userId, coupleId) {
     throw new Error("Código de casal inválido — não existe nenhum espaço com esse código.");
   }
 
-  const ref = doc(db, "couples", coupleId);
-  await updateDoc(ref, { members: arrayUnion(userId) });
+  await addCoupleMember(coupleId, userId);
   return upsertUserProfile(userId, { coupleId });
 }
 
