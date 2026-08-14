@@ -19,6 +19,7 @@ import {
   serverTimestamp,
   setDoc,
   getDoc,
+  arrayUnion,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 /**
@@ -119,12 +120,44 @@ export async function upsertUserProfile(userId, data) {
 }
 
 /**
+ * Busca o documento raiz do espaço de casal em `couples/{coupleId}`.
+ * Esse documento guarda só a lista de membros (`members`) — é o que as
+ * regras do Firestore usam pra decidir quem pode ler/escrever nas
+ * subcoleções financeiras do casal (couples/{coupleId}/transactions, etc).
+ * @param {string} coupleId
+ */
+export async function getCoupleDoc(coupleId) {
+  const ref = doc(db, "couples", coupleId);
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data() : null;
+}
+
+/**
+ * Cria o espaço de casal de um usuário (chamado uma única vez, no
+ * primeiro login) com ele mesmo como único membro inicial.
+ * @param {string} coupleId - por convenção, o próprio uid do criador
+ * @param {string} ownerUid
+ */
+export async function createCoupleSpace(coupleId, ownerUid) {
+  const ref = doc(db, "couples", coupleId);
+  return setDoc(ref, { members: [ownerUid] }, { merge: true });
+}
+
+/**
  * Associa o usuário ao espaço de casal de outra pessoa a partir de um
- * código de casal (coupleId) compartilhado.
+ * código de casal (coupleId) compartilhado. Valida que o espaço existe
+ * antes de entrar — sem isso, qualquer string era aceita silenciosamente.
  * @param {string} userId
  * @param {string} coupleId
  */
 export async function joinCouple(userId, coupleId) {
+  const coupleDoc = await getCoupleDoc(coupleId);
+  if (!coupleDoc) {
+    throw new Error("Código de casal inválido — não existe nenhum espaço com esse código.");
+  }
+
+  const ref = doc(db, "couples", coupleId);
+  await updateDoc(ref, { members: arrayUnion(userId) });
   return upsertUserProfile(userId, { coupleId });
 }
 

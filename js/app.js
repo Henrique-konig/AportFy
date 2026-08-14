@@ -39,6 +39,7 @@ import {
   getUserProfile,
   upsertUserProfile,
   joinCouple,
+  createCoupleSpace,
 } from "./db.js";
 import { fetchQuotes, fetchDividendHistory, B3_CATEGORIES } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
@@ -363,7 +364,7 @@ function initUIBindings() {
       ui.showToast("Você entrou no espaço de casal com sucesso!", "success");
     } catch (err) {
       console.error(err);
-      ui.showToast("Erro ao entrar no espaço de casal.", "error");
+      ui.showToast(err.message || "Erro ao entrar no espaço de casal.", "error");
     }
   });
 
@@ -827,6 +828,7 @@ async function ensureCoupleId(user) {
   if (profile?.coupleId) return profile.coupleId;
 
   const newCoupleId = user.uid;
+  await createCoupleSpace(newCoupleId, user.uid);
   await upsertUserProfile(user.uid, { coupleId: newCoupleId, email: user.email });
   return newCoupleId;
 }

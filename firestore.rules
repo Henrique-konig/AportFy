@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// =========================================================
+// EcoFy — Regras de segurança do Firestore
+//
+// Modelo:
+//   users/{userId}/**              -> só o dono (auth.uid == userId)
+//   couples/{coupleId}             -> doc raiz, guarda só a lista de
+//                                      membros (não é dado financeiro)
+//   couples/{coupleId}/**          -> só quem está em "members"
+//
+// Deploy: Firebase Console > Firestore Database > Regras > colar este
+// arquivo > Publicar. Ou, com o Firebase CLI instalado e o projeto
+// linkado (firebase use ecofy-c332d): `firebase deploy --only firestore:rules`.
+//
+// Limitação conhecida: qualquer usuário autenticado que descubra um
+// coupleId (o UID de 28 caracteres do criador do espaço) consegue se
+// adicionar aos "members" e ganhar acesso de leitura/escrita aos dados
+// financeiros daquele casal — não há convite/aprovação bilateral.
+// O coupleId não é público (só aparece na tela de Configurações do
+// próprio dono e é compartilhado manualmente), mas não é secreto o
+// suficiente pra ser a única barreira num app mais sensível. Uma vez
+// dentro, o "members" só pode crescer, nunca encolher, então ninguém
+// consegue remover o parceiro à força.
+// =========================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Perfil do usuário (coupleId, displayName, email) e suas coleções
+    // pessoais (transactions, goals, investments, dividends, budgets,
+    // recurrences) — só o próprio dono acessa.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /{collection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Espaço de casal.
+    match /couples/{coupleId} {
+      // Leitura liberada pra qualquer autenticado: é só a lista de
+      // membros, necessária pra outras regras conseguirem checar
+      // pertencimento via get() antes de liberar as subcoleções.
+      allow read: if request.auth != null;
+
+      // Só pode criar o PRÓPRIO espaço (coupleId == seu uid), e só com
+      // ele mesmo como único membro inicial.
+      allow create: if request.auth != null
+                     && request.auth.uid == coupleId
+                     && request.resource.data.members == [request.auth.uid];
+
+      // Atualização do doc raiz só pode mexer no campo "members", e só
+      // de forma aditiva (o novo array precisa conter todo o antigo) —
+      // isso é o que permite "entrar no espaço de outra pessoa" sem
+      // abrir brecha pra excluir/travar o parceiro fora.
+      allow update: if request.auth != null
+                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+                     && request.resource.data.members.hasAll(resource.data.members);
+
+      // Dados financeiros reais do casal — só quem está em "members".
+      match /{collection}/{docId} {
+        allow read, write: if request.auth != null
+                             && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.members;
+      }
+    }
+
+    // Qualquer coisa fora dos padrões acima é negada por padrão.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
