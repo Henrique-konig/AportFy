@@ -10,6 +10,7 @@
 
 import { attachDatePicker, setDatePickerValue, closeDatePicker } from "./datepicker.js";
 import { enhanceSelect, refreshDropdown } from "./dropdown.js";
+import { calcInvestmentMetrics, pctChange, buildMonthlySeries, calcBudgetSpent } from "./calc.js";
 
 /* ---------------------------------------------------------------
    Referências de elementos
@@ -80,11 +81,26 @@ const el = {
   transactionsFullTbody: document.getElementById("transactions-full-tbody"),
   transactionsFullEmpty: document.getElementById("transactions-full-empty"),
   txnFullCount: document.getElementById("txn-full-count"),
+  txnLoadMoreWrap: document.getElementById("txn-load-more-wrap"),
+  txnLoadMoreBtn: document.getElementById("txn-load-more-btn"),
+  txnLoadMoreRemaining: document.getElementById("txn-load-more-remaining"),
 
   // Goals view
   newGoalBtn: document.getElementById("new-goal-btn"),
   goalsGrid: document.getElementById("goals-grid"),
   goalsEmpty: document.getElementById("goals-empty"),
+
+  // Budget view (Orçamento)
+  newBudgetBtn: document.getElementById("new-budget-btn"),
+  budgetGrid: document.getElementById("budget-grid"),
+  budgetEmpty: document.getElementById("budget-empty"),
+  budgetModal: document.getElementById("budget-modal"),
+  budgetModalBackdrop: document.getElementById("budget-modal-backdrop"),
+  budgetModalTitle: document.getElementById("budget-modal-title"),
+  budgetModalCloseBtn: document.getElementById("budget-modal-close-btn"),
+  budgetForm: document.getElementById("budget-form"),
+  budgetCategory: document.getElementById("budget-category"),
+  budgetLimit: document.getElementById("budget-limit"),
 
   // Reports view
   reportTotalIncome: document.getElementById("report-total-income"),
@@ -122,6 +138,23 @@ const el = {
   transactionDate: document.getElementById("transaction-date"),
   transactionCategory: document.getElementById("transaction-category"),
   transactionSubmitBtn: document.getElementById("transaction-submit-btn"),
+
+  // Recurrence view (dentro de Transações) + modal
+  newRecurrenceBtn: document.getElementById("new-recurrence-btn"),
+  recurrencesList: document.getElementById("recurrences-list"),
+  recurrencesEmpty: document.getElementById("recurrences-empty"),
+  recurrenceModal: document.getElementById("recurrence-modal"),
+  recurrenceModalBackdrop: document.getElementById("recurrence-modal-backdrop"),
+  recurrenceModalTitle: document.getElementById("recurrence-modal-title"),
+  recurrenceModalCloseBtn: document.getElementById("recurrence-modal-close-btn"),
+  recurrenceForm: document.getElementById("recurrence-form"),
+  recurrenceId: document.getElementById("recurrence-id"),
+  recurrenceTypeBtns: document.querySelectorAll("#recurrence-form .type-btn"),
+  recurrenceType: document.getElementById("recurrence-type"),
+  recurrenceDesc: document.getElementById("recurrence-desc"),
+  recurrenceAmount: document.getElementById("recurrence-amount"),
+  recurrenceDay: document.getElementById("recurrence-day"),
+  recurrenceCategory: document.getElementById("recurrence-category"),
 
   // Goal modal
   goalModal: document.getElementById("goal-modal"),
@@ -254,9 +287,12 @@ let currentMode = "personal";
 let isRegisterMode = false;
 let lastTransactions = [];
 let lastGoals = [];
+let lastBudgets = [];
 let pendingDeleteId = null;
 let pendingDeleteType = "transaction";
 let txnTypeFilter = "all";
+let txnVisibleCount = 100;
+const TXN_PAGE_SIZE = 100;
 let lastInvestments = [];
 let lastDividends = [];
 let invAssetFilterValue = "all";
@@ -301,6 +337,7 @@ const VIEW_META = {
   dashboard: { title: "Dashboard", subtitle: "Visão geral das suas finanças" },
   transactions: { title: "Transações", subtitle: "Histórico completo de receitas e despesas" },
   goals: { title: "Metas", subtitle: "Acompanhe o progresso dos seus objetivos financeiros" },
+  budget: { title: "Orçamento", subtitle: "Acompanhe seus limites de gasto por categoria" },
   investments: { title: "Investimentos", subtitle: "Acompanhe o rendimento da sua carteira de ativos" },
   news: { title: "Notícias", subtitle: "Fique por dentro do mercado e dos ativos da sua carteira" },
   reports: { title: "Relatórios", subtitle: "Análise detalhada do seu fluxo de caixa" },
@@ -312,7 +349,11 @@ const DELETE_META = {
   goal: { title: "Excluir meta?", desc: "O progresso dessa meta será perdido. Deseja continuar?" },
   investment: { title: "Excluir ativo?", desc: "O histórico dessa posição será perdido. Deseja continuar?" },
   dividend: { title: "Excluir provento?", desc: "Esse registro não pode ser recuperado. Deseja continuar?" },
+  budget: { title: "Excluir orçamento?", desc: "O limite definido para essa categoria será removido. Você pode recriar depois se quiser." },
+  recurrence: { title: "Excluir recorrência?", desc: "Deixa de ser lançada automaticamente. As transações já geradas continuam existindo." },
 };
+
+const EXPENSE_CATEGORIES = ["Alimentação", "Transporte", "Moradia", "Lazer", "Saúde", "Educação", "Outros"];
 
 const DIVIDEND_TYPE_COLORS = {
   "Dividendo": "#3b82f6",
@@ -505,6 +546,7 @@ export function setActiveMode(mode) {
   // Re-renderiza gráficos e cards com a cor do novo modo
   updateCharts(lastTransactions);
   renderGoals(lastGoals);
+  renderBudgets(lastBudgets, lastTransactions);
   renderInvestments(lastInvestments);
   renderNewsCards("portfolio", lastNewsPortfolio);
   renderNewsCards("market", lastNewsMarket);
@@ -523,11 +565,6 @@ export function getCurrentMode() {
 /* ---------------------------------------------------------------
    KPIs
 --------------------------------------------------------------- */
-function pctChange(current, previous) {
-  if (!previous) return current > 0 ? 100 : 0;
-  return ((current - previous) / Math.abs(previous)) * 100;
-}
-
 function renderChangeBadge(elNode, pct, invert = false) {
   const positive = invert ? pct <= 0 : pct >= 0;
   elNode.classList.toggle("text-emerald-400", positive);
@@ -703,11 +740,22 @@ export function renderFullTransactionsTable(transactions) {
   el.transactionsFullEmpty.classList.add("hidden");
   el.transactionsFullEmpty.classList.remove("flex");
 
-  el.transactionsFullTbody.innerHTML = filtered.slice(0, 300).map(buildRowHtml).join("");
+  el.transactionsFullTbody.innerHTML = filtered.slice(0, txnVisibleCount).map(buildRowHtml).join("");
   wireRowActions(el.transactionsFullTbody, transactions);
+
+  const remaining = filtered.length - txnVisibleCount;
+  if (remaining > 0) {
+    el.txnLoadMoreWrap.classList.remove("hidden");
+    el.txnLoadMoreWrap.classList.add("flex");
+    el.txnLoadMoreRemaining.textContent = `(${remaining})`;
+  } else {
+    el.txnLoadMoreWrap.classList.add("hidden");
+    el.txnLoadMoreWrap.classList.remove("flex");
+  }
 }
 
 function refreshTransactionViews() {
+  txnVisibleCount = TXN_PAGE_SIZE;
   renderTransactionsTable(lastTransactions);
   renderFullTransactionsTable(lastTransactions);
 }
@@ -728,10 +776,18 @@ export function bindTransactionFilters() {
     btn.addEventListener("click", () => {
       txnTypeFilter = btn.dataset.filterType;
       el.txnFilterBtns.forEach((b) => b.classList.toggle("active-filter", b === btn));
+      txnVisibleCount = TXN_PAGE_SIZE;
       renderFullTransactionsTable(lastTransactions);
     });
   });
-  el.txnCategoryFilter?.addEventListener("change", () => renderFullTransactionsTable(lastTransactions));
+  el.txnCategoryFilter?.addEventListener("change", () => {
+    txnVisibleCount = TXN_PAGE_SIZE;
+    renderFullTransactionsTable(lastTransactions);
+  });
+  el.txnLoadMoreBtn?.addEventListener("click", () => {
+    txnVisibleCount += TXN_PAGE_SIZE;
+    renderFullTransactionsTable(lastTransactions);
+  });
 }
 
 /* ---------------------------------------------------------------
@@ -830,29 +886,6 @@ export function initReportsCharts() {
       },
     },
   });
-}
-
-function buildMonthlySeries(transactions, monthsCount = 6) {
-  const months = [];
-  const now = new Date();
-  for (let i = monthsCount - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }) });
-  }
-
-  const income = months.map(() => 0);
-  const expense = months.map(() => 0);
-
-  transactions.forEach((t) => {
-    const d = new Date(`${t.date}T00:00:00`);
-    const idx = months.findIndex((m) => m.year === d.getFullYear() && m.month === d.getMonth());
-    if (idx === -1) return;
-    const amount = Number(t.amount) || 0;
-    if (t.type === "income") income[idx] += amount;
-    else expense[idx] += amount;
-  });
-
-  return { labels: months.map((m) => m.label.replace(".", "")), income, expense };
 }
 
 function buildCashflowDatasets(canvas, labels, income, expense) {
@@ -1264,6 +1297,143 @@ export function renderNewsCards(target, items, emptyMessage = null) {
 }
 
 /* ---------------------------------------------------------------
+   Orçamento por categoria (view: Orçamento)
+--------------------------------------------------------------- */
+let editBudgetHandler = null;
+
+export function onEditBudget(handler) {
+  editBudgetHandler = handler;
+}
+
+export function renderBudgets(budgets, transactions) {
+  lastBudgets = budgets;
+
+  if (budgets.length === 0) {
+    el.budgetGrid.innerHTML = "";
+    el.budgetEmpty.classList.remove("hidden");
+    el.budgetEmpty.classList.add("flex");
+    return;
+  }
+
+  el.budgetEmpty.classList.add("hidden");
+  el.budgetEmpty.classList.remove("flex");
+
+  const modeColor = getModeColor();
+
+  el.budgetGrid.innerHTML = budgets
+    .slice()
+    .sort((a, b) => a.category.localeCompare(b.category))
+    .map((b) => {
+      const limit = Number(b.monthlyLimit) || 0;
+      const spent = calcBudgetSpent(b.category, transactions);
+      const pct = limit > 0 ? (spent / limit) * 100 : 0;
+      const over = pct > 100;
+      const warn = pct >= 80 && pct <= 100;
+      const barColor = over ? "#f43f5e" : warn ? "#f59e0b" : modeColor;
+      const dotColor = CATEGORY_COLORS[b.category] || CATEGORY_COLORS["Outros"];
+      const remaining = limit - spent;
+
+      return `
+        <div class="budget-card glass-card rounded-2xl p-5" data-category="${escapeHtml(b.category)}">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dotColor};"></span>
+              <h4 class="font-bold text-sm truncate">${escapeHtml(b.category)}</h4>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button class="row-action-btn edit-budget-btn" data-category="${escapeHtml(b.category)}" title="Editar"><i class="ph-bold ph-pencil-simple"></i></button>
+              <button class="row-action-btn delete-btn delete-budget-btn" data-category="${escapeHtml(b.category)}" title="Excluir"><i class="ph-bold ph-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="flex items-end justify-between mb-2">
+            <span class="text-xl font-extrabold">${formatCurrency(spent)}</span>
+            <span class="text-xs text-slate-500">de ${formatCurrency(limit)}</span>
+          </div>
+
+          <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div class="goal-progress-bar h-full rounded-full" style="width:${Math.min(100, pct)}%; background:${barColor};"></div>
+          </div>
+
+          <div class="flex items-center justify-between mt-2.5">
+            <span class="text-xs font-semibold" style="color:${barColor};">${pct.toFixed(0)}%</span>
+            ${
+              over
+                ? `<span class="text-[11px] text-red-400 font-semibold flex items-center gap-1"><i class="ph-fill ph-warning-circle"></i> Estourou ${formatCurrency(Math.abs(remaining))}</span>`
+                : `<span class="text-[11px] text-slate-500">${formatCurrency(remaining)} restante</span>`
+            }
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  el.budgetGrid.querySelectorAll(".edit-budget-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const b = budgets.find((x) => x.category === btn.dataset.category);
+      if (b && editBudgetHandler) editBudgetHandler(b);
+    });
+  });
+  el.budgetGrid.querySelectorAll(".delete-budget-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openDeleteModal(btn.dataset.category, "budget"));
+  });
+}
+
+let budgetSubmitHandler = null;
+
+export function onBudgetFormSubmit(handler) {
+  budgetSubmitHandler = handler;
+}
+
+export function openBudgetModal(budget = null) {
+  el.budgetForm.reset();
+
+  if (budget) {
+    el.budgetModalTitle.textContent = "Editar Orçamento";
+    el.budgetCategory.value = budget.category;
+    el.budgetCategory.disabled = true;
+    el.budgetLimit.value = budget.monthlyLimit;
+  } else {
+    el.budgetModalTitle.textContent = "Novo Orçamento";
+    el.budgetCategory.disabled = false;
+    const usedCategories = lastBudgets.map((b) => b.category);
+    [...el.budgetCategory.options].forEach((opt) => {
+      opt.hidden = usedCategories.includes(opt.value);
+    });
+    const firstAvailable = [...el.budgetCategory.options].find((o) => !o.hidden);
+    if (firstAvailable) el.budgetCategory.value = firstAvailable.value;
+    el.budgetLimit.value = "";
+  }
+
+  refreshDropdown("budget-category");
+  el.budgetModal.classList.remove("hidden");
+  el.budgetModal.classList.add("flex");
+}
+
+export function closeBudgetModal() {
+  el.budgetModal.classList.add("hidden");
+  el.budgetModal.classList.remove("flex");
+}
+
+export function bindBudgetModal() {
+  el.newBudgetBtn?.addEventListener("click", () => {
+    if (lastBudgets.length >= EXPENSE_CATEGORIES.length) {
+      showToast("Todas as categorias de despesa já têm orçamento definido.", "info");
+      return;
+    }
+    openBudgetModal();
+  });
+  el.budgetModalCloseBtn?.addEventListener("click", closeBudgetModal);
+  el.budgetModalBackdrop?.addEventListener("click", closeBudgetModal);
+
+  el.budgetForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const category = el.budgetCategory.value;
+    const monthlyLimit = parseFloat(el.budgetLimit.value);
+    budgetSubmitHandler?.(category, monthlyLimit);
+  });
+}
+
+/* ---------------------------------------------------------------
    Investimentos (view: Investimentos)
 
    Fórmulas:
@@ -1275,17 +1445,6 @@ export function renderNewsCards(target, items, emptyMessage = null) {
    - Rentabilidade %:                      ((precoAtual - precoMedio) / precoMedio) * 100
 --------------------------------------------------------------- */
 let invTypeSort = "recent";
-
-function calcInvestmentMetrics(inv) {
-  const quantity = Number(inv.quantity) || 0;
-  const avgPrice = Number(inv.avgPrice) || 0;
-  const currentPrice = Number(inv.currentPrice) || 0;
-  const costBasis = avgPrice * quantity;
-  const totalValue = currentPrice * quantity;
-  const profitValue = totalValue - costBasis;
-  const profitPct = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
-  return { quantity, avgPrice, currentPrice, costBasis, totalValue, profitValue, profitPct };
-}
 
 function formatQuantity(n) {
   return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 8 });
@@ -2190,6 +2349,133 @@ export function bindTransactionModal() {
 }
 
 /* ---------------------------------------------------------------
+   Transações Recorrentes (dentro da view: Transações)
+--------------------------------------------------------------- */
+function setRecurrenceType(type) {
+  el.recurrenceType.value = type;
+  el.recurrenceTypeBtns.forEach((btn) => {
+    const isTarget = btn.dataset.type === type;
+    btn.classList.toggle("income-active", isTarget && type === "income");
+    btn.classList.toggle("expense-active", isTarget && type === "expense");
+    if (!isTarget) {
+      btn.classList.remove("income-active", "expense-active");
+    }
+  });
+}
+
+let editRecurrenceHandler = null;
+
+export function onEditRecurrence(handler) {
+  editRecurrenceHandler = handler;
+}
+
+export function renderRecurrences(recurrences) {
+  if (recurrences.length === 0) {
+    el.recurrencesList.innerHTML = "";
+    el.recurrencesEmpty.classList.remove("hidden");
+    el.recurrencesEmpty.classList.add("flex");
+    return;
+  }
+
+  el.recurrencesEmpty.classList.add("hidden");
+  el.recurrencesEmpty.classList.remove("flex");
+
+  el.recurrencesList.innerHTML = recurrences
+    .map((r) => {
+      const color = CATEGORY_COLORS[r.category] || CATEGORY_COLORS["Outros"];
+      const isIncome = r.type === "income";
+      const amountLabel = `${isIncome ? "+" : "-"} ${formatCurrency(Math.abs(Number(r.amount) || 0))}`;
+      return `
+        <div class="flex items-center justify-between px-5 sm:px-6 py-3.5" data-id="${r.id}">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:${color}22;">
+              <i class="ph-bold ph-arrows-clockwise" style="color:${color};"></i>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-medium truncate max-w-[160px] sm:max-w-xs">${escapeHtml(r.description)}</p>
+              <p class="text-xs text-slate-500 truncate">${escapeHtml(r.category)} · dia ${r.dayOfMonth} de cada mês</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+            <span class="text-sm font-semibold ${isIncome ? "text-emerald-400" : "text-red-400"}">${amountLabel}</span>
+            <button class="row-action-btn edit-recurrence-btn" data-id="${r.id}" title="Editar"><i class="ph-bold ph-pencil-simple"></i></button>
+            <button class="row-action-btn delete-btn delete-recurrence-btn" data-id="${r.id}" title="Excluir"><i class="ph-bold ph-trash"></i></button>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  el.recurrencesList.querySelectorAll(".edit-recurrence-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const r = recurrences.find((x) => x.id === btn.dataset.id);
+      if (r && editRecurrenceHandler) editRecurrenceHandler(r);
+    });
+  });
+  el.recurrencesList.querySelectorAll(".delete-recurrence-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "recurrence"));
+  });
+}
+
+let recurrenceSubmitHandler = null;
+
+export function onRecurrenceFormSubmit(handler) {
+  recurrenceSubmitHandler = handler;
+}
+
+export function openRecurrenceModal(recurrence = null) {
+  el.recurrenceForm.reset();
+  if (recurrence) {
+    el.recurrenceModalTitle.textContent = "Editar Recorrência";
+    el.recurrenceId.value = recurrence.id;
+    el.recurrenceDesc.value = recurrence.description;
+    el.recurrenceAmount.value = recurrence.amount;
+    el.recurrenceDay.value = recurrence.dayOfMonth;
+    el.recurrenceCategory.value = recurrence.category;
+    setRecurrenceType(recurrence.type);
+  } else {
+    el.recurrenceModalTitle.textContent = "Nova Recorrência";
+    el.recurrenceId.value = "";
+    setRecurrenceType("income");
+  }
+  refreshDropdown("recurrence-category");
+  el.recurrenceModal.classList.remove("hidden");
+  el.recurrenceModal.classList.add("flex");
+}
+
+export function closeRecurrenceModal() {
+  el.recurrenceModal.classList.add("hidden");
+  el.recurrenceModal.classList.remove("flex");
+}
+
+export function bindRecurrenceModal() {
+  el.newRecurrenceBtn?.addEventListener("click", () => openRecurrenceModal());
+  el.recurrenceModalCloseBtn?.addEventListener("click", closeRecurrenceModal);
+  el.recurrenceModalBackdrop?.addEventListener("click", closeRecurrenceModal);
+
+  el.recurrenceTypeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setRecurrenceType(btn.dataset.type));
+  });
+
+  el.recurrenceForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const day = parseInt(el.recurrenceDay.value, 10);
+    if (day < 1 || day > 31) {
+      showToast("Dia do mês precisa ser entre 1 e 31.", "error");
+      return;
+    }
+    const data = {
+      description: el.recurrenceDesc.value.trim(),
+      amount: parseFloat(el.recurrenceAmount.value),
+      dayOfMonth: day,
+      category: el.recurrenceCategory.value,
+      type: el.recurrenceType.value,
+    };
+    const editingId = el.recurrenceId.value || null;
+    recurrenceSubmitHandler?.(data, editingId);
+  });
+}
+
+/* ---------------------------------------------------------------
    Calendário customizado (datepicker.js)
 --------------------------------------------------------------- */
 export function bindDatePickers() {
@@ -2223,6 +2509,8 @@ export function bindCustomDropdowns() {
   [
     "transaction-category",
     "investment-category",
+    "budget-category",
+    "recurrence-category",
     "txn-category-filter",
     "inv-category-filter",
     "inv-sort-select",

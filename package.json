@@ -1,0 +1,23 @@
+{
+  "name": "eco-fy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashboard financeiro pessoal e de casal — dark mode, glassmorphism e dados em tempo real via Firebase.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Henrique-konig/Eco-fy.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Henrique-konig/Eco-fy/issues"
+  },
+  "homepage": "https://github.com/Henrique-konig/Eco-fy#readme",
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

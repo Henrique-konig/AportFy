@@ -345,3 +345,147 @@ export async function deleteDividend(mode, id, dividendId) {
   const docRef = doc(db, path, dividendId);
   return deleteDoc(docRef);
 }
+
+/* ---------------------------------------------------------------
+   Orçamento por categoria (Budgets)
+   Coleções:
+     users/{userId}/budgets      -> modo Pessoal
+     couples/{coupleId}/budgets  -> modo Casal
+
+   Um documento por categoria (id do doc = nome da categoria), então
+   definir orçamento de uma categoria que já tem um é sempre um upsert
+   — nunca duplica.
+--------------------------------------------------------------- */
+
+function getBudgetsCollection(mode, id) {
+  const path = mode === "couple" ? `couples/${id}/budgets` : `users/${id}/budgets`;
+  return collection(db, path);
+}
+
+/**
+ * Escuta em tempo real os orçamentos definidos.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {(budgets: Array<Object>) => void} callback
+ * @returns {() => void} função para cancelar a escuta (unsubscribe)
+ */
+export function listenToBudgets(mode, id, callback) {
+  const colRef = getBudgetsCollection(mode, id);
+
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const budgets = snapshot.docs.map((docSnap) => ({ id: docSnap.id, category: docSnap.id, ...docSnap.data() }));
+      callback(budgets);
+    },
+    (error) => {
+      console.error("Erro ao escutar orçamentos:", error);
+      callback([], error);
+    }
+  );
+}
+
+/**
+ * Cria ou atualiza o limite mensal de uma categoria (doc id = categoria).
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} category
+ * @param {number} monthlyLimit
+ */
+export async function upsertBudget(mode, id, category, monthlyLimit) {
+  const path = mode === "couple" ? `couples/${id}/budgets` : `users/${id}/budgets`;
+  const docRef = doc(db, path, category);
+  return setDoc(docRef, { monthlyLimit }, { merge: true });
+}
+
+/**
+ * Remove o orçamento de uma categoria.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} category
+ */
+export async function deleteBudget(mode, id, category) {
+  const path = mode === "couple" ? `couples/${id}/budgets` : `users/${id}/budgets`;
+  const docRef = doc(db, path, category);
+  return deleteDoc(docRef);
+}
+
+/* ---------------------------------------------------------------
+   Transações recorrentes (Recurrences)
+   Coleções:
+     users/{userId}/recurrences      -> modo Pessoal
+     couples/{coupleId}/recurrences  -> modo Casal
+
+   Cada documento é um "modelo" (descrição, valor, categoria, dia do
+   mês). A geração da transação real do mês acontece em app.js
+   (processRecurrences), que compara lastGeneratedMonth com o mês
+   atual e usa addTransaction — esta camada só guarda o modelo.
+--------------------------------------------------------------- */
+
+function getRecurrencesCollection(mode, id) {
+  const path = mode === "couple" ? `couples/${id}/recurrences` : `users/${id}/recurrences`;
+  return collection(db, path);
+}
+
+/**
+ * Escuta em tempo real as recorrências cadastradas.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {(recurrences: Array<Object>) => void} callback
+ * @returns {() => void} função para cancelar a escuta (unsubscribe)
+ */
+export function listenToRecurrences(mode, id, callback) {
+  const colRef = getRecurrencesCollection(mode, id);
+
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const recurrences = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(recurrences);
+    },
+    (error) => {
+      console.error("Erro ao escutar recorrências:", error);
+      callback([], error);
+    }
+  );
+}
+
+/**
+ * Cria um novo modelo de transação recorrente.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {{description:string, amount:number, type:"income"|"expense", category:string, dayOfMonth:number}} recurrence
+ */
+export async function addRecurrence(mode, id, recurrence) {
+  const colRef = getRecurrencesCollection(mode, id);
+  return addDoc(colRef, {
+    ...recurrence,
+    lastGeneratedMonth: null,
+    createdAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Atualiza um modelo de recorrência existente.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} recurrenceId
+ * @param {Object} updates
+ */
+export async function updateRecurrence(mode, id, recurrenceId, updates) {
+  const path = mode === "couple" ? `couples/${id}/recurrences` : `users/${id}/recurrences`;
+  const docRef = doc(db, path, recurrenceId);
+  return updateDoc(docRef, updates);
+}
+
+/**
+ * Remove um modelo de recorrência (não apaga transações já geradas).
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} recurrenceId
+ */
+export async function deleteRecurrence(mode, id, recurrenceId) {
+  const path = mode === "couple" ? `couples/${id}/recurrences` : `users/${id}/recurrences`;
+  const docRef = doc(db, path, recurrenceId);
+  return deleteDoc(docRef);
+}

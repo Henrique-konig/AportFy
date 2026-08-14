@@ -29,12 +29,20 @@ import {
   listenToDividends,
   addDividend,
   deleteDividend,
+  listenToBudgets,
+  upsertBudget,
+  deleteBudget,
+  listenToRecurrences,
+  addRecurrence,
+  updateRecurrence,
+  deleteRecurrence,
   getUserProfile,
   upsertUserProfile,
   joinCouple,
 } from "./db.js";
 import { fetchQuotes, fetchDividendHistory, B3_CATEGORIES } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
+import { mergeInvestmentPurchase, recurrenceDateForMonth, dividendDedupeKey } from "./calc.js";
 import * as ui from "./ui.js";
 
 /* ---------------------------------------------------------------
@@ -44,6 +52,8 @@ let unsubscribeTransactions = null;
 let unsubscribeGoals = null;
 let unsubscribeInvestments = null;
 let unsubscribeDividends = null;
+let unsubscribeBudgets = null;
+let unsubscribeRecurrences = null;
 let activeUser = null;
 let activeMode = "personal";
 let activeCoupleId = null;
@@ -51,6 +61,9 @@ let latestTransactions = [];
 let latestGoals = [];
 let latestInvestments = [];
 let latestDividends = [];
+let latestBudgets = [];
+let latestRecurrences = [];
+let recurrencesProcessing = false;
 let quotesInFlight = false;
 
 /** Últimos N pontos de preço mantidos por ativo (evita crescimento infinito do documento). */
@@ -78,7 +91,9 @@ function buildPriceHistory(investment, price) {
 function initUIBindings() {
   ui.bindSidebarToggle();
   ui.bindTransactionModal();
+  ui.bindRecurrenceModal();
   ui.bindGoalModal();
+  ui.bindBudgetModal();
   ui.bindInvestmentModal();
   ui.bindPriceEditModal();
   ui.bindDividendModal();
@@ -129,6 +144,26 @@ function initUIBindings() {
 
   ui.onEditTransaction((transaction) => ui.openTransactionModal(transaction));
 
+  /* -------------------- Recorrências -------------------- */
+  ui.onRecurrenceFormSubmit(async (data, editingId) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      if (editingId) {
+        await updateRecurrence(activeMode, id, editingId, data);
+        ui.showToast("Recorrência atualizada com sucesso!", "success");
+      } else {
+        await addRecurrence(activeMode, id, data);
+        ui.showToast("Recorrência criada com sucesso!", "success");
+      }
+      ui.closeRecurrenceModal();
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao salvar recorrência.", "error");
+    }
+  });
+
+  ui.onEditRecurrence((recurrence) => ui.openRecurrenceModal(recurrence));
+
   /* -------------------- Metas -------------------- */
   ui.onGoalFormSubmit(async (data, editingId) => {
     try {
@@ -148,6 +183,21 @@ function initUIBindings() {
   });
 
   ui.onEditGoal((goal) => ui.openGoalModal(goal));
+
+  /* -------------------- Orçamento -------------------- */
+  ui.onBudgetFormSubmit(async (category, monthlyLimit) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      await upsertBudget(activeMode, id, category, monthlyLimit);
+      ui.showToast("Orçamento salvo com sucesso!", "success");
+      ui.closeBudgetModal();
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao salvar orçamento.", "error");
+    }
+  });
+
+  ui.onEditBudget((budget) => ui.openBudgetModal(budget));
 
   /* -------------------- Investimentos -------------------- */
   ui.onInvestmentFormSubmit(async (data, editingId) => {
@@ -175,16 +225,15 @@ function initUIBindings() {
         );
 
         if (existing) {
-          const oldQty = Number(existing.quantity) || 0;
-          const oldAvg = Number(existing.avgPrice) || 0;
-          const newQty = oldQty + data.quantity;
-          const newAvg = (oldQty * oldAvg + data.quantity * data.price) / newQty;
+          const merged = mergeInvestmentPurchase(existing, {
+            quantity: data.quantity,
+            price: data.price,
+            purchaseDate: data.purchaseDate,
+          });
 
           await updateInvestment(activeMode, id, existing.id, {
-            quantity: newQty,
-            avgPrice: newAvg,
+            ...merged,
             category: data.category,
-            purchaseDate: data.purchaseDate > existing.purchaseDate ? data.purchaseDate : existing.purchaseDate,
           });
           ui.showToast(`Compra somada à posição de ${existing.ticker}. Preço médio recalculado.`, "success");
         } else {
@@ -276,6 +325,12 @@ function initUIBindings() {
       } else if (type === "dividend") {
         await deleteDividend(activeMode, collectionId, id);
         ui.showToast("Provento excluído.", "success");
+      } else if (type === "budget") {
+        await deleteBudget(activeMode, collectionId, id);
+        ui.showToast("Orçamento excluído.", "success");
+      } else if (type === "recurrence") {
+        await deleteRecurrence(activeMode, collectionId, id);
+        ui.showToast("Recorrência excluída.", "success");
       } else {
         await deleteTransaction(activeMode, collectionId, id);
         ui.showToast("Transação excluída.", "success");
@@ -575,7 +630,7 @@ async function importDividendsFromB3() {
   try {
     const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
     // Evita reimportar o mesmo provento a cada clique.
-    const existingKeys = new Set(latestDividends.map((d) => `${d.ticker}|${d.date}|${d.type}`));
+    const existingKeys = new Set(latestDividends.map((d) => dividendDedupeKey(d.ticker, d.date, d.type)));
 
     let imported = 0;
     let importedTotal = 0;
@@ -593,7 +648,7 @@ async function importDividendsFromB3() {
         // não era dono do ativo na data-base do provento.
         if (d.date < inv.purchaseDate) continue;
 
-        const key = `${inv.ticker}|${d.date}|${d.type}`;
+        const key = dividendDedupeKey(inv.ticker, d.date, d.type);
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
 
@@ -633,6 +688,47 @@ function refreshDashboard() {
   ui.renderFullTransactionsTable(latestTransactions);
   ui.updateCharts(latestTransactions);
   ui.renderReports(latestTransactions);
+  ui.renderBudgets(latestBudgets, latestTransactions);
+}
+
+/**
+ * Gera a transação do mês atual pra cada recorrência que ainda não foi
+ * lançada nesse mês (lastGeneratedMonth != mês atual). Roda toda vez que
+ * a lista de recorrências chega do Firestore — é seguro rodar de novo
+ * porque cada recorrência só é processada uma vez por mês (marcada logo
+ * após a escrita), e a flag local evita reentrância se dois snapshots
+ * chegarem em sequência rápida.
+ */
+async function processRecurrences(recurrences) {
+  if (recurrencesProcessing || recurrences.length === 0) return;
+  recurrencesProcessing = true;
+
+  try {
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+
+    for (const r of recurrences) {
+      if (r.lastGeneratedMonth === currentMonthKey) continue;
+
+      const date = recurrenceDateForMonth(now.getFullYear(), now.getMonth(), r.dayOfMonth);
+
+      try {
+        await addTransaction(activeMode, id, {
+          description: r.description,
+          amount: r.amount,
+          type: r.type,
+          category: r.category,
+          date,
+        });
+        await updateRecurrence(activeMode, id, r.id, { lastGeneratedMonth: currentMonthKey });
+      } catch (err) {
+        console.error(`Erro ao gerar transação recorrente de "${r.description}":`, err);
+      }
+    }
+  } finally {
+    recurrencesProcessing = false;
+  }
 }
 
 function subscribeToActiveCollection() {
@@ -651,6 +747,14 @@ function subscribeToActiveCollection() {
   if (unsubscribeDividends) {
     unsubscribeDividends();
     unsubscribeDividends = null;
+  }
+  if (unsubscribeBudgets) {
+    unsubscribeBudgets();
+    unsubscribeBudgets = null;
+  }
+  if (unsubscribeRecurrences) {
+    unsubscribeRecurrences();
+    unsubscribeRecurrences = null;
   }
 
   const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
@@ -691,6 +795,25 @@ function subscribeToActiveCollection() {
     }
     latestDividends = dividends;
     ui.renderDividendsData(dividends);
+  });
+
+  unsubscribeBudgets = listenToBudgets(activeMode, id, (budgets, error) => {
+    if (error) {
+      ui.showToast("Erro ao carregar orçamentos em tempo real.", "error");
+      return;
+    }
+    latestBudgets = budgets;
+    ui.renderBudgets(latestBudgets, latestTransactions);
+  });
+
+  unsubscribeRecurrences = listenToRecurrences(activeMode, id, (recurrences, error) => {
+    if (error) {
+      ui.showToast("Erro ao carregar recorrências em tempo real.", "error");
+      return;
+    }
+    latestRecurrences = recurrences;
+    ui.renderRecurrences(recurrences);
+    processRecurrences(recurrences);
   });
 }
 
@@ -745,6 +868,8 @@ onAuthChange(async (user) => {
     latestGoals = [];
     latestInvestments = [];
     latestDividends = [];
+    latestBudgets = [];
+    latestRecurrences = [];
     if (unsubscribeTransactions) {
       unsubscribeTransactions();
       unsubscribeTransactions = null;
@@ -760,6 +885,14 @@ onAuthChange(async (user) => {
     if (unsubscribeDividends) {
       unsubscribeDividends();
       unsubscribeDividends = null;
+    }
+    if (unsubscribeBudgets) {
+      unsubscribeBudgets();
+      unsubscribeBudgets = null;
+    }
+    if (unsubscribeRecurrences) {
+      unsubscribeRecurrences();
+      unsubscribeRecurrences = null;
     }
     ui.showLoginScreen();
   }
