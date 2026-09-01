@@ -78,9 +78,11 @@ const el = {
   // Transactions view
   txnFilterBtns: document.querySelectorAll(".txn-filter-btn"),
   txnCategoryFilter: document.getElementById("txn-category-filter"),
+  txnMonthFilter: document.getElementById("txn-month-filter"),
   transactionsFullTbody: document.getElementById("transactions-full-tbody"),
   transactionsFullEmpty: document.getElementById("transactions-full-empty"),
   txnFullCount: document.getElementById("txn-full-count"),
+  txnFullTotal: document.getElementById("txn-full-total"),
   txnLoadMoreWrap: document.getElementById("txn-load-more-wrap"),
   txnLoadMoreBtn: document.getElementById("txn-load-more-btn"),
   txnLoadMoreRemaining: document.getElementById("txn-load-more-remaining"),
@@ -291,6 +293,7 @@ let lastBudgets = [];
 let pendingDeleteId = null;
 let pendingDeleteType = "transaction";
 let txnTypeFilter = "all";
+let txnMonthFilterValue = "all";
 let txnVisibleCount = 100;
 const TXN_PAGE_SIZE = 100;
 let lastInvestments = [];
@@ -714,13 +717,30 @@ export function renderTransactionsTable(transactions) {
   wireRowActions(el.transactionsTbody, transactions);
 }
 
+/** Repopula o filtro de mês com os meses realmente presentes nas transações. */
+function populateTransactionMonthFilter(transactions) {
+  if (!el.txnMonthFilter) return;
+  const months = [...new Set(transactions.map((t) => t.date.slice(0, 7)))].sort().reverse();
+  const current = el.txnMonthFilter.value;
+
+  el.txnMonthFilter.innerHTML =
+    `<option value="all">Todos os meses</option>` + months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
+
+  el.txnMonthFilter.value = months.includes(current) ? current : "all";
+  txnMonthFilterValue = el.txnMonthFilter.value;
+  refreshDropdown("txn-month-filter");
+}
+
 export function renderFullTransactionsTable(transactions) {
   lastTransactions = transactions;
+  populateTransactionMonthFilter(transactions);
+
   const term = getSearchTerm();
   const categoryFilter = el.txnCategoryFilter?.value || "all";
 
   let filtered = transactions;
   if (txnTypeFilter !== "all") filtered = filtered.filter((t) => t.type === txnTypeFilter);
+  if (txnMonthFilterValue !== "all") filtered = filtered.filter((t) => t.date.slice(0, 7) === txnMonthFilterValue);
   if (categoryFilter !== "all") filtered = filtered.filter((t) => t.category === categoryFilter);
   if (term) {
     filtered = filtered.filter(
@@ -729,6 +749,10 @@ export function renderFullTransactionsTable(transactions) {
   }
 
   el.txnFullCount.textContent = `${filtered.length} registro${filtered.length === 1 ? "" : "s"}`;
+  if (el.txnFullTotal) {
+    const totalSpent = filtered.filter((t) => t.type === "expense").reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    el.txnFullTotal.textContent = totalSpent > 0 ? `Gasto: ${formatCurrency(totalSpent)}` : "";
+  }
 
   if (filtered.length === 0) {
     el.transactionsFullTbody.innerHTML = "";
@@ -781,6 +805,11 @@ export function bindTransactionFilters() {
     });
   });
   el.txnCategoryFilter?.addEventListener("change", () => {
+    txnVisibleCount = TXN_PAGE_SIZE;
+    renderFullTransactionsTable(lastTransactions);
+  });
+  el.txnMonthFilter?.addEventListener("change", () => {
+    txnMonthFilterValue = el.txnMonthFilter.value;
     txnVisibleCount = TXN_PAGE_SIZE;
     renderFullTransactionsTable(lastTransactions);
   });
@@ -2512,6 +2541,7 @@ export function bindCustomDropdowns() {
     "budget-category",
     "recurrence-category",
     "txn-category-filter",
+    "txn-month-filter",
     "inv-category-filter",
     "inv-sort-select",
     "inv-asset-filter",
