@@ -28,6 +28,7 @@ import {
   deleteInvestment,
   listenToDividends,
   addDividend,
+  updateDividend,
   deleteDividend,
   listenToBudgets,
   upsertBudget,
@@ -279,17 +280,24 @@ function initUIBindings() {
   });
 
   /* -------------------- Proventos -------------------- */
-  ui.onDividendFormSubmit(async (data) => {
+  ui.onDividendFormSubmit(async (data, editingId) => {
     try {
       const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
-      await addDividend(activeMode, id, data);
-      ui.showToast("Provento registrado com sucesso!", "success");
+      if (editingId) {
+        await updateDividend(activeMode, id, editingId, data);
+        ui.showToast("Provento atualizado com sucesso!", "success");
+      } else {
+        await addDividend(activeMode, id, data);
+        ui.showToast("Provento registrado com sucesso!", "success");
+      }
       ui.closeDividendModal();
     } catch (err) {
       console.error(err);
-      ui.showToast("Erro ao registrar provento.", "error");
+      ui.showToast("Erro ao salvar provento.", "error");
     }
   });
+
+  ui.onEditDividend((dividend) => ui.openDividendModal(dividend));
 
   ui.onImportDividends(() => importDividendsFromB3());
 

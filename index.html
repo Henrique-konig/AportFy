@@ -1298,13 +1298,14 @@
 
     <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
       <div class="flex items-center justify-between mb-6">
-        <h3 class="text-lg font-bold">Registrar Provento</h3>
+        <h3 class="text-lg font-bold" id="dividend-modal-title">Registrar Provento</h3>
         <button id="dividend-modal-close-btn" class="text-slate-500 hover:text-white transition-colors">
           <i class="ph-bold ph-x text-xl"></i>
         </button>
       </div>
 
       <form id="dividend-form" class="space-y-4">
+        <input type="hidden" id="dividend-id" />
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1.5" for="dividend-ticker">Ativo</label>
           <select id="dividend-ticker"

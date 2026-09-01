@@ -378,6 +378,19 @@ export async function addDividend(mode, id, dividend) {
 }
 
 /**
+ * Atualiza um provento existente.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {string} dividendId
+ * @param {Object} updates
+ */
+export async function updateDividend(mode, id, dividendId, updates) {
+  const path = mode === "couple" ? `couples/${id}/dividends` : `users/${id}/dividends`;
+  const docRef = doc(db, path, dividendId);
+  return updateDoc(docRef, updates);
+}
+
+/**
  * Remove um provento.
  * @param {"personal"|"couple"} mode
  * @param {string} id

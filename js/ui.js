@@ -232,7 +232,9 @@ const el = {
   dividendModal: document.getElementById("dividend-modal"),
   dividendModalBackdrop: document.getElementById("dividend-modal-backdrop"),
   dividendModalCloseBtn: document.getElementById("dividend-modal-close-btn"),
+  dividendModalTitle: document.getElementById("dividend-modal-title"),
   dividendForm: document.getElementById("dividend-form"),
+  dividendId: document.getElementById("dividend-id"),
   dividendTicker: document.getElementById("dividend-ticker"),
   dividendType: document.getElementById("dividend-type"),
   dividendAmount: document.getElementById("dividend-amount"),
@@ -1943,6 +1945,9 @@ function renderDividends(dividends, investments) {
             <td class="px-5 sm:px-6 py-4 text-right font-semibold text-emerald-400">${formatCurrency(Number(d.amount) || 0)}</td>
             <td class="px-5 sm:px-6 py-4">
               <div class="flex items-center justify-end gap-1.5">
+                <button class="row-action-btn edit-dividend-btn" data-id="${d.id}" title="Editar">
+                  <i class="ph-bold ph-pencil-simple"></i>
+                </button>
                 <button class="row-action-btn delete-btn delete-dividend-btn" data-id="${d.id}" title="Excluir">
                   <i class="ph-bold ph-trash"></i>
                 </button>
@@ -1952,6 +1957,12 @@ function renderDividends(dividends, investments) {
       })
       .join("");
 
+    el.dividendsTbody.querySelectorAll(".edit-dividend-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const d = tableRows.find((row) => row.id === btn.dataset.id);
+        if (d && dividendEditHandler) dividendEditHandler(d);
+      });
+    });
     el.dividendsTbody.querySelectorAll(".delete-dividend-btn").forEach((btn) => {
       btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "dividend"));
     });
@@ -2058,21 +2069,36 @@ export function bindInvestmentFilters() {
    Modal: Registrar Provento
 --------------------------------------------------------------- */
 let dividendSubmitHandler = null;
+let dividendEditHandler = null;
 
 export function onDividendFormSubmit(handler) {
   dividendSubmitHandler = handler;
 }
 
+export function onEditDividend(handler) {
+  dividendEditHandler = handler;
+}
+
 const DIVIDEND_DATE_PLACEHOLDER = "Selecionar data";
 
-export function openDividendModal() {
+export function openDividendModal(dividend = null) {
   el.dividendForm.reset();
   populateDividendTickerSelect(lastInvestments);
-  if (invAssetFilterValue !== "all") {
-    el.dividendTicker.value = invAssetFilterValue;
-    refreshDropdown("dividend-ticker");
+  if (dividend) {
+    el.dividendModalTitle.textContent = "Editar Provento";
+    el.dividendId.value = dividend.id;
+    el.dividendTicker.value = dividend.ticker;
+    el.dividendType.value = dividend.type;
+    el.dividendAmount.value = dividend.amount;
+    setDatePickerValue("dividend-date", "dividend-date-label", dividend.date, DIVIDEND_DATE_PLACEHOLDER);
+  } else {
+    el.dividendModalTitle.textContent = "Registrar Provento";
+    el.dividendId.value = "";
+    if (invAssetFilterValue !== "all") el.dividendTicker.value = invAssetFilterValue;
+    setDatePickerValue("dividend-date", "dividend-date-label", todayISO(), DIVIDEND_DATE_PLACEHOLDER);
   }
-  setDatePickerValue("dividend-date", "dividend-date-label", todayISO(), DIVIDEND_DATE_PLACEHOLDER);
+  refreshDropdown("dividend-ticker");
+  refreshDropdown("dividend-type");
   el.dividendModal.classList.remove("hidden");
   el.dividendModal.classList.add("flex");
 }
@@ -2104,7 +2130,8 @@ export function bindDividendModal() {
       amount: parseFloat(el.dividendAmount.value),
       date: el.dividendDate.value,
     };
-    dividendSubmitHandler?.(data);
+    const editingId = el.dividendId.value || null;
+    dividendSubmitHandler?.(data, editingId);
   });
 }
 
