@@ -108,6 +108,7 @@ function initUIBindings() {
   ui.bindSearch();
   ui.bindMobileSearch();
   ui.bindTransactionFilters();
+  ui.bindDashboardFilters();
   ui.bindInvestmentFilters();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();

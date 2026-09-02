@@ -256,6 +256,16 @@
           <!-- ======================= VIEW: DASHBOARD ======================= -->
           <div id="view-dashboard" class="view-section space-y-6">
 
+            <!-- PERIOD FILTER -->
+            <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 class="font-bold text-base">Visão Geral</h3>
+                <p class="text-xs text-slate-500">Resumo financeiro do mês selecionado.</p>
+              </div>
+              <select id="dashboard-period-filter"
+                class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all sm:w-44"></select>
+            </section>
+
             <!-- KPI CARDS -->
             <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-slide-up">
               <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">

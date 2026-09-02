@@ -56,6 +56,9 @@ const el = {
   pageSubtitle: document.getElementById("page-subtitle"),
   viewSections: document.querySelectorAll(".view-section"),
 
+  // Dashboard period filter
+  dashboardPeriodFilter: document.getElementById("dashboard-period-filter"),
+
   // KPIs
   kpiBalance: document.getElementById("kpi-balance"),
   kpiBalanceChange: document.getElementById("kpi-balance-change"),
@@ -296,6 +299,7 @@ let pendingDeleteId = null;
 let pendingDeleteType = "transaction";
 let txnTypeFilter = "all";
 let txnMonthFilterValue = "all";
+let dashPeriodFilterValue = todayISO().slice(0, 7);
 let txnVisibleCount = 100;
 const TXN_PAGE_SIZE = 100;
 let lastInvestments = [];
@@ -578,11 +582,42 @@ function renderChangeBadge(elNode, pct, invert = false) {
   elNode.innerHTML = `<i class="ph-bold ${icon}"></i> ${Math.abs(pct).toFixed(1)}%`;
 }
 
+function dashPeriodDate() {
+  const [y, m] = dashPeriodFilterValue.split("-").map(Number);
+  return new Date(y, m - 1, 1);
+}
+
+/** Repopula o filtro de período do dashboard com o mês atual + os meses com transações. */
+function populateDashboardPeriodFilter(transactions) {
+  if (!el.dashboardPeriodFilter) return;
+  const currentMonth = todayISO().slice(0, 7);
+  const months = [...new Set([currentMonth, ...transactions.map((t) => t.date.slice(0, 7))])].sort().reverse();
+  const current = el.dashboardPeriodFilter.value || dashPeriodFilterValue;
+
+  el.dashboardPeriodFilter.innerHTML = months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
+
+  el.dashboardPeriodFilter.value = months.includes(current) ? current : currentMonth;
+  dashPeriodFilterValue = el.dashboardPeriodFilter.value;
+  refreshDropdown("dashboard-period-filter");
+}
+
+export function bindDashboardFilters() {
+  el.dashboardPeriodFilter?.addEventListener("change", () => {
+    dashPeriodFilterValue = el.dashboardPeriodFilter.value;
+    updateKPIs(lastTransactions, lastGoals);
+    updateCharts(lastTransactions);
+  });
+}
+
 export function updateKPIs(transactions, goals = []) {
-  const now = new Date();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
+  lastGoals = goals;
+  populateDashboardPeriodFilter(transactions);
+
+  const periodDate = dashPeriodDate();
+  const thisMonth = periodDate.getMonth();
+  const thisYear = periodDate.getFullYear();
   const prevDate = new Date(thisYear, thisMonth - 1, 1);
+  const periodEnd = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59);
 
   let currentIncome = 0, currentExpense = 0, prevIncome = 0, prevExpense = 0, totalBalance = 0;
 
@@ -590,7 +625,7 @@ export function updateKPIs(transactions, goals = []) {
     const d = new Date(`${t.date}T00:00:00`);
     const amount = Number(t.amount) || 0;
     const signedAmount = t.type === "income" ? amount : -amount;
-    totalBalance += signedAmount;
+    if (d <= periodEnd) totalBalance += signedAmount;
 
     if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) {
       if (t.type === "income") currentIncome += amount;
@@ -969,16 +1004,16 @@ export function updateCharts(transactions) {
   lastTransactions = transactions;
   if (!cashflowChart || !categoryChart) return;
 
-  const { labels, income, expense } = buildMonthlySeries(transactions, 6);
+  const { labels, income, expense } = buildMonthlySeries(transactions, 6, dashPeriodDate());
   const built = buildCashflowDatasets(el.cashflowCanvas, labels, income, expense);
   cashflowChart.data.labels = built.labels;
   cashflowChart.data.datasets = built.datasets;
   cashflowChart.update();
 
-  // Categoria (somente despesas)
+  // Categoria (somente despesas do mês selecionado no filtro do dashboard)
   const categoryTotals = {};
   transactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && t.date.slice(0, 7) === dashPeriodFilterValue)
     .forEach((t) => {
       categoryTotals[t.category] = (categoryTotals[t.category] || 0) + (Number(t.amount) || 0);
     });
@@ -2569,6 +2604,7 @@ export function bindCustomDropdowns() {
     "recurrence-category",
     "txn-category-filter",
     "txn-month-filter",
+    "dashboard-period-filter",
     "inv-category-filter",
     "inv-sort-select",
     "inv-asset-filter",
