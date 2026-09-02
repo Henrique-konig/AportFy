@@ -260,7 +260,7 @@
             <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h3 class="font-bold text-base">Visão Geral</h3>
-                <p class="text-xs text-slate-500">Resumo financeiro do mês selecionado.</p>
+                <p class="text-xs text-slate-500">Resumo financeiro do período selecionado.</p>
               </div>
               <select id="dashboard-period-filter"
                 class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all sm:w-44"></select>
@@ -271,14 +271,14 @@
               <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
                 <div class="flex items-start justify-between">
                   <div>
-                    <p class="text-xs font-medium text-slate-400 mb-1">Saldo Atual</p>
+                    <p class="text-xs font-medium text-slate-400 mb-1" id="kpi-balance-label">Saldo Atual</p>
                     <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-balance">R$ 0,00</h3>
                   </div>
                   <div class="w-11 h-11 rounded-xl bg-blue-500/15 flex items-center justify-center kpi-icon">
                     <i class="ph-fill ph-wallet text-xl text-blue-400"></i>
                   </div>
                 </div>
-                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500" id="kpi-balance-change-row">
                   <span id="kpi-balance-change" class="font-semibold text-emerald-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-up"></i> 0%</span>
                   vs. mês anterior
                 </p>
@@ -287,14 +287,14 @@
               <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
                 <div class="flex items-start justify-between">
                   <div>
-                    <p class="text-xs font-medium text-slate-400 mb-1">Receitas do Mês</p>
+                    <p class="text-xs font-medium text-slate-400 mb-1" id="kpi-income-label">Receitas do Mês</p>
                     <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-income">R$ 0,00</h3>
                   </div>
                   <div class="w-11 h-11 rounded-xl bg-emerald-500/15 flex items-center justify-center kpi-icon">
                     <i class="ph-fill ph-trend-up text-xl text-emerald-400"></i>
                   </div>
                 </div>
-                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500" id="kpi-income-change-row">
                   <span id="kpi-income-change" class="font-semibold text-emerald-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-up"></i> 0%</span>
                   vs. mês anterior
                 </p>
@@ -303,14 +303,14 @@
               <div class="kpi-card glass-card rounded-2xl p-5 relative overflow-hidden group">
                 <div class="flex items-start justify-between">
                   <div>
-                    <p class="text-xs font-medium text-slate-400 mb-1">Despesas do Mês</p>
+                    <p class="text-xs font-medium text-slate-400 mb-1" id="kpi-expense-label">Despesas do Mês</p>
                     <h3 class="text-2xl font-extrabold tracking-tight" id="kpi-expense">R$ 0,00</h3>
                   </div>
                   <div class="w-11 h-11 rounded-xl bg-red-500/15 flex items-center justify-center kpi-icon">
                     <i class="ph-fill ph-trend-down text-xl text-red-400"></i>
                   </div>
                 </div>
-                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500">
+                <p class="text-xs mt-3 flex items-center gap-1 text-slate-500" id="kpi-expense-change-row">
                   <span id="kpi-expense-change" class="font-semibold text-red-400 flex items-center gap-0.5"><i class="ph-bold ph-arrow-down"></i> 0%</span>
                   vs. mês anterior
                 </p>

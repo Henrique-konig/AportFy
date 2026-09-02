@@ -61,11 +61,17 @@ const el = {
 
   // KPIs
   kpiBalance: document.getElementById("kpi-balance"),
+  kpiBalanceLabel: document.getElementById("kpi-balance-label"),
   kpiBalanceChange: document.getElementById("kpi-balance-change"),
+  kpiBalanceChangeRow: document.getElementById("kpi-balance-change-row"),
   kpiIncome: document.getElementById("kpi-income"),
+  kpiIncomeLabel: document.getElementById("kpi-income-label"),
   kpiIncomeChange: document.getElementById("kpi-income-change"),
+  kpiIncomeChangeRow: document.getElementById("kpi-income-change-row"),
   kpiExpense: document.getElementById("kpi-expense"),
+  kpiExpenseLabel: document.getElementById("kpi-expense-label"),
   kpiExpenseChange: document.getElementById("kpi-expense-change"),
+  kpiExpenseChangeRow: document.getElementById("kpi-expense-change-row"),
   kpiGoals: document.getElementById("kpi-goals"),
   kpiGoalsBar: document.getElementById("kpi-goals-bar"),
 
@@ -583,20 +589,22 @@ function renderChangeBadge(elNode, pct, invert = false) {
 }
 
 function dashPeriodDate() {
+  if (dashPeriodFilterValue === "all") return new Date();
   const [y, m] = dashPeriodFilterValue.split("-").map(Number);
   return new Date(y, m - 1, 1);
 }
 
-/** Repopula o filtro de período do dashboard com o mês atual + os meses com transações. */
+/** Repopula o filtro de período do dashboard com "Todos os meses" + o mês atual + os meses com transações. */
 function populateDashboardPeriodFilter(transactions) {
   if (!el.dashboardPeriodFilter) return;
   const currentMonth = todayISO().slice(0, 7);
   const months = [...new Set([currentMonth, ...transactions.map((t) => t.date.slice(0, 7))])].sort().reverse();
   const current = el.dashboardPeriodFilter.value || dashPeriodFilterValue;
 
-  el.dashboardPeriodFilter.innerHTML = months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
+  el.dashboardPeriodFilter.innerHTML =
+    `<option value="all">Todos os meses</option>` + months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
 
-  el.dashboardPeriodFilter.value = months.includes(current) ? current : currentMonth;
+  el.dashboardPeriodFilter.value = current === "all" || months.includes(current) ? current : currentMonth;
   dashPeriodFilterValue = el.dashboardPeriodFilter.value;
   refreshDropdown("dashboard-period-filter");
 }
@@ -613,6 +621,7 @@ export function updateKPIs(transactions, goals = []) {
   lastGoals = goals;
   populateDashboardPeriodFilter(transactions);
 
+  const isAllPeriod = dashPeriodFilterValue === "all";
   const periodDate = dashPeriodDate();
   const thisMonth = periodDate.getMonth();
   const thisYear = periodDate.getFullYear();
@@ -625,9 +634,9 @@ export function updateKPIs(transactions, goals = []) {
     const d = new Date(`${t.date}T00:00:00`);
     const amount = Number(t.amount) || 0;
     const signedAmount = t.type === "income" ? amount : -amount;
-    if (d <= periodEnd) totalBalance += signedAmount;
+    if (isAllPeriod || d <= periodEnd) totalBalance += signedAmount;
 
-    if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) {
+    if (isAllPeriod || (d.getFullYear() === thisYear && d.getMonth() === thisMonth)) {
       if (t.type === "income") currentIncome += amount;
       else currentExpense += amount;
     } else if (d.getFullYear() === prevDate.getFullYear() && d.getMonth() === prevDate.getMonth()) {
@@ -639,12 +648,20 @@ export function updateKPIs(transactions, goals = []) {
   el.kpiBalance.textContent = formatCurrency(totalBalance);
   el.kpiIncome.textContent = formatCurrency(currentIncome);
   el.kpiExpense.textContent = formatCurrency(currentExpense);
+  el.kpiIncomeLabel.textContent = isAllPeriod ? "Receitas Totais" : "Receitas do Mês";
+  el.kpiExpenseLabel.textContent = isAllPeriod ? "Despesas Totais" : "Despesas do Mês";
 
-  const prevBalance = prevIncome - prevExpense;
-  const currBalance = currentIncome - currentExpense;
-  renderChangeBadge(el.kpiBalanceChange, pctChange(currBalance, prevBalance));
-  renderChangeBadge(el.kpiIncomeChange, pctChange(currentIncome, prevIncome));
-  renderChangeBadge(el.kpiExpenseChange, pctChange(currentExpense, prevExpense), true);
+  el.kpiBalanceChangeRow.classList.toggle("hidden", isAllPeriod);
+  el.kpiIncomeChangeRow.classList.toggle("hidden", isAllPeriod);
+  el.kpiExpenseChangeRow.classList.toggle("hidden", isAllPeriod);
+
+  if (!isAllPeriod) {
+    const prevBalance = prevIncome - prevExpense;
+    const currBalance = currentIncome - currentExpense;
+    renderChangeBadge(el.kpiBalanceChange, pctChange(currBalance, prevBalance));
+    renderChangeBadge(el.kpiIncomeChange, pctChange(currentIncome, prevIncome));
+    renderChangeBadge(el.kpiExpenseChange, pctChange(currentExpense, prevExpense), true);
+  }
 
   let goalsProgress;
   if (goals.length > 0) {
@@ -1010,10 +1027,11 @@ export function updateCharts(transactions) {
   cashflowChart.data.datasets = built.datasets;
   cashflowChart.update();
 
-  // Categoria (somente despesas do mês selecionado no filtro do dashboard)
+  // Categoria (despesas do período selecionado no filtro do dashboard)
+  const isAllPeriod = dashPeriodFilterValue === "all";
   const categoryTotals = {};
   transactions
-    .filter((t) => t.type === "expense" && t.date.slice(0, 7) === dashPeriodFilterValue)
+    .filter((t) => t.type === "expense" && (isAllPeriod || t.date.slice(0, 7) === dashPeriodFilterValue))
     .forEach((t) => {
       categoryTotals[t.category] = (categoryTotals[t.category] || 0) + (Number(t.amount) || 0);
     });
