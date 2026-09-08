@@ -626,7 +626,6 @@ export function updateKPIs(transactions, goals = []) {
   const thisMonth = periodDate.getMonth();
   const thisYear = periodDate.getFullYear();
   const prevDate = new Date(thisYear, thisMonth - 1, 1);
-  const periodEnd = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59);
 
   let currentIncome = 0, currentExpense = 0, prevIncome = 0, prevExpense = 0, totalBalance = 0;
 
@@ -634,7 +633,7 @@ export function updateKPIs(transactions, goals = []) {
     const d = new Date(`${t.date}T00:00:00`);
     const amount = Number(t.amount) || 0;
     const signedAmount = t.type === "income" ? amount : -amount;
-    if (isAllPeriod || d <= periodEnd) totalBalance += signedAmount;
+    totalBalance += signedAmount;
 
     if (isAllPeriod || (d.getFullYear() === thisYear && d.getMonth() === thisMonth)) {
       if (t.type === "income") currentIncome += amount;
@@ -645,9 +644,12 @@ export function updateKPIs(transactions, goals = []) {
     }
   });
 
-  el.kpiBalance.textContent = formatCurrency(totalBalance);
+  const currBalance = currentIncome - currentExpense;
+
+  el.kpiBalance.textContent = formatCurrency(isAllPeriod ? totalBalance : currBalance);
   el.kpiIncome.textContent = formatCurrency(currentIncome);
   el.kpiExpense.textContent = formatCurrency(currentExpense);
+  el.kpiBalanceLabel.textContent = isAllPeriod ? "Saldo Atual" : "Saldo do Mês";
   el.kpiIncomeLabel.textContent = isAllPeriod ? "Receitas Totais" : "Receitas do Mês";
   el.kpiExpenseLabel.textContent = isAllPeriod ? "Despesas Totais" : "Despesas do Mês";
 
@@ -657,7 +659,6 @@ export function updateKPIs(transactions, goals = []) {
 
   if (!isAllPeriod) {
     const prevBalance = prevIncome - prevExpense;
-    const currBalance = currentIncome - currentExpense;
     renderChangeBadge(el.kpiBalanceChange, pctChange(currBalance, prevBalance));
     renderChangeBadge(el.kpiIncomeChange, pctChange(currentIncome, prevIncome));
     renderChangeBadge(el.kpiExpenseChange, pctChange(currentExpense, prevExpense), true);
