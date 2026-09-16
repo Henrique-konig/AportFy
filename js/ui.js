@@ -114,8 +114,11 @@ const el = {
   budgetLimit: document.getElementById("budget-limit"),
 
   // Reports view
+  reportsPeriodFilter: document.getElementById("reports-period-filter"),
   reportTotalIncome: document.getElementById("report-total-income"),
+  reportIncomePeriodLabel: document.getElementById("report-income-period-label"),
   reportTotalExpense: document.getElementById("report-total-expense"),
+  reportExpensePeriodLabel: document.getElementById("report-expense-period-label"),
   reportNet: document.getElementById("report-net"),
   reportTopCategory: document.getElementById("report-top-category"),
   reportsCashflowCanvas: document.getElementById("reports-cashflow-chart"),
@@ -306,6 +309,7 @@ let pendingDeleteType = "transaction";
 let txnTypeFilter = "all";
 let txnMonthFilterValue = "all";
 let dashPeriodFilterValue = todayISO().slice(0, 7);
+let reportsPeriodFilterValue = todayISO().slice(0, 7);
 let txnVisibleCount = 100;
 const TXN_PAGE_SIZE = 100;
 let lastInvestments = [];
@@ -1074,17 +1078,54 @@ export function updateCharts(transactions) {
 /* ---------------------------------------------------------------
    Relatórios (view: Relatórios)
 --------------------------------------------------------------- */
+function reportsPeriodDate() {
+  if (reportsPeriodFilterValue === "all") return new Date();
+  const [y, m] = reportsPeriodFilterValue.split("-").map(Number);
+  return new Date(y, m - 1, 1);
+}
+
+/** Repopula o filtro de período dos relatórios com "Todos os meses" + o mês atual + os meses com transações. */
+function populateReportsPeriodFilter(transactions) {
+  if (!el.reportsPeriodFilter) return;
+  const currentMonth = todayISO().slice(0, 7);
+  const months = [...new Set([currentMonth, ...transactions.map((t) => t.date.slice(0, 7))])].sort().reverse();
+  const current = el.reportsPeriodFilter.value || reportsPeriodFilterValue;
+
+  el.reportsPeriodFilter.innerHTML =
+    `<option value="all">Todos os meses</option>` + months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
+
+  el.reportsPeriodFilter.value = current === "all" || months.includes(current) ? current : currentMonth;
+  reportsPeriodFilterValue = el.reportsPeriodFilter.value;
+  refreshDropdown("reports-period-filter");
+}
+
+export function bindReportsFilters() {
+  el.reportsPeriodFilter?.addEventListener("change", () => {
+    reportsPeriodFilterValue = el.reportsPeriodFilter.value;
+    renderReports(lastTransactions);
+  });
+}
+
 export function renderReports(transactions) {
   if (!reportsCashflowChart || !reportsCategoryChart) return;
+  lastTransactions = transactions;
+  populateReportsPeriodFilter(transactions);
 
-  const { labels, income, expense } = buildMonthlySeries(transactions, 12);
+  const isAllPeriod = reportsPeriodFilterValue === "all";
+  const periodTransactions = transactions.filter((t) => isAllPeriod || t.date.slice(0, 7) === reportsPeriodFilterValue);
+
+  const { labels, income, expense } = buildMonthlySeries(transactions, 12, reportsPeriodDate());
   const built = buildCashflowDatasets(el.reportsCashflowCanvas, labels, income, expense);
   reportsCashflowChart.data.labels = built.labels;
   reportsCashflowChart.data.datasets = built.datasets;
   reportsCashflowChart.update();
 
-  const totalIncome = income.reduce((a, b) => a + b, 0);
-  const totalExpense = expense.reduce((a, b) => a + b, 0);
+  let totalIncome = 0, totalExpense = 0;
+  periodTransactions.forEach((t) => {
+    const amount = Number(t.amount) || 0;
+    if (t.type === "income") totalIncome += amount;
+    else totalExpense += amount;
+  });
   const net = totalIncome - totalExpense;
 
   el.reportTotalIncome.textContent = formatCurrency(totalIncome);
@@ -1093,8 +1134,12 @@ export function renderReports(transactions) {
   el.reportNet.classList.toggle("text-emerald-400", net >= 0);
   el.reportNet.classList.toggle("text-red-400", net < 0);
 
+  const periodLabel = isAllPeriod ? "Todos os meses" : formatMonthLabel(reportsPeriodFilterValue);
+  el.reportIncomePeriodLabel.textContent = periodLabel;
+  el.reportExpensePeriodLabel.textContent = periodLabel;
+
   const categoryTotals = {};
-  transactions
+  periodTransactions
     .filter((t) => t.type === "expense")
     .forEach((t) => {
       categoryTotals[t.category] = (categoryTotals[t.category] || 0) + (Number(t.amount) || 0);
@@ -1116,7 +1161,7 @@ export function renderReports(transactions) {
   ];
   reportsCategoryChart.update();
 
-  const topExpenses = transactions
+  const topExpenses = periodTransactions
     .filter((t) => t.type === "expense")
     .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))
     .slice(0, 5);
@@ -2624,6 +2669,7 @@ export function bindCustomDropdowns() {
     "txn-category-filter",
     "txn-month-filter",
     "dashboard-period-filter",
+    "reports-period-filter",
     "inv-category-filter",
     "inv-sort-select",
     "inv-asset-filter",
