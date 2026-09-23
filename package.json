@@ -1,5 +1,5 @@
 {
-  "name": "eco-fy",
+  "name": "aportfy",
   "version": "1.0.0",
   "private": true,
   "description": "Dashboard financeiro pessoal e de casal — dark mode, glassmorphism e dados em tempo real via Firebase.",
@@ -9,14 +9,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Henrique-konig/Eco-fy.git"
+    "url": "git+https://github.com/Henrique-konig/AportFy.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Henrique-konig/Eco-fy/issues"
+    "url": "https://github.com/Henrique-konig/AportFy/issues"
   },
-  "homepage": "https://github.com/Henrique-konig/Eco-fy#readme",
+  "homepage": "https://github.com/Henrique-konig/AportFy#readme",
   "devDependencies": {
     "vitest": "^4.1.10"
   }

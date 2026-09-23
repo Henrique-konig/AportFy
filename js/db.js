@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — db.js
+// AportFy — db.js
 // Operações CRUD no Firestore para transações financeiras.
 // Coleções:
 //   users/{userId}/transactions      -> modo Pessoal

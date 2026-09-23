@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // =========================================================
-// EcoFy — Regras de segurança do Firestore
+// AportFy — Regras de segurança do Firestore
 //
 // Modelo:
 //   users/{userId}/**              -> só o dono (auth.uid == userId)

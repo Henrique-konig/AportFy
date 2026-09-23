@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — ui.js
+// AportFy — ui.js
 // Manipulação do DOM, modais, toasts, gráficos (Chart.js)
 // e alternância visual entre os modos Pessoal / Casal.
 //
@@ -360,7 +360,7 @@ const VIEW_META = {
   investments: { title: "Investimentos", subtitle: "Acompanhe o rendimento da sua carteira de ativos" },
   news: { title: "Notícias", subtitle: "Fique por dentro do mercado e dos ativos da sua carteira" },
   reports: { title: "Relatórios", subtitle: "Análise detalhada do seu fluxo de caixa" },
-  settings: { title: "Configurações", subtitle: "Preferências da sua conta EcoFy" },
+  settings: { title: "Configurações", subtitle: "Preferências da sua conta AportFy" },
 };
 
 const DELETE_META = {

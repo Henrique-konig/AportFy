@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — news.js
+// AportFy — news.js
 // Duas fontes, uma por sub-aba:
 // - "Minha Carteira": Alpha Vantage (NEWS_SENTIMENT), filtrada por
 //   ticker dos ativos do usuário.

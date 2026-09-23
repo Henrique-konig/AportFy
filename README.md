@@ -1,4 +1,4 @@
-# EcoFy
+# AportFy
 
 Dashboard financeiro pessoal e de casal — dark mode, glassmorphism e dados em tempo real via Firebase.
 
@@ -11,7 +11,7 @@ Dashboard financeiro pessoal e de casal — dark mode, glassmorphism e dados em 
 ## Estrutura
 
 ```
-/ecofy
+/aportfy
   ├── index.html
   ├── css/
   │    └── custom.css

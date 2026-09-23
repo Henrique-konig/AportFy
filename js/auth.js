@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — auth.js
+// AportFy — auth.js
 // Controle de sessão do usuário (Firebase Authentication).
 // =========================================================
 

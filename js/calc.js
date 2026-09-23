@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — calc.js
+// AportFy — calc.js
 // Funções de cálculo puras (sem DOM, sem Firebase, sem fetch).
 // Isoladas aqui especificamente pra serem testáveis em Node puro
 // (ver tests/calc.test.js) — o resto do app depende de document/

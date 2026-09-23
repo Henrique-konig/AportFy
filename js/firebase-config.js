@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — firebase-config.js
+// AportFy — firebase-config.js
 // Inicialização do Firebase SDK (v10+) via ES Modules (CDN).
 // Credenciais do projeto "ecofy-c332d" (Firebase Console > Configurações do projeto > SDK).
 // =========================================================

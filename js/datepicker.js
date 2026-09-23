@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — datepicker.js
+// AportFy — datepicker.js
 // Calendário customizado no tema do app (glass-card, cores por
 // modo Pessoal/Casal), usado no lugar do <input type="date">
 // nativo do navegador para manter consistência visual.

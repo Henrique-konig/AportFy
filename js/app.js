@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — app.js
+// AportFy — app.js
 // Ponto de entrada da aplicação: conecta auth.js, db.js e
 // ui.js, registrando os event listeners da página.
 // =========================================================
@@ -498,7 +498,7 @@ function serializeForBackup(items) {
 
 function exportBackup() {
   const payload = {
-    app: "EcoFy",
+    app: "AportFy",
     backupVersion: 1,
     exportedAt: new Date().toISOString(),
     mode: activeMode,
@@ -512,7 +512,7 @@ function exportBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `ecofy-backup-${activeMode}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `aportfy-backup-${activeMode}-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -535,7 +535,7 @@ async function importBackup(file) {
   try {
     data = JSON.parse(await file.text());
   } catch {
-    ui.showToast("Arquivo inválido — não é um JSON de backup do EcoFy.", "error");
+    ui.showToast("Arquivo inválido — não é um JSON de backup do AportFy.", "error");
     return;
   }
 

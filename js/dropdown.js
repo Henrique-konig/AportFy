@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — dropdown.js
+// AportFy — dropdown.js
 // Substitui a lista de opções nativa do <select> (renderizada
 // pelo sistema operacional, fora do alcance do CSS) por um
 // popup no mesmo tema glass-card do resto do app.

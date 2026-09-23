@@ -1,5 +1,5 @@
 // =========================================================
-// EcoFy — api.js
+// AportFy — api.js
 // Busca de cotações da B3 (Ações e FIIs) via Brapi API.
 // Não depende de Firebase; falha de rede nunca deve quebrar
 // o app — sempre retorna um resultado parcial utilizável.
