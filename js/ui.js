@@ -10,7 +10,7 @@
 
 import { attachDatePicker, setDatePickerValue, closeDatePicker } from "./datepicker.js";
 import { enhanceSelect, refreshDropdown } from "./dropdown.js";
-import { calcInvestmentMetrics, pctChange, buildMonthlySeries, calcBudgetSpent } from "./calc.js";
+import { calcInvestmentMetrics, pctChange, buildMonthlySeries, calcBudgetSpent, buildMonthlyContributions } from "./calc.js";
 
 /* ---------------------------------------------------------------
    Referências de elementos
@@ -206,6 +206,11 @@ const el = {
   invKpiBestPct: document.getElementById("inv-kpi-best-pct"),
   invEvolutionCanvas: document.getElementById("inv-evolution-chart"),
   invEvolutionLegend: document.getElementById("inv-evolution-legend"),
+  invContribCanvas: document.getElementById("inv-contrib-chart"),
+  invContribTbody: document.getElementById("inv-contrib-tbody"),
+  invContribTotal: document.getElementById("inv-contrib-total"),
+  invContribAvg: document.getElementById("inv-contrib-avg"),
+  invContribSubtitle: document.getElementById("inv-contrib-subtitle"),
   invAllocationCanvas: document.getElementById("inv-allocation-chart"),
   invAllocationLegend: document.getElementById("inv-allocation-legend"),
   investmentsTbody: document.getElementById("investments-tbody"),
@@ -321,6 +326,7 @@ let categoryChart = null;
 let reportsCashflowChart = null;
 let reportsCategoryChart = null;
 let invEvolutionChart = null;
+let invContribChart = null;
 let invAllocationChart = null;
 let assetDetailChart = null;
 let divChart = null;
@@ -1741,6 +1747,32 @@ export function initInvestmentCharts() {
     options: baseLineOptions,
   });
 
+  invContribChart = new Chart(el.invContribCanvas.getContext("2d"), {
+    type: "bar",
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#0f172a",
+          borderColor: "#334155",
+          borderWidth: 1,
+          padding: 10,
+          callbacks: { label: (ctx) => ` ${formatCurrency(ctx.parsed.y)}` },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 } } },
+        y: {
+          grid: { color: "rgba(51,65,85,0.35)" },
+          ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => "R$ " + v },
+        },
+      },
+    },
+  });
+
   invAllocationChart = new Chart(el.invAllocationCanvas.getContext("2d"), {
     type: "doughnut",
     data: { labels: [], datasets: [] },
@@ -1754,6 +1786,42 @@ export function initInvestmentCharts() {
       },
     },
   });
+}
+
+/** Aportes (compras) por mês nos últimos 12 meses — respeita o filtro de ativo da aba. */
+function renderMonthlyContributions(investments) {
+  if (!invContribChart) return;
+
+  const isFiltered = invAssetFilterValue !== "all";
+  const relevant = isFiltered ? investments.filter((inv) => inv.ticker === invAssetFilterValue) : investments;
+  const months = buildMonthlyContributions(relevant, 12);
+
+  const total = months.reduce((sum, m) => sum + m.total, 0);
+  el.invContribTotal.textContent = formatCurrency(total);
+  el.invContribAvg.textContent = formatCurrency(total / months.length);
+  el.invContribSubtitle.textContent = isFiltered
+    ? `Quanto você investiu em ${invAssetFilterValue} nos últimos 12 meses`
+    : "Quanto você investiu em cada um dos últimos 12 meses";
+
+  const modeColor = getModeColor();
+  invContribChart.data.labels = months.map((m) => m.label);
+  invContribChart.data.datasets = [
+    { label: "Aportes", data: months.map((m) => m.total), backgroundColor: hexToRgba(modeColor, 0.7), borderRadius: 6, barThickness: 22 },
+  ];
+  invContribChart.update();
+
+  el.invContribTbody.innerHTML = months
+    .slice()
+    .reverse()
+    .map(
+      (m) => `
+        <tr class="border-b border-slate-800/40 last:border-0">
+          <td class="py-3 font-medium capitalize">${formatMonthLabel(m.key)}</td>
+          <td class="py-3 text-right text-slate-400">${m.count || "—"}</td>
+          <td class="py-3 text-right font-semibold ${m.total > 0 ? "" : "text-slate-600"}">${m.total > 0 ? formatCurrency(m.total) : "—"}</td>
+        </tr>`
+    )
+    .join("");
 }
 
 function updateInvestmentCharts(investments) {
@@ -2134,6 +2202,7 @@ export function renderInvestments(investments) {
   updateInvestmentKPIs(investments);
   updateInvestmentCharts(investments);
   populateAssetFilter(investments);
+  renderMonthlyContributions(investments);
   populateDividendTickerSelect(investments);
   renderAssetDetail(investments, lastDividends);
   renderDividends(lastDividends, investments);
@@ -2155,6 +2224,7 @@ export function bindInvestmentFilters() {
   el.invAssetFilter.addEventListener("change", () => {
     invAssetFilterValue = el.invAssetFilter.value;
     renderInvestmentsTable(lastInvestments);
+    renderMonthlyContributions(lastInvestments);
     renderAssetDetail(lastInvestments, lastDividends);
     renderDividends(lastDividends, lastInvestments);
   });

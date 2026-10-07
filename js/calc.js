@@ -37,6 +37,43 @@ export function mergeInvestmentPurchase(existing, purchase) {
   return { quantity: newQty, avgPrice: newAvg, purchaseDate };
 }
 
+/**
+ * Histórico de compras (aportes) de uma posição. Posições criadas antes do
+ * histórico existir não têm `purchases`: viram uma única compra sintética
+ * (quantidade × preço médio na data da última compra).
+ * @returns {Array<{date:string, quantity:number, price:number}>}
+ */
+export function getInvestmentPurchases(inv) {
+  if (Array.isArray(inv.purchases) && inv.purchases.length > 0) return inv.purchases;
+  if (!inv.purchaseDate) return [];
+  return [{ date: inv.purchaseDate, quantity: Number(inv.quantity) || 0, price: Number(inv.avgPrice) || 0 }];
+}
+
+/**
+ * Total aportado por mês nos últimos N meses (do mais antigo ao mais recente),
+ * somando quantidade × preço de cada compra.
+ * @returns {Array<{key:string, label:string, total:number, count:number}>}
+ */
+export function buildMonthlyContributions(investments, monthsCount = 12, referenceDate = new Date()) {
+  const months = [];
+  for (let i = monthsCount - 1; i >= 0; i--) {
+    const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    months.push({ key, label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", ""), total: 0, count: 0 });
+  }
+
+  investments.forEach((inv) => {
+    getInvestmentPurchases(inv).forEach((p) => {
+      const month = months.find((m) => m.key === String(p.date).slice(0, 7));
+      if (!month) return;
+      month.total += (Number(p.quantity) || 0) * (Number(p.price) || 0);
+      month.count += 1;
+    });
+  });
+
+  return months;
+}
+
 /** Variação percentual entre dois valores (usado nos KPIs do dashboard). */
 export function pctChange(current, previous) {
   if (!previous) return current > 0 ? 100 : 0;

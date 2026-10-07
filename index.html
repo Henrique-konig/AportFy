@@ -680,6 +680,41 @@
               </div>
             </section>
 
+            <!-- Aportes mensais -->
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                  <h3 class="font-bold text-base">Aportes Mensais</h3>
+                  <p class="text-xs text-slate-500" id="inv-contrib-subtitle">Quanto você investiu em cada um dos últimos 12 meses</p>
+                </div>
+                <div class="flex items-center gap-6 sm:text-right">
+                  <div>
+                    <p class="text-[11px] text-slate-500">Total em 12 meses</p>
+                    <p class="text-sm font-bold" id="inv-contrib-total">R$ 0,00</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] text-slate-500">Média mensal</p>
+                    <p class="text-sm font-bold" id="inv-contrib-avg">R$ 0,00</p>
+                  </div>
+                </div>
+              </div>
+              <div class="h-64">
+                <canvas id="inv-contrib-chart"></canvas>
+              </div>
+              <div class="overflow-x-auto custom-scroll mt-5">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="py-3 font-medium">Mês</th>
+                      <th class="py-3 font-medium text-right">Compras</th>
+                      <th class="py-3 font-medium text-right">Total aportado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="inv-contrib-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
             <!-- Tabela de ativos -->
             <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
               <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">

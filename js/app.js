@@ -46,7 +46,7 @@ import {
 } from "./db.js";
 import { fetchQuotes, fetchDividendHistory, B3_CATEGORIES } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
-import { mergeInvestmentPurchase, recurrenceDateForMonth, dividendDedupeKey } from "./calc.js";
+import { mergeInvestmentPurchase, recurrenceDateForMonth, dividendDedupeKey, getInvestmentPurchases } from "./calc.js";
 import * as ui from "./ui.js";
 
 /* ---------------------------------------------------------------
@@ -214,12 +214,24 @@ function initUIBindings() {
         // Edição direta: substitui os dados da posição (ticker, categoria,
         // quantidade, preço médio, data) pelos valores informados — sem
         // mesclar com nenhuma outra compra.
+        const current = latestInvestments.find((inv) => inv.id === editingId);
+        const numbersChanged =
+          !current ||
+          Number(current.quantity) !== data.quantity ||
+          Number(current.avgPrice) !== data.price ||
+          current.purchaseDate !== data.purchaseDate;
+
         await updateInvestment(activeMode, id, editingId, {
           ticker: data.ticker,
           category: data.category,
           quantity: data.quantity,
           avgPrice: data.price,
           purchaseDate: data.purchaseDate,
+          // Se só ticker/categoria mudaram, o histórico de aportes é mantido;
+          // se quantidade/preço/data foram sobrescritos, ele vira uma compra única.
+          ...(numbersChanged && {
+            purchases: [{ date: data.purchaseDate, quantity: data.quantity, price: data.price }],
+          }),
         });
         ui.showToast("Ativo atualizado com sucesso!", "success");
       } else {
@@ -240,6 +252,10 @@ function initUIBindings() {
           await updateInvestment(activeMode, id, existing.id, {
             ...merged,
             category: data.category,
+            purchases: [
+              ...getInvestmentPurchases(existing),
+              { date: data.purchaseDate, quantity: data.quantity, price: data.price },
+            ],
           });
           ui.showToast(`Compra somada à posição de ${existing.ticker}. Preço médio recalculado.`, "success");
         } else {
@@ -250,6 +266,7 @@ function initUIBindings() {
             avgPrice: data.price,
             currentPrice: data.price,
             purchaseDate: data.purchaseDate,
+            purchases: [{ date: data.purchaseDate, quantity: data.quantity, price: data.price }],
             lastQuoteAt: null,
             lastQuoteError: false,
           });

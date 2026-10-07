@@ -7,7 +7,42 @@ import {
   calcBudgetSpent,
   recurrenceDateForMonth,
   dividendDedupeKey,
+  getInvestmentPurchases,
+  buildMonthlyContributions,
 } from "../js/calc.js";
+
+describe("getInvestmentPurchases", () => {
+  it("usa o histórico salvo quando existe", () => {
+    const purchases = [{ date: "2026-09-05", quantity: 2, price: 10 }];
+    expect(getInvestmentPurchases({ purchases, purchaseDate: "2026-01-01", quantity: 9, avgPrice: 9 })).toBe(purchases);
+  });
+
+  it("sintetiza uma compra única para posições sem histórico", () => {
+    expect(getInvestmentPurchases({ purchaseDate: "2026-08-10", quantity: 5, avgPrice: 20 })).toEqual([
+      { date: "2026-08-10", quantity: 5, price: 20 },
+    ]);
+  });
+});
+
+describe("buildMonthlyContributions", () => {
+  const ref = new Date(2026, 8, 15); // setembro/2026
+
+  it("soma quantidade × preço de cada compra no mês certo", () => {
+    const investments = [
+      { purchases: [{ date: "2026-09-05", quantity: 2, price: 100 }, { date: "2026-08-20", quantity: 1, price: 50 }] },
+      { purchaseDate: "2026-09-30", quantity: 10, avgPrice: 5 },
+    ];
+    const months = buildMonthlyContributions(investments, 3, ref);
+    expect(months.map((m) => m.key)).toEqual(["2026-07", "2026-08", "2026-09"]);
+    expect(months.map((m) => m.total)).toEqual([0, 50, 250]);
+    expect(months.map((m) => m.count)).toEqual([0, 1, 2]);
+  });
+
+  it("ignora compras fora da janela de meses", () => {
+    const months = buildMonthlyContributions([{ purchaseDate: "2025-01-10", quantity: 1, avgPrice: 100 }], 3, ref);
+    expect(months.every((m) => m.total === 0)).toBe(true);
+  });
+});
 
 describe("calcInvestmentMetrics", () => {
   it("calcula rentabilidade positiva corretamente", () => {
