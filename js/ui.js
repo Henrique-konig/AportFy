@@ -1592,7 +1592,8 @@ export function onEditInvestmentPrice(handler) {
   editInvestmentPriceHandler = handler;
 }
 
-function renderInvestmentsTable(investments) {
+/** Aplica ativo, categoria e busca da barra de filtros — usado por tabela, KPIs, gráficos e aportes. */
+function getFilteredInvestments(investments) {
   const term = (el.invSearchInput.value || "").toLowerCase().trim();
   const categoryFilter = el.invCategoryFilter.value;
 
@@ -1604,6 +1605,20 @@ function renderInvestmentsTable(investments) {
       (inv) => inv.ticker.toLowerCase().includes(term) || (inv.name || "").toLowerCase().includes(term)
     );
   }
+  return filtered;
+}
+
+/** Redesenha tudo na aba Investimentos que depende dos filtros (tabela, KPIs, gráficos e aportes). */
+function refreshInvestmentViews() {
+  const filtered = getFilteredInvestments(lastInvestments);
+  renderInvestmentsTable(lastInvestments);
+  updateInvestmentKPIs(filtered);
+  updateInvestmentCharts(filtered);
+  renderMonthlyContributions(filtered);
+}
+
+function renderInvestmentsTable(investments) {
+  const filtered = getFilteredInvestments(investments);
 
   const withMetrics = filtered.map((inv) => ({ inv, m: calcInvestmentMetrics(inv) }));
 
@@ -1792,16 +1807,17 @@ export function initInvestmentCharts() {
 function renderMonthlyContributions(investments) {
   if (!invContribChart) return;
 
-  const isFiltered = invAssetFilterValue !== "all";
-  const relevant = isFiltered ? investments.filter((inv) => inv.ticker === invAssetFilterValue) : investments;
-  const months = buildMonthlyContributions(relevant, 12);
+  const months = buildMonthlyContributions(investments, 12);
 
   const total = months.reduce((sum, m) => sum + m.total, 0);
   el.invContribTotal.textContent = formatCurrency(total);
   el.invContribAvg.textContent = formatCurrency(total / months.length);
-  el.invContribSubtitle.textContent = isFiltered
-    ? `Quanto você investiu em ${invAssetFilterValue} nos últimos 12 meses`
-    : "Quanto você investiu em cada um dos últimos 12 meses";
+  el.invContribSubtitle.textContent =
+    invAssetFilterValue !== "all"
+      ? `Quanto você investiu em ${invAssetFilterValue} nos últimos 12 meses`
+      : investments.length < lastInvestments.length
+        ? "Quanto você investiu nos ativos filtrados nos últimos 12 meses"
+        : "Quanto você investiu em cada um dos últimos 12 meses";
 
   const modeColor = getModeColor();
   invContribChart.data.labels = months.map((m) => m.label);
@@ -2198,11 +2214,8 @@ export function renderDividendsData(dividends) {
 
 export function renderInvestments(investments) {
   lastInvestments = investments;
-  renderInvestmentsTable(investments);
-  updateInvestmentKPIs(investments);
-  updateInvestmentCharts(investments);
   populateAssetFilter(investments);
-  renderMonthlyContributions(investments);
+  refreshInvestmentViews();
   populateDividendTickerSelect(investments);
   renderAssetDetail(investments, lastDividends);
   renderDividends(lastDividends, investments);
@@ -2215,16 +2228,15 @@ export function setQuotesLoading(loading) {
 }
 
 export function bindInvestmentFilters() {
-  el.invSearchInput.addEventListener("input", () => renderInvestmentsTable(lastInvestments));
-  el.invCategoryFilter.addEventListener("change", () => renderInvestmentsTable(lastInvestments));
+  el.invSearchInput.addEventListener("input", refreshInvestmentViews);
+  el.invCategoryFilter.addEventListener("change", refreshInvestmentViews);
   el.invSortSelect.addEventListener("change", () => {
     invTypeSort = el.invSortSelect.value;
     renderInvestmentsTable(lastInvestments);
   });
   el.invAssetFilter.addEventListener("change", () => {
     invAssetFilterValue = el.invAssetFilter.value;
-    renderInvestmentsTable(lastInvestments);
-    renderMonthlyContributions(lastInvestments);
+    refreshInvestmentViews();
     renderAssetDetail(lastInvestments, lastDividends);
     renderDividends(lastDividends, lastInvestments);
   });

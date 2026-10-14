@@ -660,6 +660,36 @@
               </div>
             </section>
 
+            <!-- Tabela de ativos -->
+            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
+              <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">
+                <h3 class="font-bold text-base">Carteira de Ativos</h3>
+                <span id="inv-count" class="text-xs text-slate-500">0 ativos</span>
+              </div>
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="px-5 sm:px-6 py-3 font-medium">Ativo</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Categoria</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Preço Médio</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Preço Atual</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Qtd.</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Saldo Total</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Rentabilidade</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="investments-tbody"></tbody>
+                </table>
+                <div id="investments-empty" class="hidden flex-col items-center justify-center py-16 text-center">
+                  <i class="ph-thin ph-chart-line-up text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm">Nenhum ativo cadastrado ainda.</p>
+                  <p class="text-slate-600 text-xs mt-1">Adicione seu primeiro investimento para começar a acompanhar.</p>
+                </div>
+              </div>
+            </section>
+
             <!-- Gráficos -->
             <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 animate-slide-up">
               <div class="xl:col-span-2 glass-card rounded-2xl p-5 sm:p-6">
@@ -712,36 +742,6 @@
                   </thead>
                   <tbody id="inv-contrib-tbody"></tbody>
                 </table>
-              </div>
-            </section>
-
-            <!-- Tabela de ativos -->
-            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
-              <div class="flex items-center justify-between px-5 sm:px-6 py-5 border-b border-slate-800/80">
-                <h3 class="font-bold text-base">Carteira de Ativos</h3>
-                <span id="inv-count" class="text-xs text-slate-500">0 ativos</span>
-              </div>
-              <div class="overflow-x-auto custom-scroll">
-                <table class="w-full text-sm">
-                  <thead>
-                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
-                      <th class="px-5 sm:px-6 py-3 font-medium">Ativo</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium">Categoria</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Preço Médio</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Preço Atual</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Qtd.</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Saldo Total</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Rentabilidade</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody id="investments-tbody"></tbody>
-                </table>
-                <div id="investments-empty" class="hidden flex-col items-center justify-center py-16 text-center">
-                  <i class="ph-thin ph-chart-line-up text-5xl text-slate-700 mb-3"></i>
-                  <p class="text-slate-500 text-sm">Nenhum ativo cadastrado ainda.</p>
-                  <p class="text-slate-600 text-xs mt-1">Adicione seu primeiro investimento para começar a acompanhar.</p>
-                </div>
               </div>
             </section>
 
