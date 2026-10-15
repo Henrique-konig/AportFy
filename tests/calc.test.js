@@ -94,9 +94,13 @@ describe("buildUpcomingDividends", () => {
   };
 
   it("lista só o que ainda será pago e calcula pelas cotas da data-com", () => {
-    const items = buildUpcomingDividends(investments, calendars, "2026-10-15");
+    const items = buildUpcomingDividends(investments, calendars, "2026-10-14");
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ ticker: "MXRF11", shares: 100, total: 10, paymentDate: "2026-10-15" });
+  });
+
+  it("o que é pago hoje já conta como recebido, não como a receber", () => {
+    expect(buildUpcomingDividends(investments, calendars, "2026-10-15")).toHaveLength(0);
   });
 });
 

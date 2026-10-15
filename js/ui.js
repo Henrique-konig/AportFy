@@ -10,7 +10,7 @@
 
 import { attachDatePicker, setDatePickerValue, closeDatePicker } from "./datepicker.js";
 import { enhanceSelect, refreshDropdown } from "./dropdown.js";
-import { calcInvestmentMetrics, pctChange, buildMonthlySeries, calcBudgetSpent, buildMonthlyContributions } from "./calc.js";
+import { calcInvestmentMetrics, pctChange, buildMonthlySeries, calcBudgetSpent, buildMonthlyContributions, dividendDedupeKey } from "./calc.js";
 
 /* ---------------------------------------------------------------
    Referências de elementos
@@ -2094,7 +2094,7 @@ function renderDividendsChart(received) {
   if (!divChart) return;
   const now = new Date();
   const toKey = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
-  const upcoming = upcomingState.items.filter((i) => invAssetFilterValue === "all" || i.ticker === invAssetFilterValue);
+  const upcoming = getPendingUpcomingDividends();
 
   const lastUpcomingKey = upcoming.reduce((max, i) => (i.paymentDate.slice(0, 7) > max ? i.paymentDate.slice(0, 7) : max), toKey(now.getFullYear(), now.getMonth()));
   const [endY, endM] = lastUpcomingKey.split("-").map(Number);
@@ -2387,10 +2387,18 @@ function daysUntilLabel(isoDate) {
   return diff === 1 ? "amanhã" : `em ${diff} dias`;
 }
 
+/** Anunciados que ainda não foram lançados como recebidos (respeitando o filtro de ativo). */
+function getPendingUpcomingDividends() {
+  const registered = new Set(lastDividends.map((d) => dividendDedupeKey(d.ticker, d.date, d.type)));
+  return upcomingState.items.filter(
+    (i) => (invAssetFilterValue === "all" || i.ticker === invAssetFilterValue) && !registered.has(dividendDedupeKey(i.ticker, i.paymentDate, i.type))
+  );
+}
+
 /** Linhas do painel já filtradas pelo ativo: recebidos (proventos lançados) e a receber (anunciados na B3). */
 function getDividendPanelRows() {
   const assetOk = (ticker) => invAssetFilterValue === "all" || ticker === invAssetFilterValue;
-  const upcoming = upcomingState.items.filter((i) => assetOk(i.ticker)).map((i) => ({ ...i, status: "upcoming" }));
+  const upcoming = getPendingUpcomingDividends().map((i) => ({ ...i, status: "upcoming" }));
   const received = lastDividends
     .filter((d) => assetOk(d.ticker))
     .map((d) => ({

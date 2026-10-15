@@ -140,7 +140,7 @@ export function dividendNetAmount(type, rate, shares) {
 }
 
 /**
- * Proventos já anunciados e ainda não pagos (pagamento de hoje em diante), com
+ * Proventos já anunciados e ainda não pagos (pagamento depois de hoje — o que cai hoje já conta como recebido), com
  * o total que o usuário receberá = valor por cota × cotas que tinha na data-com.
  * @param {Array<Object>} investments posições da carteira
  * @param {Object<string, Array<{type:string, rate:number, exDate:string|null, paymentDate:string}>>} calendars proventos por ticker
@@ -150,7 +150,7 @@ export function buildUpcomingDividends(investments, calendars, today) {
   const items = [];
   investments.forEach((inv) => {
     (calendars[inv.ticker] || []).forEach((d) => {
-      if (d.paymentDate < today) return;
+      if (d.paymentDate <= today) return;
       const shares = sharesOnDate(inv, d.exDate || d.paymentDate);
       if (shares <= 0) return;
       items.push({ ticker: inv.ticker, type: d.type, rate: d.rate, exDate: d.exDate, paymentDate: d.paymentDate, shares, total: dividendNetAmount(d.type, d.rate, shares) });
