@@ -241,6 +241,12 @@ const el = {
   divKpiYield: document.getElementById("div-kpi-yield"),
   divMonthFilter: document.getElementById("div-month-filter"),
   divUpcomingTotal: document.getElementById("div-upcoming-total"),
+  divPanelReceivedTotal: document.getElementById("div-panel-received-total"),
+  divPanelMonthFilter: document.getElementById("div-panel-month-filter"),
+  divPanelTabs: document.querySelectorAll(".div-tab-btn"),
+  divPanelMoreWrap: document.getElementById("div-panel-more-wrap"),
+  divPanelMoreBtn: document.getElementById("div-panel-more-btn"),
+  divPanelMoreRemaining: document.getElementById("div-panel-more-remaining"),
   divUpcomingTbody: document.getElementById("div-upcoming-tbody"),
   divUpcomingStatus: document.getElementById("div-upcoming-status"),
   refreshUpcomingBtn: document.getElementById("refresh-upcoming-btn"),
@@ -2059,18 +2065,65 @@ export function initDividendsChart() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
-        tooltip: { backgroundColor: "#0f172a", borderColor: "#334155", borderWidth: 1, padding: 10 },
+        legend: { display: true, position: "bottom", labels: { color: "#94a3b8", boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } },
+        tooltip: {
+          backgroundColor: "#0f172a",
+          borderColor: "#334155",
+          borderWidth: 1,
+          padding: 10,
+          callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}` },
+        },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 } } },
+        x: { stacked: true, grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 } } },
         y: {
+          stacked: true,
           grid: { color: "rgba(51,65,85,0.35)" },
           ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => "R$ " + v },
         },
       },
     },
   });
+}
+
+/**
+ * Proventos por mês: os 6 últimos meses (até o atual) mais os meses futuros que
+ * já têm pagamento anunciado, empilhando o que foi recebido e o que ainda vai cair.
+ */
+function renderDividendsChart(received) {
+  if (!divChart) return;
+  const now = new Date();
+  const toKey = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
+  const upcoming = upcomingState.items.filter((i) => invAssetFilterValue === "all" || i.ticker === invAssetFilterValue);
+
+  const lastUpcomingKey = upcoming.reduce((max, i) => (i.paymentDate.slice(0, 7) > max ? i.paymentDate.slice(0, 7) : max), toKey(now.getFullYear(), now.getMonth()));
+  const [endY, endM] = lastUpcomingKey.split("-").map(Number);
+  const futureMonths = Math.min(6, (endY - now.getFullYear()) * 12 + (endM - 1 - now.getMonth()));
+
+  const months = [];
+  for (let i = 5; i >= -futureMonths; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: toKey(d.getFullYear(), d.getMonth()), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
+  }
+
+  const receivedTotals = months.map(() => 0);
+  const upcomingTotals = months.map(() => 0);
+  received.forEach((d) => {
+    const idx = months.findIndex((m) => m.key === String(d.date).slice(0, 7));
+    if (idx !== -1) receivedTotals[idx] += Number(d.amount) || 0;
+  });
+  upcoming.forEach((i) => {
+    const idx = months.findIndex((m) => m.key === i.paymentDate.slice(0, 7));
+    if (idx !== -1) upcomingTotals[idx] += i.total;
+  });
+
+  const modeColor = getModeColor();
+  divChart.data.labels = months.map((m) => m.label);
+  divChart.data.datasets = [
+    { label: "Recebido", data: receivedTotals, backgroundColor: hexToRgba(modeColor, 0.75), borderRadius: 6, barThickness: 28 },
+    { label: "A receber", data: upcomingTotals, backgroundColor: "rgba(245, 158, 11, 0.55)", borderRadius: 6, barThickness: 28 },
+  ];
+  divChart.update();
 }
 
 const MONTHS_PT_FULL = [
@@ -2181,39 +2234,14 @@ function renderDividends(dividends, investments) {
   el.divKpi12m.textContent = formatCurrency(last12mReceived);
   el.divKpiYield.textContent = `${yieldOnCost.toFixed(2)}%`;
 
-  // Gráfico: proventos por mês (últimos 6 meses)
-  const months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
-  }
-  const monthlyTotals = months.map(() => 0);
-  filtered.forEach((d) => {
-    const dt = new Date(`${d.date}T00:00:00`);
-    const idx = months.findIndex((m) => m.year === dt.getFullYear() && m.month === dt.getMonth());
-    if (idx !== -1) monthlyTotals[idx] += Number(d.amount) || 0;
-  });
-
-  if (divChart) {
-    const modeColor = getModeColor();
-    divChart.data.labels = months.map((m) => m.label);
-    divChart.data.datasets = [
-      {
-        label: "Proventos",
-        data: monthlyTotals,
-        backgroundColor: hexToRgba(modeColor, 0.7),
-        borderRadius: 6,
-        barThickness: 28,
-      },
-    ];
-    divChart.update();
-  }
+  renderDividendsChart(filtered);
 }
 
 /** Chamado pelo app.js sempre que os proventos mudam em tempo real. */
 export function renderDividendsData(dividends) {
   lastDividends = dividends;
   renderDividends(dividends, lastInvestments);
+  renderUpcomingDividendsView();
   renderAssetDetail(lastInvestments, dividends);
 }
 
@@ -2245,6 +2273,22 @@ export function bindInvestmentFilters() {
     renderUpcomingDividendsView();
     renderAssetDetail(lastInvestments, lastDividends);
     renderDividends(lastDividends, lastInvestments);
+  });
+  el.divPanelTabs.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      divPanelTab = btn.dataset.divTab;
+      divPanelLimit = DIV_PANEL_PAGE_SIZE;
+      renderUpcomingDividendsView();
+    })
+  );
+  el.divPanelMonthFilter?.addEventListener("change", () => {
+    divPanelMonth = el.divPanelMonthFilter.value;
+    divPanelLimit = DIV_PANEL_PAGE_SIZE;
+    renderUpcomingDividendsView();
+  });
+  el.divPanelMoreBtn?.addEventListener("click", () => {
+    divPanelLimit += DIV_PANEL_PAGE_SIZE;
+    renderUpcomingDividendsView();
   });
   el.divMonthFilter.addEventListener("change", () => {
     divMonthFilterValue = el.divMonthFilter.value;
@@ -2329,8 +2373,12 @@ export function onImportDividends(handler) {
   importDividendsHandler = handler;
 }
 
-/* -------- Proventos a Receber (anunciados, ainda não pagos) -------- */
+/* -------- Painel de proventos: recebidos (lançados) e a receber (anunciados) -------- */
 let upcomingState = { items: [], failed: [], hasEligible: false, loading: false };
+let divPanelTab = "all";
+let divPanelMonth = "all";
+const DIV_PANEL_PAGE_SIZE = 30;
+let divPanelLimit = DIV_PANEL_PAGE_SIZE;
 
 function daysUntilLabel(isoDate) {
   const today = new Date().toLocaleDateString("sv-SE");
@@ -2339,42 +2387,103 @@ function daysUntilLabel(isoDate) {
   return diff === 1 ? "amanhã" : `em ${diff} dias`;
 }
 
-function renderUpcomingDividendsView() {
-  const { items, failed, hasEligible, loading } = upcomingState;
-  const visible = invAssetFilterValue === "all" ? items : items.filter((i) => i.ticker === invAssetFilterValue);
+/** Linhas do painel já filtradas pelo ativo: recebidos (proventos lançados) e a receber (anunciados na B3). */
+function getDividendPanelRows() {
+  const assetOk = (ticker) => invAssetFilterValue === "all" || ticker === invAssetFilterValue;
+  const upcoming = upcomingState.items.filter((i) => assetOk(i.ticker)).map((i) => ({ ...i, status: "upcoming" }));
+  const received = lastDividends
+    .filter((d) => assetOk(d.ticker))
+    .map((d) => ({
+      status: "received",
+      ticker: d.ticker,
+      type: d.type,
+      paymentDate: d.date,
+      total: Number(d.amount) || 0,
+      rate: d.rate ?? null,
+      shares: d.shares ?? null,
+      exDate: d.exDate ?? null,
+    }));
+  return { upcoming, received };
+}
 
-  el.divUpcomingTotal.textContent = formatCurrency(visible.reduce((sum, i) => sum + i.total, 0));
+function populateDividendPanelMonthFilter(rows) {
+  const months = [...new Set(rows.map((r) => r.paymentDate.slice(0, 7)))].sort().reverse();
+  const current = el.divPanelMonthFilter.value || divPanelMonth;
+
+  el.divPanelMonthFilter.innerHTML =
+    `<option value="all">Todos os meses</option>` + months.map((m) => `<option value="${m}">${formatMonthLabel(m)}</option>`).join("");
+
+  el.divPanelMonthFilter.value = current === "all" || months.includes(current) ? current : "all";
+  divPanelMonth = el.divPanelMonthFilter.value;
+  refreshDropdown("div-panel-month-filter");
+}
+
+function renderUpcomingDividendsView() {
+  const { failed, hasEligible, loading } = upcomingState;
+  const { upcoming, received } = getDividendPanelRows();
+  populateDividendPanelMonthFilter([...upcoming, ...received]);
+
+  const inMonth = (r) => divPanelMonth === "all" || r.paymentDate.slice(0, 7) === divPanelMonth;
+  const upcomingInMonth = upcoming.filter(inMonth);
+  const receivedInMonth = received.filter(inMonth);
+
+  el.divUpcomingTotal.textContent = formatCurrency(upcomingInMonth.reduce((sum, i) => sum + i.total, 0));
+  el.divPanelReceivedTotal.textContent = formatCurrency(receivedInMonth.reduce((sum, i) => sum + i.total, 0));
   el.refreshUpcomingIcon.classList.toggle("animate-spin", loading);
   el.refreshUpcomingBtn.disabled = loading;
+  el.divPanelTabs.forEach((b) => b.classList.toggle("active-filter", b.dataset.divTab === divPanelTab));
+
+  let rows;
+  if (divPanelTab === "upcoming") rows = [...upcomingInMonth].sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.ticker.localeCompare(b.ticker));
+  else if (divPanelTab === "received") rows = [...receivedInMonth];
+  else rows = [...upcomingInMonth, ...receivedInMonth];
+  if (divPanelTab !== "upcoming") rows.sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || a.ticker.localeCompare(b.ticker));
 
   const perShare = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
-  el.divUpcomingTbody.innerHTML = visible
-    .map((i) => {
-      const color = DIVIDEND_TYPE_COLORS[i.type] || DIVIDEND_TYPE_COLORS["Outro"];
+  el.divUpcomingTbody.innerHTML = rows
+    .slice(0, divPanelLimit)
+    .map((r) => {
+      const color = DIVIDEND_TYPE_COLORS[r.type] || DIVIDEND_TYPE_COLORS["Outro"];
+      const isUpcoming = r.status === "upcoming";
+      const jcpHint = r.type === "JCP" ? ` title="Líquido de 15% de IR"` : "";
       return `
         <tr class="animate-fade-in">
-          <td class="px-5 sm:px-6 py-4 font-medium">${escapeHtml(i.ticker)}</td>
+          <td class="px-5 sm:px-6 py-4 font-medium">${escapeHtml(r.ticker)}</td>
           <td class="px-5 sm:px-6 py-4">
-            <span class="category-badge"><span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>${escapeHtml(i.type)}</span>
+            <span class="category-badge"${jcpHint}><span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>${escapeHtml(r.type)}</span>
           </td>
-          <td class="px-5 sm:px-6 py-4 text-slate-400">${i.exDate ? formatDate(i.exDate) : "—"}</td>
-          <td class="px-5 sm:px-6 py-4 text-slate-400">${formatDate(i.paymentDate)} <span class="text-[11px] text-slate-600">· ${daysUntilLabel(i.paymentDate)}</span></td>
-          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${perShare(i.rate)}</td>
-          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${formatQuantity(i.shares)}</td>
-          <td class="px-5 sm:px-6 py-4 text-right font-semibold text-emerald-400">${formatCurrency(i.total)}</td>
+          <td class="px-5 sm:px-6 py-4 text-slate-400">${r.exDate ? formatDate(r.exDate) : "—"}</td>
+          <td class="px-5 sm:px-6 py-4 text-slate-400">${formatDate(r.paymentDate)}${isUpcoming ? ` <span class="text-[11px] text-slate-600">· ${daysUntilLabel(r.paymentDate)}</span>` : ""}</td>
+          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${r.rate != null ? perShare(r.rate) : "—"}</td>
+          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${r.shares != null ? formatQuantity(r.shares) : "—"}</td>
+          <td class="px-5 sm:px-6 py-4 text-right font-semibold ${isUpcoming ? "text-amber-400" : "text-emerald-400"}">${formatCurrency(r.total)}</td>
+          <td class="px-5 sm:px-6 py-4">
+            <span class="whitespace-nowrap text-[11px] font-semibold px-2 py-1 rounded-md ${isUpcoming ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/15 text-emerald-400"}">${isUpcoming ? "A receber" : "Recebido"}</span>
+          </td>
         </tr>`;
     })
     .join("");
 
+  const remaining = rows.length - divPanelLimit;
+  el.divPanelMoreWrap.classList.toggle("hidden", remaining <= 0);
+  el.divPanelMoreWrap.classList.toggle("flex", remaining > 0);
+  el.divPanelMoreRemaining.textContent = remaining > 0 ? `(${remaining})` : "";
+
   let message = "";
-  if (loading) message = "Buscando proventos anunciados…";
-  else if (!hasEligible) message = "Cadastre Ações ou FIIs na carteira para acompanhar os proventos anunciados.";
-  else if (visible.length === 0) message = "Nenhum provento anunciado para os seus ativos no momento.";
+  if (loading && rows.length === 0) message = "Buscando proventos na B3…";
+  else if (rows.length === 0) {
+    if (!hasEligible && received.length === 0) message = "Cadastre Ações ou FIIs na carteira para acompanhar os proventos.";
+    else if (divPanelTab === "upcoming") message = "Nenhum provento anunciado para os seus ativos no momento.";
+    else if (divPanelTab === "received") message = "Nenhum provento recebido neste filtro.";
+    else message = "Nenhum provento neste filtro.";
+  }
   if (!loading && failed.length > 0) {
-    message += `${message ? " " : ""}Sem resposta da B3/Brapi para: ${failed.join(", ")}. Tente atualizar.`;
+    message += `${message ? " " : ""}Sem resposta da B3 para: ${failed.join(", ")}. Tente atualizar.`;
   }
   el.divUpcomingStatus.textContent = message;
   el.divUpcomingStatus.classList.toggle("hidden", !message);
+
+  renderDividendsChart(received.map((r) => ({ date: r.paymentDate, amount: r.total })));
 }
 
 export function setUpcomingDividendsLoading(loading) {
@@ -2824,6 +2933,7 @@ export function bindCustomDropdowns() {
     "inv-sort-select",
     "inv-asset-filter",
     "div-month-filter",
+    "div-panel-month-filter",
     "dividend-ticker",
     "dividend-type",
   ].forEach(enhanceSelect);

@@ -119,6 +119,26 @@ export function parseB3CashDividends(cashDividends) {
   return [...unique.values()];
 }
 
+// Tipo do papel no código ISIN, a partir do sufixo do ticker (3=ON, 4=PN, 11=unit...).
+const ISIN_CLASS_BY_TICKER_SUFFIX = { "3": "ACNOR", "4": "ACNPR", "5": "ACNPA", "6": "ACNPB", "7": "ACNPC", "8": "ACNPD", "11": "CDAM" };
+
+/**
+ * A B3 lista os proventos de uma empresa por classe de ação (ON, PN, unit) no
+ * mesmo conjunto. Fica só com os da classe do ticker informado (ex: TAEE11 = unit).
+ * Tickers de classe desconhecida retornam vazio.
+ */
+export function filterByAssetClass(cashDividends, ticker) {
+  const suffix = String(ticker).toUpperCase().replace(/^[A-Z]{4}/, "");
+  const isinClass = ISIN_CLASS_BY_TICKER_SUFFIX[suffix];
+  if (!isinClass) return [];
+  return (Array.isArray(cashDividends) ? cashDividends : []).filter((d) => String(d.assetIssued || "").slice(6).startsWith(isinClass));
+}
+
+/** O JCP é divulgado bruto e cai na conta com 15% de IR retido na fonte; dividendos e rendimentos são isentos. */
+export function dividendNetAmount(type, rate, shares) {
+  return rate * shares * (type === "JCP" ? 0.85 : 1);
+}
+
 /**
  * Proventos já anunciados e ainda não pagos (pagamento de hoje em diante), com
  * o total que o usuário receberá = valor por cota × cotas que tinha na data-com.
@@ -133,7 +153,7 @@ export function buildUpcomingDividends(investments, calendars, today) {
       if (d.paymentDate < today) return;
       const shares = sharesOnDate(inv, d.exDate || d.paymentDate);
       if (shares <= 0) return;
-      items.push({ ticker: inv.ticker, type: d.type, rate: d.rate, exDate: d.exDate, paymentDate: d.paymentDate, shares, total: d.rate * shares });
+      items.push({ ticker: inv.ticker, type: d.type, rate: d.rate, exDate: d.exDate, paymentDate: d.paymentDate, shares, total: dividendNetAmount(d.type, d.rate, shares) });
     });
   });
   return items.sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.ticker.localeCompare(b.ticker));

@@ -59,8 +59,9 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Cotações automáticas de **Ações e FIIs da B3** (Brapi), com fallback para o último preço salvo.
 - **Aportes mensais**: quanto foi investido em cada um dos últimos 12 meses, com média e filtro por ativo.
 - Evolução do capital por categoria, alocação da carteira e detalhe do ativo com histórico de preço.
-- **Proventos a Receber**: proventos já anunciados e ainda não pagos de Ações e FIIs, com data-com, data de pagamento e o total calculado pelas cotas que você tinha na data-com.
-- **Proventos** (dividendos, JCP e rendimentos): registro manual ou importação automática dos já pagos (Ações e FIIs), com filtro por mês e yield on cost.
+- **Proventos Recebidos e a Receber**: painel com os proventos já pagos e os já anunciados de Ações e FIIs (dados da B3), com abas, filtro por mês e total de cada lado. O valor é o provento por cota × as cotas que você tinha na data-com; o JCP é calculado líquido de 15% de IR.
+- **Importação automática**: os proventos já pagos são lançados sozinhos (e alimentam o gráfico "Proventos por Mês", que também mostra o que ainda vai cair). O que você excluir não volta; o botão "Importar da B3" força uma nova busca.
+- **Proventos** (dividendos, JCP e rendimentos): registro manual ou automático, histórico com filtro por mês e yield on cost.
 
 **Notícias**
 - *Minha Carteira*: notícias filtradas pelos ativos cadastrados (Alpha Vantage).
@@ -82,7 +83,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 | Lógica | JavaScript puro (ES Modules), sem framework e sem bundler |
 | Gráficos | [Chart.js](https://www.chartjs.org) |
 | Autenticação e banco | Firebase Authentication e Cloud Firestore (tempo real via `onSnapshot`) |
-| Cotações e proventos | [Brapi](https://brapi.dev) (Ações) e API pública da [B3](https://www.b3.com.br) (FIIs) |
+| Cotações | [Brapi](https://brapi.dev) |
+| Proventos | API pública da [B3](https://www.b3.com.br) (Ações e FIIs), com a Brapi como reserva para Ações |
 | Notícias | [Alpha Vantage](https://www.alphavantage.co) e Google News RSS |
 | Testes | [Vitest](https://vitest.dev) |
 | Hospedagem | [Vercel](https://vercel.com) |
@@ -100,13 +102,13 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── auth.js           # Login, registro, sessão e recuperação de senha
 │   ├── db.js             # CRUD e listeners em tempo real no Firestore
 │   ├── calc.js           # Cálculos puros (sem DOM/Firebase), cobertos por testes
-│   ├── api.js            # Cotações e calendário de proventos (Brapi e função /api/proventos)
+│   ├── api.js            # Cotações (Brapi) e calendário de proventos (função /api/proventos)
 │   ├── news.js           # Notícias da carteira e do mercado
 │   ├── datepicker.js     # Seletor de data customizado
 │   ├── dropdown.js       # Dropdown customizado para os selects
 │   └── firebase-config.js# Inicialização do Firebase SDK
 ├── api/
-│   └── proventos.js      # Função serverless (Vercel): proventos de FIIs na API da B3
+│   └── proventos.js      # Função serverless (Vercel): proventos de Ações e FIIs na API da B3
 ├── tests/
 │   └── calc.test.js      # Testes unitários de calc.js
 ├── assets/images/        # Favicon
@@ -127,7 +129,7 @@ npx serve .
 
 O Node.js é necessário apenas para o servidor estático de desenvolvimento e para os testes; o app em si não tem build.
 
-> Os proventos de **FIIs** vêm da função serverless `api/proventos.js`, que só existe na Vercel. Com `npx serve` o restante do app funciona normalmente e o painel "Proventos a Receber" avisa que não obteve resposta para os FIIs. Para testar a função localmente use `npx vercel dev`.
+> Os proventos vêm da função serverless `api/proventos.js`, que só existe na Vercel. Com `npx serve` o restante do app funciona normalmente; os proventos de FIIs ficam indisponíveis (e os de Ações usam a Brapi como reserva). Para testar a função localmente use `npx vercel dev`.
 
 ## Configuração
 
@@ -159,7 +161,7 @@ O Node.js é necessário apenas para o servidor estático de desenvolvimento e p
 
 | Serviço | Onde configurar | Efeito sem a chave |
 | --- | --- | --- |
-| Brapi | `BRAPI_TOKEN` em [`js/api.js`](js/api.js) | Cotações e proventos de Ações e cotações de FIIs funcionam no plano gratuito, sem token |
+| Brapi | `BRAPI_TOKEN` em [`js/api.js`](js/api.js) | Cotações de Ações e FIIs funcionam no plano gratuito, sem token. Os proventos vêm da B3; a Brapi só serve de reserva (sem token, o plano gratuito cobre poucos tickers) |
 | Alpha Vantage | `ALPHA_VANTAGE_KEY` em [`js/news.js`](js/news.js) | A aba "Minha Carteira" de Notícias fica vazia e exibe um aviso |
 
 > A Alpha Vantage tem limite de 25 requisições por dia no plano gratuito, por isso as respostas ficam em cache local por 3 horas.
@@ -221,4 +223,5 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 - **Modo Casal sem convite bilateral:** quem descobrir o código de um espaço consegue entrar nele. O código só aparece na tela de Configurações do dono e deve ser compartilhado apenas com quem você confia.
 - **Histórico de aportes:** posições criadas antes do campo `purchases` aparecem como uma única compra, na data da última compra. Editar quantidade, preço ou data de um ativo também resume o histórico em uma compra única.
 - **Cotações e notícias** dependem de APIs gratuitas de terceiros, sujeitas a limites de uso e indisponibilidade.
-- **Proventos de FIIs** vêm da API pública (não documentada) da B3 por meio de uma função serverless; o formato pode mudar sem aviso. O cálculo usa o histórico de aportes (`purchases`) para saber as cotas na data-com — para posições antigas sem histórico, vale a data da última compra.
+- **Proventos** vêm da API pública (não documentada) da B3 por meio de uma função serverless; o formato pode mudar sem aviso. O cálculo usa o histórico de aportes (`purchases`) para saber as cotas na data-com — para posições antigas sem histórico, vale a data da última compra.
+- **Valores estimados:** o JCP é calculado com 15% de IR (alguns investidores são isentos) e a corretora pode creditar o provento em data ligeiramente diferente da divulgada.

@@ -113,14 +113,48 @@ function normalizeDividendType(label) {
   return DIVIDEND_LABEL_MAP[key] || "Outro";
 }
 
+/** Consulta a função serverless /api/proventos (que lê a B3). */
+async function fetchViaB3Function(symbol, type) {
+  const res = await fetch(`/api/proventos?ticker=${encodeURIComponent(symbol)}&type=${type}`);
+  if (!res.ok) return { dividends: [], ok: false };
+  const data = await res.json();
+  const dividends = (data.dividends || []).map((d) => ({
+    type: normalizeDividendType(d.label),
+    rate: d.rate,
+    exDate: d.exDate,
+    paymentDate: d.paymentDate,
+  }));
+  return { dividends, ok: true };
+}
+
+/** Plano gratuito da Brapi só libera alguns tickers sem token — usada só como reserva para Ações. */
+async function fetchViaBrapi(symbol) {
+  const url = BRAPI_TOKEN
+    ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true&token=${encodeURIComponent(BRAPI_TOKEN)}`
+    : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true`;
+  const res = await fetch(url);
+  if (!res.ok) return { dividends: [], ok: false };
+
+  const data = await res.json();
+  const cashDividends = data.results?.[0]?.dividendsData?.cashDividends || [];
+  const dividends = cashDividends
+    .filter((d) => typeof d.rate === "number" && d.paymentDate)
+    .map((d) => ({
+      type: normalizeDividendType(d.label),
+      rate: d.rate,
+      exDate: d.lastDatePrior ? d.lastDatePrior.slice(0, 10) : null,
+      paymentDate: d.paymentDate.slice(0, 10),
+    }));
+  return { dividends, ok: true };
+}
+
 /**
- * Busca o calendário de proventos de um ativo — pagos e já anunciados:
- * - FIIs/Fiagros: função serverless `/api/proventos` (consulta a B3; a API
- *   da Brapi exige token pago para FIIs). Só existe quando o app está na
- *   Vercel — localmente (`npx serve`) a chamada falha e retorna ok:false.
- * - Ações: Brapi (`dividends=true`), liberado sem token.
- * Cada item traz a data-com (exDate), usada para saber quantas cotas o
- * usuário tinha com direito ao provento.
+ * Busca o calendário de proventos de um ativo — pagos e já anunciados — na API
+ * pública da B3, por meio da função serverless `/api/proventos` (a B3 não
+ * libera chamada direta do navegador). Só existe quando o app está na Vercel:
+ * para Ações, se a função não responder (ex: `npx serve` local), tenta a Brapi.
+ * Cada item traz a data-com (exDate), usada para saber quantas cotas o usuário
+ * tinha com direito ao provento.
  * @param {string} ticker
  * @param {string} category categoria do ativo ("FIIs" ou "Ações")
  * @returns {Promise<{ dividends: Array<{type:string, rate:number, exDate:string|null, paymentDate:string}>, ok: boolean }>}
@@ -128,36 +162,15 @@ function normalizeDividendType(label) {
 export async function fetchDividendCalendar(ticker, category) {
   const symbol = ticker.toUpperCase().trim();
   try {
-    if (category === "FIIs") {
-      const res = await fetch(`/api/proventos?ticker=${encodeURIComponent(symbol)}`);
-      if (!res.ok) return { dividends: [], ok: false };
-      const data = await res.json();
-      const dividends = (data.dividends || []).map((d) => ({
-        type: normalizeDividendType(d.label),
-        rate: d.rate,
-        exDate: d.exDate,
-        paymentDate: d.paymentDate,
-      }));
-      return { dividends, ok: true };
+    if (category === "FIIs") return await fetchViaB3Function(symbol, "fii");
+
+    try {
+      const viaB3 = await fetchViaB3Function(symbol, "acao");
+      if (viaB3.ok) return viaB3;
+    } catch {
+      /* função indisponível: cai na Brapi */
     }
-
-    const url = BRAPI_TOKEN
-      ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true&token=${encodeURIComponent(BRAPI_TOKEN)}`
-      : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true`;
-    const res = await fetch(url);
-    if (!res.ok) return { dividends: [], ok: false };
-
-    const data = await res.json();
-    const cashDividends = data.results?.[0]?.dividendsData?.cashDividends || [];
-    const dividends = cashDividends
-      .filter((d) => typeof d.rate === "number" && d.paymentDate)
-      .map((d) => ({
-        type: normalizeDividendType(d.label),
-        rate: d.rate,
-        exDate: d.lastDatePrior ? d.lastDatePrior.slice(0, 10) : null,
-        paymentDate: d.paymentDate.slice(0, 10),
-      }));
-    return { dividends, ok: true };
+    return await fetchViaBrapi(symbol);
   } catch (err) {
     console.warn(`Falha ao buscar proventos de ${ticker}:`, err.message);
     return { dividends: [], ok: false };

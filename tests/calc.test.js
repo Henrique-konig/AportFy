@@ -12,7 +12,35 @@ import {
   sharesOnDate,
   parseB3CashDividends,
   buildUpcomingDividends,
+  filterByAssetClass,
+  dividendNetAmount,
 } from "../js/calc.js";
+
+describe("dividendNetAmount", () => {
+  it("desconta 15% de IR só do JCP", () => {
+    expect(dividendNetAmount("JCP", 1, 100)).toBeCloseTo(85);
+    expect(dividendNetAmount("Dividendo", 1, 100)).toBe(100);
+    expect(dividendNetAmount("Rendimento", 0.1, 100)).toBeCloseTo(10);
+  });
+});
+
+describe("filterByAssetClass", () => {
+  const all = [
+    { assetIssued: "BRTAEEACNOR9", rate: "1" },
+    { assetIssued: "BRTAEEACNPR6", rate: "2" },
+    { assetIssued: "BRTAEECDAM10", rate: "3" },
+  ];
+
+  it("separa os proventos pela classe do ticker (ON, PN e unit)", () => {
+    expect(filterByAssetClass(all, "TAEE3").map((d) => d.rate)).toEqual(["1"]);
+    expect(filterByAssetClass(all, "TAEE4").map((d) => d.rate)).toEqual(["2"]);
+    expect(filterByAssetClass(all, "TAEE11").map((d) => d.rate)).toEqual(["3"]);
+  });
+
+  it("retorna vazio para sufixo desconhecido", () => {
+    expect(filterByAssetClass(all, "TAEE99")).toEqual([]);
+  });
+});
 
 describe("sharesOnDate", () => {
   const inv = { purchases: [{ date: "2026-08-05", quantity: 10, price: 10 }, { date: "2026-10-02", quantity: 20, price: 10 }] };

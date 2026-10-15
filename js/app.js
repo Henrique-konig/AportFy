@@ -53,6 +53,7 @@ import {
   getInvestmentPurchases,
   sharesOnDate,
   buildUpcomingDividends,
+  dividendNetAmount,
 } from "./calc.js";
 import * as ui from "./ui.js";
 
@@ -72,6 +73,9 @@ let latestTransactions = [];
 let latestGoals = [];
 let latestInvestments = [];
 let latestDividends = [];
+let dividendsLoaded = false;
+// Chaves já gravadas nesta sessão: o snapshot do Firestore demora um instante e não pode causar duplicidade.
+const sessionRegisteredKeys = new Set();
 let latestBudgets = [];
 let latestRecurrences = [];
 let recurrencesProcessing = false;
@@ -361,7 +365,9 @@ function initUIBindings() {
         await deleteInvestment(activeMode, collectionId, id);
         ui.showToast("Ativo excluído.", "success");
       } else if (type === "dividend") {
+        const removed = latestDividends.find((d) => d.id === id);
         await deleteDividend(activeMode, collectionId, id);
+        if (removed) ignoreDividend(dividendDedupeKey(removed.ticker, removed.date, removed.type));
         ui.showToast("Provento excluído.", "success");
       } else if (type === "budget") {
         await deleteBudget(activeMode, collectionId, id);
@@ -703,6 +709,95 @@ async function refreshUpcomingDividends({ force = false } = {}) {
   const failed = eligible.filter((inv) => dividendCalendars[inv.ticker] === null).map((inv) => inv.ticker);
   const calendars = Object.fromEntries(Object.entries(dividendCalendars).filter(([, v]) => v));
   ui.renderUpcomingDividends(buildUpcomingDividends(eligible, calendars, localISODate()), { failed, hasEligible: eligible.length > 0 });
+  autoSyncPaidDividends(eligible);
+}
+
+// Proventos que o usuário excluiu de propósito: a importação automática não os recria.
+const IGNORED_DIVIDENDS_KEY = "aportfy_ignored_dividends";
+const readIgnoredDividends = () => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(IGNORED_DIVIDENDS_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+};
+function ignoreDividend(key) {
+  try {
+    const ignored = readIgnoredDividends();
+    ignored.add(key);
+    localStorage.setItem(IGNORED_DIVIDENDS_KEY, JSON.stringify([...ignored]));
+  } catch {
+    /* storage indisponível: o provento pode voltar na próxima importação automática */
+  }
+}
+
+let syncingPaidDividends = false;
+
+/**
+ * Registra os proventos já pagos que ainda não estão lançados, calculados pelas
+ * cotas que o usuário tinha na data-com. `calendarFor` devolve o calendário de
+ * cada ativo (ou null se a consulta falhou). Retorna quantos lançou e o total.
+ */
+async function registerPaidDividends(eligible, calendarFor, { skipIgnored }) {
+  const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+  const today = localISODate();
+  const ignored = skipIgnored ? readIgnoredDividends() : new Set();
+  // Evita lançar o mesmo provento duas vezes (inclusive entre rodadas seguidas).
+  const existingKeys = new Set([...latestDividends.map((d) => dividendDedupeKey(d.ticker, d.date, d.type)), ...sessionRegisteredKeys]);
+
+  let imported = 0;
+  let importedTotal = 0;
+  let anyFailed = false;
+
+  for (const inv of eligible) {
+    const dividends = calendarFor(inv);
+    if (!dividends) {
+      anyFailed = true;
+      continue;
+    }
+
+    for (const d of dividends) {
+      // Só os já pagos — os anunciados aparecem como "a receber".
+      if (d.paymentDate > today) continue;
+
+      // Cotas que o usuário tinha na data-com (direito ao provento).
+      const shares = sharesOnDate(inv, d.exDate || d.paymentDate);
+      if (shares <= 0) continue;
+
+      const key = dividendDedupeKey(inv.ticker, d.paymentDate, d.type);
+      if (existingKeys.has(key) || ignored.has(key)) continue;
+      existingKeys.add(key);
+      sessionRegisteredKeys.add(key);
+
+      const amount = Math.round(dividendNetAmount(d.type, d.rate, shares) * 100) / 100;
+      await addDividend(activeMode, id, {
+        ticker: inv.ticker,
+        type: d.type,
+        amount,
+        date: d.paymentDate,
+        rate: d.rate,
+        shares,
+        exDate: d.exDate || null,
+      });
+      imported++;
+      importedTotal += amount;
+    }
+  }
+
+  return { imported, importedTotal, anyFailed };
+}
+
+/** Importação automática: roda quando o calendário carrega e lança os proventos pagos que faltam. */
+async function autoSyncPaidDividends(eligible) {
+  if (syncingPaidDividends || !dividendsLoaded || !activeUser || eligible.length === 0) return;
+  syncingPaidDividends = true;
+  try {
+    await registerPaidDividends(eligible, (inv) => dividendCalendars[inv.ticker] || null, { skipIgnored: true });
+  } catch (err) {
+    console.error("Falha na importação automática de proventos:", err);
+  } finally {
+    syncingPaidDividends = false;
+  }
 }
 
 async function importDividendsFromB3() {
@@ -715,51 +810,29 @@ async function importDividendsFromB3() {
   ui.setImportDividendsLoading(true);
 
   try {
-    const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
-    const today = localISODate();
-    // Evita reimportar o mesmo provento a cada clique.
-    const existingKeys = new Set(latestDividends.map((d) => dividendDedupeKey(d.ticker, d.date, d.type)));
+    const calendars = {};
+    await Promise.all(
+      eligible.map(async (inv) => {
+        const { dividends, ok } = await getDividendCalendar(inv, { force: true });
+        calendars[inv.ticker] = ok ? dividends : null;
+        dividendCalendars[inv.ticker] = ok ? dividends : null;
+      })
+    );
 
-    let imported = 0;
-    let importedTotal = 0;
-    let anyFetchFailed = false;
-
-    for (const inv of eligible) {
-      const { dividends, ok } = await getDividendCalendar(inv, { force: true });
-      if (!ok) {
-        anyFetchFailed = true;
-        continue;
-      }
-
-      for (const d of dividends) {
-        // Só os já pagos — os anunciados aparecem em "Proventos a Receber".
-        if (d.paymentDate > today) continue;
-
-        // Cotas que o usuário tinha na data-com (direito ao provento).
-        const shares = sharesOnDate(inv, d.exDate || d.paymentDate);
-        if (shares <= 0) continue;
-
-        const key = dividendDedupeKey(inv.ticker, d.paymentDate, d.type);
-        if (existingKeys.has(key)) continue;
-        existingKeys.add(key);
-
-        const amount = Math.round(d.rate * shares * 100) / 100;
-        await addDividend(activeMode, id, { ticker: inv.ticker, type: d.type, amount, date: d.paymentDate });
-        imported++;
-        importedTotal += amount;
-      }
-    }
+    // Importação manual: traz também o que foi excluído antes (o usuário pediu de novo).
+    const { imported, importedTotal, anyFailed } = await registerPaidDividends(eligible, (inv) => calendars[inv.ticker], { skipIgnored: false });
 
     if (imported > 0) {
       ui.showToast(
         `${imported} provento(s) importado(s) da B3 (R$ ${importedTotal.toFixed(2).replace(".", ",")} no total).`,
         "success"
       );
-    } else if (anyFetchFailed) {
+    } else if (anyFailed) {
       ui.showToast("Não foi possível buscar proventos na B3 agora.", "error");
     } else {
       ui.showToast("Nenhum provento novo encontrado na B3 para importar.", "info");
     }
+    refreshUpcomingDividends();
   } catch (err) {
     console.error(err);
     ui.showToast("Erro ao importar proventos da B3.", "error");
@@ -837,6 +910,9 @@ function subscribeToActiveCollection() {
     unsubscribeDividends();
     unsubscribeDividends = null;
   }
+  // Troca de modo/usuário: os proventos do modo anterior não podem servir de base para a importação automática.
+  dividendsLoaded = false;
+  sessionRegisteredKeys.clear();
   if (unsubscribeBudgets) {
     unsubscribeBudgets();
     unsubscribeBudgets = null;
@@ -883,8 +959,11 @@ function subscribeToActiveCollection() {
       ui.showToast("Erro ao carregar proventos em tempo real.", "error");
       return;
     }
+    const firstLoad = !dividendsLoaded;
     latestDividends = dividends;
+    dividendsLoaded = true;
     ui.renderDividendsData(dividends);
+    if (firstLoad) refreshUpcomingDividends();
   });
 
   unsubscribeBudgets = listenToBudgets(activeMode, id, (budgets, error) => {
@@ -971,6 +1050,8 @@ onAuthChange(async (user) => {
     latestGoals = [];
     latestInvestments = [];
     latestDividends = [];
+    dividendsLoaded = false;
+    sessionRegisteredKeys.clear();
     latestBudgets = [];
     latestRecurrences = [];
     if (unsubscribeTransactions) {

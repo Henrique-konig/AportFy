@@ -789,20 +789,35 @@
             </section>
 
             <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 sm:px-6 py-5 border-b border-slate-800/80">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-5 sm:px-6 py-5 border-b border-slate-800/80">
                 <div>
-                  <h3 class="font-bold text-base">Proventos a Receber</h3>
-                  <p class="text-xs text-slate-500 mt-0.5">Anunciados e ainda não pagos — valor por cota × cotas que você tinha na data-com.</p>
+                  <h3 class="font-bold text-base">Proventos Recebidos e a Receber</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Os já pagos entram automaticamente; os anunciados mostram valor por cota × cotas que você tinha na data-com (JCP líquido de 15% de IR).</p>
                 </div>
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-5">
                   <div class="sm:text-right">
-                    <p class="text-[11px] text-slate-500">Total a receber</p>
+                    <p class="text-[11px] text-slate-500">Recebido</p>
+                    <p class="text-lg font-extrabold" id="div-panel-received-total">R$ 0,00</p>
+                  </div>
+                  <div class="sm:text-right">
+                    <p class="text-[11px] text-slate-500">A receber</p>
                     <p class="text-lg font-extrabold text-emerald-400" id="div-upcoming-total">R$ 0,00</p>
                   </div>
-                  <button id="refresh-upcoming-btn" type="button" class="row-action-btn" title="Atualizar proventos anunciados">
+                  <button id="refresh-upcoming-btn" type="button" class="row-action-btn" title="Atualizar proventos da B3">
                     <i id="refresh-upcoming-icon" class="ph-bold ph-arrows-clockwise"></i>
                   </button>
                 </div>
+              </div>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-3 px-5 sm:px-6 py-4 border-b border-slate-800/60">
+                <div class="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-xl p-1 shrink-0">
+                  <button type="button" data-div-tab="all" class="div-tab-btn active-filter px-3.5 py-2 rounded-lg text-xs font-semibold transition-all">Todos</button>
+                  <button type="button" data-div-tab="upcoming" class="div-tab-btn px-3.5 py-2 rounded-lg text-xs font-semibold transition-all">A receber</button>
+                  <button type="button" data-div-tab="received" class="div-tab-btn px-3.5 py-2 rounded-lg text-xs font-semibold transition-all">Recebidos</button>
+                </div>
+                <select id="div-panel-month-filter"
+                  class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all sm:w-44 sm:ml-auto">
+                  <option value="all">Todos os meses</option>
+                </select>
               </div>
               <div class="overflow-x-auto custom-scroll">
                 <table class="w-full text-sm">
@@ -814,12 +829,18 @@
                       <th class="px-5 sm:px-6 py-3 font-medium">Pagamento</th>
                       <th class="px-5 sm:px-6 py-3 font-medium text-right">Por cota</th>
                       <th class="px-5 sm:px-6 py-3 font-medium text-right">Cotas</th>
-                      <th class="px-5 sm:px-6 py-3 font-medium text-right">A receber</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Valor</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Situação</th>
                     </tr>
                   </thead>
                   <tbody id="div-upcoming-tbody"></tbody>
                 </table>
                 <p id="div-upcoming-status" class="hidden text-xs text-slate-500 text-center px-5 py-8"></p>
+              </div>
+              <div id="div-panel-more-wrap" class="hidden justify-center py-4 border-t border-slate-800/80">
+                <button id="div-panel-more-btn" type="button" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5">
+                  Mostrar mais <span id="div-panel-more-remaining"></span> <i class="ph-bold ph-caret-down"></i>
+                </button>
               </div>
             </section>
 
