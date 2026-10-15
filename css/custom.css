@@ -333,6 +333,31 @@ body.mode-couple select:focus {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+/* ---------- Saúde da Carteira: anel da nota ---------- */
+.health-ring {
+  --score: 0;
+  --ring-color: #34d399;
+  width: 168px;
+  height: 168px;
+  border-radius: 9999px;
+  background: conic-gradient(var(--ring-color) calc(var(--score) * 1%), rgba(51, 65, 85, 0.45) 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.6s ease;
+}
+
+.health-ring-inner {
+  width: 136px;
+  height: 136px;
+  border-radius: 9999px;
+  background: #0b1325;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ---------- Transaction type filter (view: Transações) ---------- */
 .txn-filter-btn,
 .div-tab-btn {

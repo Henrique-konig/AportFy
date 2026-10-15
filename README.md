@@ -70,6 +70,13 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 **Relatórios**
 - Receitas, despesas e economia líquida por mês/ano ou acumulado, maiores categorias e maiores despesas, e fluxo de caixa de 12 meses.
 
+**Saúde da Carteira**
+- Nota de 0 a 100 com quatro componentes: alinhamento às metas por categoria, concentração por ativo, diversificação (número efetivo de ativos) e dependência de poucos pagadores de proventos.
+- Diagnóstico com alertas, distribuição atual × meta por categoria e peso de cada ativo frente ao seu limite.
+- **Onde aportar:** como dividir o próximo aporte entre categorias para se aproximar das metas, sem vender nada.
+- **Projeção** em 1 a 30 anos com aporte mensal, valorização e dividend yield (pré-preenchidos com os dados reais da carteira), em cenários pessimista, base e otimista.
+- Metas de alocação configuráveis (perfis Conservador, Moderado e Arrojado como ponto de partida, ou personalizadas). A análise é educativa e não indica ativos específicos.
+
 **Conta e dados**
 - Login com e-mail e senha, perfil e redefinição de senha por e-mail (em Configurações).
 - **Espaço do Casal**: código de compartilhamento para ver as mesmas transações em conjunto.
@@ -178,6 +185,7 @@ Cada coleção existe nos dois modos: `users/{userId}/…` (Pessoal) e `couples/
 | `budgets` | Limite de gasto por categoria |
 | `investments` | Posições da carteira, com `purchases` (histórico de aportes) e `priceHistory` |
 | `dividends` | Proventos recebidos (`ticker`, `type`, `amount`, `date`) |
+| `settings/portfolio` | Metas de alocação da Saúde da Carteira (`targets` por categoria, `maxAssetPct`, `minAssets`) |
 
 Datas são strings `YYYY-MM-DD`, o que simplifica filtros e agrupamentos por mês.
 
@@ -196,7 +204,7 @@ npm install
 npm test
 ```
 
-Cobertura atual: métricas e preço médio de investimentos, aportes mensais, série mensal de fluxo de caixa, orçamento por categoria, recorrências e deduplicação de proventos.
+Cobertura atual: métricas e preço médio de investimentos, saúde da carteira (nota, alertas, sugestão de aporte e projeção), aportes mensais, série mensal de fluxo de caixa, orçamento por categoria, recorrências e deduplicação de proventos.
 
 ## Deploy
 

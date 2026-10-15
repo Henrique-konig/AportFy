@@ -545,3 +545,38 @@ export async function deleteRecurrence(mode, id, recurrenceId) {
   const docRef = doc(db, path, recurrenceId);
   return deleteDoc(docRef);
 }
+
+/* ---------------------------------------------------------------
+   Configurações da Saúde da Carteira (metas de alocação)
+   Documento único:
+     users/{userId}/settings/portfolio      -> modo Pessoal
+     couples/{coupleId}/settings/portfolio  -> modo Casal
+--------------------------------------------------------------- */
+
+function getPortfolioSettingsRef(mode, id) {
+  const path = mode === "couple" ? `couples/${id}/settings` : `users/${id}/settings`;
+  return doc(db, path, "portfolio");
+}
+
+/**
+ * Escuta em tempo real as metas de alocação (null se ainda não configuradas).
+ * @returns {() => void} unsubscribe
+ */
+export function listenToPortfolioSettings(mode, id, callback) {
+  return onSnapshot(
+    getPortfolioSettingsRef(mode, id),
+    (snap) => callback(snap.exists() ? snap.data() : null),
+    (error) => {
+      console.error("Erro ao escutar metas da carteira:", error);
+      callback(null, error);
+    }
+  );
+}
+
+/**
+ * Salva as metas de alocação da carteira.
+ * @param {{preset:string, targets:Object<string,number>, maxAssetPct:number, minAssets:number}} settings
+ */
+export async function savePortfolioSettings(mode, id, settings) {
+  return setDoc(getPortfolioSettingsRef(mode, id), { ...settings, updatedAt: serverTimestamp() });
+}

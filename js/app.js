@@ -31,6 +31,8 @@ import {
   updateDividend,
   deleteDividend,
   listenToBudgets,
+  listenToPortfolioSettings,
+  savePortfolioSettings,
   upsertBudget,
   deleteBudget,
   listenToRecurrences,
@@ -65,6 +67,7 @@ let unsubscribeGoals = null;
 let unsubscribeInvestments = null;
 let unsubscribeDividends = null;
 let unsubscribeBudgets = null;
+let unsubscribePortfolioSettings = null;
 let unsubscribeRecurrences = null;
 let activeUser = null;
 let activeMode = "personal";
@@ -122,6 +125,7 @@ function initUIBindings() {
   ui.bindDashboardFilters();
   ui.bindReportsFilters();
   ui.bindInvestmentFilters();
+  ui.bindPortfolioHealth();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();
 
@@ -330,6 +334,19 @@ function initUIBindings() {
   ui.onEditDividend((dividend) => ui.openDividendModal(dividend));
 
   ui.onImportDividends(() => importDividendsFromB3());
+
+  /* -------------------- Saúde da Carteira -------------------- */
+  ui.onPortfolioSettingsSubmit(async (settings) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      await savePortfolioSettings(activeMode, id, settings);
+      ui.showToast("Metas de alocação salvas!", "success");
+      ui.closePortfolioSettingsModal();
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao salvar as metas de alocação.", "error");
+    }
+  });
   ui.onRefreshUpcomingDividends(() => refreshUpcomingDividends({ force: true }));
 
   ui.elements.refreshQuotesBtn?.addEventListener("click", () => refreshQuotes({ silent: false }));
@@ -453,6 +470,7 @@ function initUIBindings() {
   ui.initInvestmentCharts();
   ui.initAssetDetailChart();
   ui.initDividendsChart();
+  ui.initHealthCharts();
 }
 
 /* ---------------------------------------------------------------
@@ -917,6 +935,10 @@ function subscribeToActiveCollection() {
     unsubscribeBudgets();
     unsubscribeBudgets = null;
   }
+  if (unsubscribePortfolioSettings) {
+    unsubscribePortfolioSettings();
+    unsubscribePortfolioSettings = null;
+  }
   if (unsubscribeRecurrences) {
     unsubscribeRecurrences();
     unsubscribeRecurrences = null;
@@ -964,6 +986,14 @@ function subscribeToActiveCollection() {
     dividendsLoaded = true;
     ui.renderDividendsData(dividends);
     if (firstLoad) refreshUpcomingDividends();
+  });
+
+  unsubscribePortfolioSettings = listenToPortfolioSettings(activeMode, id, (settings, error) => {
+    if (error) {
+      ui.showToast("Erro ao carregar as metas da carteira.", "error");
+      return;
+    }
+    ui.setPortfolioSettings(settings);
   });
 
   unsubscribeBudgets = listenToBudgets(activeMode, id, (budgets, error) => {
@@ -1073,6 +1103,10 @@ onAuthChange(async (user) => {
     if (unsubscribeBudgets) {
       unsubscribeBudgets();
       unsubscribeBudgets = null;
+    }
+    if (unsubscribePortfolioSettings) {
+      unsubscribePortfolioSettings();
+      unsubscribePortfolioSettings = null;
     }
     if (unsubscribeRecurrences) {
       unsubscribeRecurrences();

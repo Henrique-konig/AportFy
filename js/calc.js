@@ -222,3 +222,213 @@ export function recurrenceDateForMonth(year, month0, dayOfMonth) {
 export function dividendDedupeKey(ticker, date, type) {
   return `${ticker}|${date}|${type}`;
 }
+
+/* =========================================================
+   Saúde da Carteira
+   Análise educativa baseada nas metas que o próprio usuário define —
+   não indica ativos específicos nem substitui um profissional.
+   ========================================================= */
+
+export const HEALTH_CATEGORIES = ["Ações", "FIIs", "Renda Fixa", "Tesouro", "Criptomoedas", "Imóveis", "Outros"];
+
+/** Perfis de referência genéricos (pontos de partida editáveis, não recomendação). */
+export const ALLOCATION_PRESETS = {
+  conservador: {
+    label: "Conservador",
+    targets: { "Ações": 10, "FIIs": 15, "Renda Fixa": 45, "Tesouro": 25, "Criptomoedas": 0, "Imóveis": 0, "Outros": 5 },
+  },
+  moderado: {
+    label: "Moderado",
+    targets: { "Ações": 25, "FIIs": 25, "Renda Fixa": 25, "Tesouro": 15, "Criptomoedas": 5, "Imóveis": 0, "Outros": 5 },
+  },
+  arrojado: {
+    label: "Arrojado",
+    targets: { "Ações": 45, "FIIs": 25, "Renda Fixa": 10, "Tesouro": 5, "Criptomoedas": 10, "Imóveis": 0, "Outros": 5 },
+  },
+};
+
+export const DEFAULT_PORTFOLIO_SETTINGS = {
+  preset: "moderado",
+  targets: { ...ALLOCATION_PRESETS.moderado.targets },
+  maxAssetPct: 15,
+  minAssets: 8,
+};
+
+const clamp = (v, min = 0, max = 100) => Math.min(max, Math.max(min, v));
+const num1 = (v) => v.toFixed(1).replace(".", ",");
+
+/** Data ISO de N meses antes (mesmo dia), usada para a janela de 12 meses de proventos. */
+function isoMonthsBefore(isoDate, months) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const dt = new Date(y, m - 1 - months, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Diagnóstico da carteira: distribuição por categoria e por ativo, nota de 0 a
+ * 100 (com os componentes) e alertas, sempre comparando com as metas do usuário.
+ * @param {Array<Object>} investments posições
+ * @param {Array<{ticker:string, amount:number, date:string}>} dividends proventos recebidos
+ * @param {{targets:Object<string,number>, maxAssetPct:number, minAssets:number}} settings
+ * @param {string} today data ISO
+ */
+export function analyzePortfolioHealth(investments, dividends, settings, today) {
+  const { targets, maxAssetPct, minAssets } = { ...DEFAULT_PORTFOLIO_SETTINGS, ...settings };
+  const positions = investments
+    .map((inv) => ({ ticker: inv.ticker, category: inv.category || "Outros", value: calcInvestmentMetrics(inv).totalValue }))
+    .filter((p) => p.value > 0);
+  const totalValue = positions.reduce((sum, p) => sum + p.value, 0);
+  if (totalValue <= 0) return { empty: true, totalValue: 0, byCategory: [], byAsset: [], alerts: [], components: [], score: null };
+
+  const byAsset = positions.map((p) => ({ ...p, pct: (p.value / totalValue) * 100 })).sort((a, b) => b.value - a.value);
+
+  const categoryNames = [...new Set([...HEALTH_CATEGORIES.filter((c) => (targets[c] || 0) > 0), ...positions.map((p) => p.category)])];
+  const byCategory = categoryNames
+    .map((category) => {
+      const value = positions.filter((p) => p.category === category).reduce((sum, p) => sum + p.value, 0);
+      const pct = (value / totalValue) * 100;
+      const target = Number(targets[category]) || 0;
+      return { category, value, pct, target, diff: pct - target };
+    })
+    .sort((a, b) => b.pct - a.pct || b.target - a.target);
+
+  // Proventos dos últimos 12 meses por pagador
+  const since = isoMonthsBefore(today, 12);
+  const incomeByTicker = {};
+  const windowDividends = dividends.filter((d) => d.date > since && d.date <= today);
+  windowDividends.forEach((d) => (incomeByTicker[d.ticker] = (incomeByTicker[d.ticker] || 0) + (Number(d.amount) || 0)));
+  // Meses cobertos pelo histórico (do primeiro provento da janela até hoje), para anualizar o yield.
+  const firstIncome = windowDividends.reduce((min, d) => (d.date < min ? d.date : min), today);
+  const monthIndex = (iso) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7));
+  const incomeMonths = clamp(monthIndex(today) - monthIndex(firstIncome) + 1, 1, 12);
+  const income12m = Object.values(incomeByTicker).reduce((a, b) => a + b, 0);
+  const topPayer = Object.entries(incomeByTicker).sort((a, b) => b[1] - a[1])[0];
+  const topPayerShare = topPayer && income12m > 0 ? (topPayer[1] / income12m) * 100 : 0;
+
+  // Componentes da nota
+  const overLimitPenalty = byAsset.reduce((sum, a) => sum + Math.max(0, a.pct - maxAssetPct) * 2.5, 0);
+  const misallocated = byCategory.reduce((sum, c) => sum + Math.abs(c.diff), 0) / 2;
+  const effectiveAssets = 1 / byAsset.reduce((sum, a) => sum + (a.pct / 100) ** 2, 0);
+  const components = [
+    { key: "allocation", label: "Alinhamento às metas", weight: 35, score: clamp(100 - misallocated * 1.25) },
+    { key: "concentration", label: "Concentração por ativo", weight: 30, score: clamp(100 - overLimitPenalty) },
+    { key: "diversification", label: "Diversificação", weight: 20, score: clamp((effectiveAssets / Math.max(1, minAssets)) * 100) },
+  ];
+  if (income12m > 0) {
+    components.push({ key: "income", label: "Fontes de renda", weight: 15, score: clamp(100 - Math.max(0, topPayerShare - 35) * 2) });
+  }
+  const weightSum = components.reduce((sum, c) => sum + c.weight, 0);
+  const score = Math.round(components.reduce((sum, c) => sum + c.score * c.weight, 0) / weightSum);
+
+  // Alertas
+  const alerts = [];
+  byAsset
+    .filter((a) => a.pct > maxAssetPct)
+    .forEach((a) =>
+      alerts.push({
+        level: a.pct > maxAssetPct * 2 ? "critical" : "warning",
+        title: `${a.ticker} representa ${num1(a.pct)}% da carteira`,
+        detail: `Acima do seu limite de ${maxAssetPct}% por ativo — um problema nele pesaria muito no total.`,
+      })
+    );
+  byCategory.forEach((c) => {
+    if (c.diff > 10) {
+      alerts.push({
+        level: c.diff > 25 ? "critical" : "warning",
+        title: `Excesso em ${c.category}: ${num1(c.pct)}% (meta ${c.target}%)`,
+        detail: `${num1(c.diff)} p.p. acima da meta. Aportar em outras categorias reequilibra sem precisar vender.`,
+      });
+    } else if (c.diff < -10) {
+      alerts.push({
+        level: "info",
+        title: `Falta ${c.category}: ${num1(c.pct)}% (meta ${c.target}%)`,
+        detail: `${num1(Math.abs(c.diff))} p.p. abaixo da meta — boa candidata para os próximos aportes.`,
+      });
+    }
+  });
+  if (byAsset.length < minAssets) {
+    alerts.push({
+      level: "warning",
+      title: `Poucos ativos: ${byAsset.length} de ${minAssets}`,
+      detail: `Com poucos ativos, cada um pesa mais no resultado. Seu mínimo configurado é ${minAssets}.`,
+    });
+  }
+  if (topPayer && topPayerShare > 50) {
+    alerts.push({
+      level: "warning",
+      title: `${topPayer[0]} gera ${topPayerShare.toFixed(0)}% dos seus proventos`,
+      detail: "Sua renda passiva dos últimos 12 meses depende muito de um único pagador.",
+    });
+  }
+  const levelOrder = { critical: 0, warning: 1, info: 2 };
+  alerts.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
+
+  return {
+    empty: false,
+    totalValue,
+    byCategory,
+    byAsset,
+    income12m,
+    incomeMonths,
+    dividendYield12m: ((income12m * (12 / incomeMonths)) / totalValue) * 100,
+    effectiveAssets,
+    components,
+    score,
+    status: score >= 75 ? "healthy" : score >= 50 ? "attention" : "critical",
+    alerts,
+  };
+}
+
+/**
+ * Como dividir um aporte entre categorias para aproximar a carteira das metas:
+ * prioriza as categorias abaixo da meta (proporcional ao que falta); se nenhuma
+ * estiver abaixo, segue a proporção das próprias metas.
+ * @returns {Array<{category:string, amount:number}>}
+ */
+export function suggestContribution(analysis, targets, amount) {
+  if (!(amount > 0)) return [];
+  const active = Object.entries(targets).filter(([, t]) => Number(t) > 0);
+  if (active.length === 0) return [];
+
+  const futureTotal = (analysis.totalValue || 0) + amount;
+  const current = (cat) => analysis.byCategory?.find((c) => c.category === cat)?.value || 0;
+  const deficits = active.map(([category, t]) => ({ category, weight: Math.max(0, (futureTotal * t) / 100 - current(category)) }));
+  const deficitSum = deficits.reduce((sum, d) => sum + d.weight, 0);
+  const base = deficitSum > 0 ? deficits : active.map(([category, t]) => ({ category, weight: Number(t) }));
+  const baseSum = base.reduce((sum, d) => sum + d.weight, 0);
+
+  const items = base
+    .map((d) => ({ category: d.category, amount: Math.floor(((amount * d.weight) / baseSum) * 100) / 100 }))
+    .filter((i) => i.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+  // Sobra de arredondamento vai para a maior parcela, pra soma bater exatamente com o aporte.
+  const remainder = Math.round((amount - items.reduce((sum, i) => sum + i.amount, 0)) * 100) / 100;
+  if (items.length > 0) items[0].amount = Math.round((items[0].amount + remainder) * 100) / 100;
+  return items;
+}
+
+/**
+ * Projeção mês a mês do patrimônio com aportes mensais, valorização anual e
+ * dividend yield anual (reinvestido ou não).
+ * @returns {{points:Array<{month:number, balance:number, contributed:number}>, finalBalance:number, totalContributed:number, monthlyIncome:number, incomeReceived:number}}
+ */
+export function projectPortfolio({ initial, monthlyContribution, annualAppreciation, annualYield, reinvest, years }) {
+  const appreciation = Math.pow(1 + (Number(annualAppreciation) || 0) / 100, 1 / 12) - 1;
+  const monthlyYield = (Number(annualYield) || 0) / 100 / 12;
+  const contribution = Math.max(0, Number(monthlyContribution) || 0);
+
+  let balance = Math.max(0, Number(initial) || 0);
+  let contributed = balance;
+  let incomeReceived = 0;
+  const points = [{ month: 0, balance, contributed }];
+
+  for (let month = 1; month <= years * 12; month++) {
+    const income = balance * monthlyYield;
+    incomeReceived += income;
+    balance = balance * (1 + appreciation) + contribution + (reinvest ? income : 0);
+    contributed += contribution;
+    points.push({ month, balance, contributed });
+  }
+
+  return { points, finalBalance: balance, totalContributed: contributed, monthlyIncome: balance * monthlyYield, incomeReceived };
+}

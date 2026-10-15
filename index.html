@@ -157,6 +157,10 @@
             <i class="ph-bold ph-chart-pie-slice text-lg shrink-0"></i>
             <span class="sidebar-label">Relatórios</span>
           </button>
+          <button data-view="health" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-heartbeat text-lg shrink-0"></i>
+            <span class="sidebar-label">Saúde da Carteira</span>
+          </button>
 
           <div class="pt-4 mt-4 border-t border-slate-800/80 sidebar-label">
             <p class="px-4 text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-2">Preferências</p>
@@ -970,6 +974,156 @@
             </section>
           </div>
 
+          <!-- ======================= VIEW: SAÚDE DA CARTEIRA ======================= -->
+          <div id="view-health" class="view-section hidden space-y-6">
+            <section id="health-empty" class="hidden glass-card rounded-2xl p-10 flex-col items-center text-center animate-slide-up">
+              <i class="ph-thin ph-heartbeat text-5xl text-slate-700 mb-3"></i>
+              <p class="text-slate-400 text-sm">Cadastre seus investimentos para ver a saúde da carteira.</p>
+              <button data-view="investments" class="nav-item-link mt-4 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
+                Ir para Investimentos <i class="ph-bold ph-arrow-right"></i>
+              </button>
+            </section>
+
+            <div id="health-content" class="space-y-6">
+              <!-- Nota -->
+              <section class="grid grid-cols-1 xl:grid-cols-3 gap-4 animate-slide-up">
+                <div class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                  <div id="health-score-ring" class="health-ring">
+                    <div class="health-ring-inner">
+                      <span id="health-score" class="text-4xl font-extrabold leading-none">0</span>
+                      <span class="text-[11px] text-slate-500 mt-1">de 100</span>
+                    </div>
+                  </div>
+                  <p id="health-status" class="mt-4 text-sm font-bold">—</p>
+                  <p id="health-status-desc" class="text-xs text-slate-500 mt-1 max-w-xs"></p>
+                </div>
+
+                <div class="xl:col-span-2 glass-card rounded-2xl p-5 sm:p-6">
+                  <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+                    <div>
+                      <h3 class="font-bold text-base">Como a nota é calculada</h3>
+                      <p class="text-xs text-slate-500 mt-0.5" id="health-profile-label">—</p>
+                    </div>
+                    <button id="health-settings-btn" type="button"
+                      class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                      <i class="ph-bold ph-sliders-horizontal text-sm"></i> Metas de alocação
+                    </button>
+                  </div>
+                  <div id="health-components" class="space-y-4"></div>
+                  <div class="grid grid-cols-3 gap-4 mt-6 pt-5 border-t border-slate-800/80">
+                    <div>
+                      <p class="text-[11px] text-slate-500">Patrimônio</p>
+                      <p id="health-total" class="text-sm font-bold">—</p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] text-slate-500" title="Quantos ativos de mesmo peso equivaleriam à sua carteira">Ativos (efetivos)</p>
+                      <p id="health-assets" class="text-sm font-bold">—</p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] text-slate-500" title="Proventos recebidos nos últimos 12 meses, anualizados pelo período com histórico, sobre o patrimônio atual">Yield anualizado</p>
+                      <p id="health-yield" class="text-sm font-bold">—</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Diagnóstico -->
+              <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+                <h3 class="font-bold text-base mb-4">Diagnóstico</h3>
+                <div id="health-alerts" class="space-y-3"></div>
+              </section>
+
+              <!-- Distribuição -->
+              <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 animate-slide-up">
+                <div class="glass-card rounded-2xl p-5 sm:p-6">
+                  <h3 class="font-bold text-base mb-1">Distribuição por Categoria</h3>
+                  <p class="text-xs text-slate-500 mb-5">Barra = peso atual · marcador = sua meta</p>
+                  <div id="health-categories" class="space-y-4"></div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 sm:p-6">
+                  <h3 class="font-bold text-base mb-1">Peso por Ativo</h3>
+                  <p class="text-xs text-slate-500 mb-5" id="health-assets-subtitle">Linha tracejada = seu limite por ativo</p>
+                  <div id="health-asset-bars" class="space-y-3"></div>
+                </div>
+              </section>
+
+              <!-- Onde aportar -->
+              <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
+                  <div>
+                    <h3 class="font-bold text-base">Onde Aportar</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Como dividir o próximo aporte entre categorias para se aproximar das suas metas, sem precisar vender nada.</p>
+                  </div>
+                  <div class="w-full sm:w-56 shrink-0">
+                    <label for="health-contribution-input" class="block text-[11px] font-medium text-slate-500 mb-1.5">Valor do aporte (R$)</label>
+                    <input id="health-contribution-input" type="number" min="0" step="50" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+                  </div>
+                </div>
+                <div id="health-suggestion" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3"></div>
+              </section>
+
+              <!-- Projeção -->
+              <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+                <div class="mb-5">
+                  <h3 class="font-bold text-base">Projeção da Carteira</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Simulação com aportes mensais, valorização e proventos, em três cenários. Valores nominais, sem inflação nem impostos.</p>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+                  <div>
+                    <label for="proj-contribution" class="block text-[11px] font-medium text-slate-500 mb-1.5">Aporte mensal (R$)</label>
+                    <input id="proj-contribution" type="number" min="0" step="50" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+                  </div>
+                  <div>
+                    <label for="proj-appreciation" class="block text-[11px] font-medium text-slate-500 mb-1.5">Valorização (% a.a.)</label>
+                    <input id="proj-appreciation" type="number" step="0.5" value="4" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+                  </div>
+                  <div>
+                    <label for="proj-yield" class="block text-[11px] font-medium text-slate-500 mb-1.5">Dividend yield (% a.a.)</label>
+                    <input id="proj-yield" type="number" min="0" step="0.5" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+                  </div>
+                  <div>
+                    <label for="proj-years" class="block text-[11px] font-medium text-slate-500 mb-1.5">Horizonte</label>
+                    <select id="proj-years" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+                      <option value="1">1 ano</option>
+                      <option value="5">5 anos</option>
+                      <option value="10" selected>10 anos</option>
+                      <option value="20">20 anos</option>
+                      <option value="30">30 anos</option>
+                    </select>
+                  </div>
+                  <label class="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer select-none col-span-2 lg:col-span-1 lg:mt-6">
+                    <input id="proj-reinvest" type="checkbox" checked class="w-4 h-4 accent-blue-500" />
+                    Reinvestir proventos
+                  </label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4">
+                    <p class="text-[11px] text-slate-500" id="proj-final-label">Patrimônio estimado</p>
+                    <p class="text-xl font-extrabold mt-0.5" id="proj-final">—</p>
+                    <p class="text-[11px] text-slate-500 mt-1" id="proj-range">—</p>
+                  </div>
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4">
+                    <p class="text-[11px] text-slate-500">Total aportado</p>
+                    <p class="text-xl font-extrabold mt-0.5" id="proj-contributed">—</p>
+                    <p class="text-[11px] text-slate-500 mt-1" id="proj-gain">—</p>
+                  </div>
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4">
+                    <p class="text-[11px] text-slate-500">Renda mensal estimada em proventos</p>
+                    <p class="text-xl font-extrabold text-emerald-400 mt-0.5" id="proj-income">—</p>
+                    <p class="text-[11px] text-slate-500 mt-1" id="proj-income-note">—</p>
+                  </div>
+                </div>
+                <div class="h-72">
+                  <canvas id="health-projection-chart"></canvas>
+                </div>
+              </section>
+
+              <p class="text-[11px] text-slate-600 text-center px-4">
+                Análise educativa baseada nas metas que você define. Não é recomendação de compra ou venda de ativos nem substitui a orientação de um profissional certificado.
+              </p>
+            </div>
+          </div>
+
           <!-- ======================= VIEW: CONFIGURAÇÕES ======================= -->
           <div id="view-settings" class="view-section hidden space-y-6 max-w-2xl">
 
@@ -1287,6 +1441,58 @@
           class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
           <i class="ph-bold ph-check-circle"></i>
           <span>Salvar Orçamento</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: METAS DE ALOCAÇÃO (Saúde da Carteira) ============ -->
+  <div id="health-settings-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="health-settings-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-bold">Metas de Alocação</h3>
+        <button id="health-settings-close-btn" type="button" class="text-slate-500 hover:text-white transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mb-6">Defina quanto da carteira você quer em cada categoria. Os perfis prontos são só pontos de partida genéricos — ajuste ao seu objetivo.</p>
+
+      <form id="health-settings-form" class="space-y-5">
+        <div>
+          <label for="health-preset" class="block text-xs font-medium text-slate-400 mb-1.5">Perfil de referência</label>
+          <select id="health-preset" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="conservador">Conservador</option>
+            <option value="moderado">Moderado</option>
+            <option value="arrojado">Arrojado</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-medium text-slate-400">Meta por categoria (%)</p>
+            <p id="health-target-sum" class="text-xs font-semibold">Total: 100%</p>
+          </div>
+          <div id="health-targets-grid" class="grid grid-cols-2 gap-3"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="health-max-asset" class="block text-xs font-medium text-slate-400 mb-1.5">Limite por ativo (%)</label>
+            <input id="health-max-asset" type="number" min="1" max="100" step="1" required class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label for="health-min-assets" class="block text-xs font-medium text-slate-400 mb-1.5">Mínimo de ativos</label>
+            <input id="health-min-assets" type="number" min="1" max="50" step="1" required class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+        </div>
+
+        <button type="submit"
+          class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar metas</span>
         </button>
       </form>
     </div>

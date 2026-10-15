@@ -14,6 +14,9 @@ import {
   buildUpcomingDividends,
   filterByAssetClass,
   dividendNetAmount,
+  analyzePortfolioHealth,
+  suggestContribution,
+  projectPortfolio,
 } from "../js/calc.js";
 
 describe("dividendNetAmount", () => {
@@ -271,5 +274,84 @@ describe("dividendDedupeKey", () => {
     expect(dividendDedupeKey("VALE3", "2026-01-01", "Dividendo")).not.toBe(base);
     expect(dividendDedupeKey("PETR4", "2026-02-01", "Dividendo")).not.toBe(base);
     expect(dividendDedupeKey("PETR4", "2026-01-01", "JCP")).not.toBe(base);
+  });
+});
+
+describe("analyzePortfolioHealth", () => {
+  const settings = { targets: { "FIIs": 50, "Ações": 50 }, maxAssetPct: 30, minAssets: 4 };
+  const inv = (ticker, category, value) => ({ ticker, category, quantity: 1, avgPrice: value, currentPrice: value });
+
+  it("carteira alinhada e diversificada tem nota alta e nenhum alerta", () => {
+    const investments = [inv("A11", "FIIs", 25), inv("B11", "FIIs", 25), inv("C3", "Ações", 25), inv("D3", "Ações", 25)];
+    const a = analyzePortfolioHealth(investments, [], settings, "2026-10-15");
+    expect(a.totalValue).toBe(100);
+    expect(a.score).toBe(100);
+    expect(a.status).toBe("healthy");
+    expect(a.alerts).toEqual([]);
+  });
+
+  it("aponta ativo acima do limite, excesso de categoria e poucos ativos", () => {
+    const investments = [inv("A11", "FIIs", 80), inv("C3", "Ações", 20)];
+    const a = analyzePortfolioHealth(investments, [], settings, "2026-10-15");
+    const titles = a.alerts.map((x) => x.title);
+    expect(titles).toContain("A11 representa 80,0% da carteira");
+    expect(titles).toContain("Excesso em FIIs: 80,0% (meta 50%)");
+    expect(titles).toContain("Falta Ações: 20,0% (meta 50%)");
+    expect(titles).toContain("Poucos ativos: 2 de 4");
+    expect(a.alerts[0].level).toBe("critical");
+    expect(a.score).toBeLessThan(50);
+  });
+
+  it("considera a concentração de proventos dos últimos 12 meses", () => {
+    const investments = [inv("A11", "FIIs", 25), inv("B11", "FIIs", 25), inv("C3", "Ações", 25), inv("D3", "Ações", 25)];
+    const dividends = [
+      { ticker: "A11", amount: 90, date: "2026-09-15" },
+      { ticker: "B11", amount: 10, date: "2026-09-15" },
+      { ticker: "B11", amount: 500, date: "2025-01-15" }, // fora da janela
+    ];
+    const a = analyzePortfolioHealth(investments, dividends, settings, "2026-10-15");
+    expect(a.income12m).toBe(100);
+    // 2 meses de histórico (set e out): R$ 100 anualizados = R$ 600 sobre R$ 100 de patrimônio
+    expect(a.incomeMonths).toBe(2);
+    expect(a.dividendYield12m).toBeCloseTo(600);
+    expect(a.alerts.map((x) => x.title)).toContain("A11 gera 90% dos seus proventos");
+    expect(a.components.find((c) => c.key === "income").score).toBe(0);
+  });
+
+  it("carteira vazia não quebra", () => {
+    expect(analyzePortfolioHealth([], [], settings, "2026-10-15").empty).toBe(true);
+  });
+});
+
+describe("suggestContribution", () => {
+  it("direciona o aporte às categorias abaixo da meta e soma exatamente o valor", () => {
+    const analysis = { totalValue: 1000, byCategory: [{ category: "FIIs", value: 800 }, { category: "Ações", value: 200 }] };
+    const items = suggestContribution(analysis, { "FIIs": 50, "Ações": 50 }, 500);
+    expect(items).toEqual([{ category: "Ações", amount: 500 }]);
+  });
+
+  it("sem déficit, segue a proporção das metas", () => {
+    const analysis = { totalValue: 0, byCategory: [] };
+    const items = suggestContribution(analysis, { "FIIs": 70, "Ações": 30 }, 100);
+    expect(items).toEqual([{ category: "FIIs", amount: 70 }, { category: "Ações", amount: 30 }]);
+    expect(suggestContribution(analysis, { "FIIs": 100 }, 0)).toEqual([]);
+  });
+});
+
+describe("projectPortfolio", () => {
+  it("sem rendimento, o patrimônio final é o inicial mais os aportes", () => {
+    const p = projectPortfolio({ initial: 1000, monthlyContribution: 100, annualAppreciation: 0, annualYield: 0, reinvest: true, years: 1 });
+    expect(p.finalBalance).toBeCloseTo(2200);
+    expect(p.totalContributed).toBeCloseTo(2200);
+    expect(p.points).toHaveLength(13);
+  });
+
+  it("valorização anual composta e proventos reinvestidos ou não", () => {
+    const grow = projectPortfolio({ initial: 1000, monthlyContribution: 0, annualAppreciation: 10, annualYield: 0, reinvest: true, years: 1 });
+    expect(grow.finalBalance).toBeCloseTo(1100);
+    const withIncome = projectPortfolio({ initial: 1200, monthlyContribution: 0, annualAppreciation: 0, annualYield: 12, reinvest: false, years: 1 });
+    expect(withIncome.finalBalance).toBeCloseTo(1200);
+    expect(withIncome.incomeReceived).toBeCloseTo(144);
+    expect(withIncome.monthlyIncome).toBeCloseTo(12);
   });
 });
