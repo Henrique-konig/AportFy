@@ -9,7 +9,68 @@ import {
   dividendDedupeKey,
   getInvestmentPurchases,
   buildMonthlyContributions,
+  sharesOnDate,
+  parseB3CashDividends,
+  buildUpcomingDividends,
 } from "../js/calc.js";
+
+describe("sharesOnDate", () => {
+  const inv = { purchases: [{ date: "2026-08-05", quantity: 10, price: 10 }, { date: "2026-10-02", quantity: 20, price: 10 }] };
+
+  it("conta só as compras feitas até a data (inclusive)", () => {
+    expect(sharesOnDate(inv, "2026-08-04")).toBe(0);
+    expect(sharesOnDate(inv, "2026-08-05")).toBe(10);
+    expect(sharesOnDate(inv, "2026-09-30")).toBe(10);
+    expect(sharesOnDate(inv, "2026-10-02")).toBe(30);
+  });
+});
+
+describe("parseB3CashDividends", () => {
+  it("converte datas dd/mm/aaaa e valor com vírgula, descartando itens sem pagamento", () => {
+    const parsed = parseB3CashDividends([
+      { label: "RENDIMENTO", rate: "0,10000000000", lastDatePrior: "30/09/2026", paymentDate: "15/10/2026", approvedOn: "30/09/2026", relatedTo: "Setembro-2026/2026" },
+      { label: "RENDIMENTO", rate: "0,1", lastDatePrior: "30/09/2026", paymentDate: "" },
+    ]);
+    expect(parsed).toEqual([
+      { label: "RENDIMENTO", rate: 0.1, exDate: "2026-09-30", paymentDate: "2026-10-15", approvedOn: "2026-09-30", relatedTo: "Setembro-2026/2026" },
+    ]);
+  });
+
+  it("tolera entrada inválida", () => {
+    expect(parseB3CashDividends(undefined)).toEqual([]);
+  });
+
+  it("não conta duas vezes o mesmo rendimento listado com datas-com diferentes", () => {
+    const base = { label: "RENDIMENTO", rate: "1,05", paymentDate: "15/10/2026", relatedTo: "SETEMBRO/2026" };
+    const parsed = parseB3CashDividends([
+      { ...base, lastDatePrior: "07/10/2026" },
+      { ...base, lastDatePrior: "30/09/2026" },
+      { ...base, rate: "1,05", paymentDate: "15/09/2026", relatedTo: "AGOSTO/2026", lastDatePrior: "31/08/2026" },
+    ]);
+    expect(parsed).toHaveLength(2);
+    expect(parsed.find((d) => d.paymentDate === "2026-10-15").exDate).toBe("2026-10-07");
+  });
+});
+
+describe("buildUpcomingDividends", () => {
+  const investments = [
+    { ticker: "MXRF11", purchases: [{ date: "2026-08-05", quantity: 100, price: 10 }] },
+    { ticker: "VGIR11", purchases: [{ date: "2026-10-14", quantity: 50, price: 9 }] },
+  ];
+  const calendars = {
+    MXRF11: [
+      { type: "Rendimento", rate: 0.1, exDate: "2026-09-30", paymentDate: "2026-10-15" },
+      { type: "Rendimento", rate: 0.1, exDate: "2026-08-31", paymentDate: "2026-09-15" },
+    ],
+    VGIR11: [{ type: "Rendimento", rate: 0.13, exDate: "2026-10-13", paymentDate: "2026-10-20" }],
+  };
+
+  it("lista só o que ainda será pago e calcula pelas cotas da data-com", () => {
+    const items = buildUpcomingDividends(investments, calendars, "2026-10-15");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ ticker: "MXRF11", shares: 100, total: 10, paymentDate: "2026-10-15" });
+  });
+});
 
 describe("getInvestmentPurchases", () => {
   it("usa o histórico salvo quando existe", () => {

@@ -44,9 +44,16 @@ import {
   getCoupleDoc,
   addCoupleMember,
 } from "./db.js";
-import { fetchQuotes, fetchDividendHistory, B3_CATEGORIES } from "./api.js";
+import { fetchQuotes, fetchDividendCalendar, B3_CATEGORIES } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
-import { mergeInvestmentPurchase, recurrenceDateForMonth, dividendDedupeKey, getInvestmentPurchases } from "./calc.js";
+import {
+  mergeInvestmentPurchase,
+  recurrenceDateForMonth,
+  dividendDedupeKey,
+  getInvestmentPurchases,
+  sharesOnDate,
+  buildUpcomingDividends,
+} from "./calc.js";
 import * as ui from "./ui.js";
 
 /* ---------------------------------------------------------------
@@ -319,6 +326,7 @@ function initUIBindings() {
   ui.onEditDividend((dividend) => ui.openDividendModal(dividend));
 
   ui.onImportDividends(() => importDividendsFromB3());
+  ui.onRefreshUpcomingDividends(() => refreshUpcomingDividends({ force: true }));
 
   ui.elements.refreshQuotesBtn?.addEventListener("click", () => refreshQuotes({ silent: false }));
 
@@ -641,17 +649,66 @@ async function loadNewsView() {
 }
 
 /* ---------------------------------------------------------------
-   Importação automática de proventos da B3 (Brapi)
+   Proventos da B3: importação dos já pagos e calendário dos a receber
 --------------------------------------------------------------- */
 
-// FIIs exigem token pago na Brapi para o histórico de rendimentos —
-// só Ações têm esse endpoint liberado no plano gratuito.
-const DIVIDEND_IMPORT_CATEGORIES = ["Ações"];
+// Ações (Brapi) e FIIs (função serverless /api/proventos, que consulta a B3).
+const DIVIDEND_IMPORT_CATEGORIES = ["Ações", "FIIs"];
+const CALENDAR_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+
+// Data local (YYYY-MM-DD) — toISOString() viraria o dia seguinte à noite no Brasil.
+const localISODate = () => new Date().toLocaleDateString("sv-SE");
+
+/** Calendário de proventos de um ativo, com cache local de 3h pra não repetir consultas. */
+async function getDividendCalendar(inv, { force = false } = {}) {
+  const cacheKey = `aportfy_div_calendar_${inv.category}_${inv.ticker}`;
+  if (!force) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+      if (cached && Date.now() - cached.at < CALENDAR_CACHE_TTL_MS) return { dividends: cached.dividends, ok: true };
+    } catch {
+      /* cache indisponível: segue sem ele */
+    }
+  }
+
+  const result = await fetchDividendCalendar(inv.ticker, inv.category);
+  if (result.ok) {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), dividends: result.dividends }));
+    } catch {
+      /* cota do storage cheia: ignora */
+    }
+  }
+  return result;
+}
+
+// Calendários já carregados nesta sessão (por ticker); null = consulta falhou.
+const dividendCalendars = {};
+
+/** Atualiza o painel "Proventos a Receber" (busca só o que ainda não foi carregado, ou tudo com force). */
+async function refreshUpcomingDividends({ force = false } = {}) {
+  const eligible = latestInvestments.filter((inv) => DIVIDEND_IMPORT_CATEGORIES.includes(inv.category));
+  const pending = eligible.filter((inv) => force || !(inv.ticker in dividendCalendars));
+
+  if (pending.length > 0) {
+    ui.setUpcomingDividendsLoading(true);
+    await Promise.all(
+      pending.map(async (inv) => {
+        const { dividends, ok } = await getDividendCalendar(inv, { force });
+        dividendCalendars[inv.ticker] = ok ? dividends : null;
+      })
+    );
+  }
+
+  const failed = eligible.filter((inv) => dividendCalendars[inv.ticker] === null).map((inv) => inv.ticker);
+  const calendars = Object.fromEntries(Object.entries(dividendCalendars).filter(([, v]) => v));
+  ui.renderUpcomingDividends(buildUpcomingDividends(eligible, calendars, localISODate()), { failed, hasEligible: eligible.length > 0 });
+}
 
 async function importDividendsFromB3() {
   const eligible = latestInvestments.filter((inv) => DIVIDEND_IMPORT_CATEGORIES.includes(inv.category));
   if (eligible.length === 0) {
-    ui.showToast("Nenhuma ação cadastrada para importar proventos (FIIs exigem token pago na Brapi).", "info");
+    ui.showToast("Nenhuma ação ou FII cadastrado para importar proventos.", "info");
     return;
   }
 
@@ -659,6 +716,7 @@ async function importDividendsFromB3() {
 
   try {
     const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+    const today = localISODate();
     // Evita reimportar o mesmo provento a cada clique.
     const existingKeys = new Set(latestDividends.map((d) => dividendDedupeKey(d.ticker, d.date, d.type)));
 
@@ -667,25 +725,26 @@ async function importDividendsFromB3() {
     let anyFetchFailed = false;
 
     for (const inv of eligible) {
-      const { dividends, ok } = await fetchDividendHistory(inv.ticker);
+      const { dividends, ok } = await getDividendCalendar(inv, { force: true });
       if (!ok) {
         anyFetchFailed = true;
         continue;
       }
 
       for (const d of dividends) {
-        // Só proventos pagos depois da compra: antes disso o usuário ainda
-        // não era dono do ativo na data-base do provento.
-        if (d.date < inv.purchaseDate) continue;
+        // Só os já pagos — os anunciados aparecem em "Proventos a Receber".
+        if (d.paymentDate > today) continue;
 
-        const key = dividendDedupeKey(inv.ticker, d.date, d.type);
+        // Cotas que o usuário tinha na data-com (direito ao provento).
+        const shares = sharesOnDate(inv, d.exDate || d.paymentDate);
+        if (shares <= 0) continue;
+
+        const key = dividendDedupeKey(inv.ticker, d.paymentDate, d.type);
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
 
-        // Aproximação: usa a quantidade de cotas atual do usuário, já que
-        // não guardamos quantas cotas ele tinha exatamente em cada data-base.
-        const amount = d.amount * (Number(inv.quantity) || 0);
-        await addDividend(activeMode, id, { ticker: inv.ticker, type: d.type, amount, date: d.date });
+        const amount = Math.round(d.rate * shares * 100) / 100;
+        await addDividend(activeMode, id, { ticker: inv.ticker, type: d.type, amount, date: d.paymentDate });
         imported++;
         importedTotal += amount;
       }
@@ -816,6 +875,7 @@ function subscribeToActiveCollection() {
     }
     latestInvestments = investments;
     ui.renderInvestments(investments);
+    refreshUpcomingDividends();
   });
 
   unsubscribeDividends = listenToDividends(activeMode, id, (dividends, error) => {

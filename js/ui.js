@@ -240,6 +240,11 @@ const el = {
   divKpi12m: document.getElementById("div-kpi-12m"),
   divKpiYield: document.getElementById("div-kpi-yield"),
   divMonthFilter: document.getElementById("div-month-filter"),
+  divUpcomingTotal: document.getElementById("div-upcoming-total"),
+  divUpcomingTbody: document.getElementById("div-upcoming-tbody"),
+  divUpcomingStatus: document.getElementById("div-upcoming-status"),
+  refreshUpcomingBtn: document.getElementById("refresh-upcoming-btn"),
+  refreshUpcomingIcon: document.getElementById("refresh-upcoming-icon"),
   divChartCanvas: document.getElementById("div-chart"),
   dividendsTbody: document.getElementById("dividends-tbody"),
   dividendsEmpty: document.getElementById("dividends-empty"),
@@ -2237,6 +2242,7 @@ export function bindInvestmentFilters() {
   el.invAssetFilter.addEventListener("change", () => {
     invAssetFilterValue = el.invAssetFilter.value;
     refreshInvestmentViews();
+    renderUpcomingDividendsView();
     renderAssetDetail(lastInvestments, lastDividends);
     renderDividends(lastDividends, lastInvestments);
   });
@@ -2321,6 +2327,68 @@ let importDividendsHandler = null;
 
 export function onImportDividends(handler) {
   importDividendsHandler = handler;
+}
+
+/* -------- Proventos a Receber (anunciados, ainda não pagos) -------- */
+let upcomingState = { items: [], failed: [], hasEligible: false, loading: false };
+
+function daysUntilLabel(isoDate) {
+  const today = new Date().toLocaleDateString("sv-SE");
+  const diff = Math.round((new Date(`${isoDate}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000);
+  if (diff <= 0) return "hoje";
+  return diff === 1 ? "amanhã" : `em ${diff} dias`;
+}
+
+function renderUpcomingDividendsView() {
+  const { items, failed, hasEligible, loading } = upcomingState;
+  const visible = invAssetFilterValue === "all" ? items : items.filter((i) => i.ticker === invAssetFilterValue);
+
+  el.divUpcomingTotal.textContent = formatCurrency(visible.reduce((sum, i) => sum + i.total, 0));
+  el.refreshUpcomingIcon.classList.toggle("animate-spin", loading);
+  el.refreshUpcomingBtn.disabled = loading;
+
+  const perShare = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  el.divUpcomingTbody.innerHTML = visible
+    .map((i) => {
+      const color = DIVIDEND_TYPE_COLORS[i.type] || DIVIDEND_TYPE_COLORS["Outro"];
+      return `
+        <tr class="animate-fade-in">
+          <td class="px-5 sm:px-6 py-4 font-medium">${escapeHtml(i.ticker)}</td>
+          <td class="px-5 sm:px-6 py-4">
+            <span class="category-badge"><span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>${escapeHtml(i.type)}</span>
+          </td>
+          <td class="px-5 sm:px-6 py-4 text-slate-400">${i.exDate ? formatDate(i.exDate) : "—"}</td>
+          <td class="px-5 sm:px-6 py-4 text-slate-400">${formatDate(i.paymentDate)} <span class="text-[11px] text-slate-600">· ${daysUntilLabel(i.paymentDate)}</span></td>
+          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${perShare(i.rate)}</td>
+          <td class="px-5 sm:px-6 py-4 text-right text-slate-400">${formatQuantity(i.shares)}</td>
+          <td class="px-5 sm:px-6 py-4 text-right font-semibold text-emerald-400">${formatCurrency(i.total)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  let message = "";
+  if (loading) message = "Buscando proventos anunciados…";
+  else if (!hasEligible) message = "Cadastre Ações ou FIIs na carteira para acompanhar os proventos anunciados.";
+  else if (visible.length === 0) message = "Nenhum provento anunciado para os seus ativos no momento.";
+  if (!loading && failed.length > 0) {
+    message += `${message ? " " : ""}Sem resposta da B3/Brapi para: ${failed.join(", ")}. Tente atualizar.`;
+  }
+  el.divUpcomingStatus.textContent = message;
+  el.divUpcomingStatus.classList.toggle("hidden", !message);
+}
+
+export function setUpcomingDividendsLoading(loading) {
+  upcomingState = { ...upcomingState, loading };
+  renderUpcomingDividendsView();
+}
+
+export function renderUpcomingDividends(items, { failed = [], hasEligible = false } = {}) {
+  upcomingState = { items, failed, hasEligible, loading: false };
+  renderUpcomingDividendsView();
+}
+
+export function onRefreshUpcomingDividends(handler) {
+  el.refreshUpcomingBtn?.addEventListener("click", handler);
 }
 
 export function setImportDividendsLoading(loading) {

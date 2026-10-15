@@ -752,7 +752,7 @@
                 <p class="text-xs text-slate-500 mt-0.5">Dividendos, JCP e rendimentos recebidos — respeita o filtro de ativo acima.</p>
               </div>
               <div class="flex items-center gap-2">
-                <button id="import-dividends-btn" title="Importa da B3 o histórico de dividendos/JCP das suas Ações (FIIs exigem token pago na Brapi)"
+                <button id="import-dividends-btn" title="Importa os proventos já pagos das suas Ações e FIIs, calculados pelas cotas que você tinha na data-com"
                   class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
                   <i id="import-dividends-icon" class="ph-bold ph-download-simple text-base"></i>
                   <span class="hidden sm:inline">Importar da B3</span>
@@ -785,6 +785,41 @@
                 <p class="text-xs font-medium text-slate-400 mb-1">Yield on Cost</p>
                 <h3 class="text-xl font-extrabold" id="div-kpi-yield">0%</h3>
                 <p class="text-[11px] text-slate-600 mt-1">Proventos (12m) / capital investido</p>
+              </div>
+            </section>
+
+            <section class="glass-card rounded-2xl overflow-hidden animate-slide-up">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 sm:px-6 py-5 border-b border-slate-800/80">
+                <div>
+                  <h3 class="font-bold text-base">Proventos a Receber</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Anunciados e ainda não pagos — valor por cota × cotas que você tinha na data-com.</p>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div class="sm:text-right">
+                    <p class="text-[11px] text-slate-500">Total a receber</p>
+                    <p class="text-lg font-extrabold text-emerald-400" id="div-upcoming-total">R$ 0,00</p>
+                  </div>
+                  <button id="refresh-upcoming-btn" type="button" class="row-action-btn" title="Atualizar proventos anunciados">
+                    <i id="refresh-upcoming-icon" class="ph-bold ph-arrows-clockwise"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="overflow-x-auto custom-scroll">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800/60">
+                      <th class="px-5 sm:px-6 py-3 font-medium">Ativo</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Tipo</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Data-com</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium">Pagamento</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Por cota</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">Cotas</th>
+                      <th class="px-5 sm:px-6 py-3 font-medium text-right">A receber</th>
+                    </tr>
+                  </thead>
+                  <tbody id="div-upcoming-tbody"></tbody>
+                </table>
+                <p id="div-upcoming-status" class="hidden text-xs text-slate-500 text-center px-5 py-8"></p>
               </div>
             </section>
 

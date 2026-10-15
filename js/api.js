@@ -103,6 +103,8 @@ const DIVIDEND_LABEL_MAP = {
   "DIVIDENDO": "Dividendo",
   "JCP": "JCP",
   "JUROS SOBRE CAPITAL PRÓPRIO": "JCP",
+  "JUROS SOBRE CAPITAL PROPRIO": "JCP",
+  "JRS CAP PROPRIO": "JCP",
   "RENDIMENTO": "Rendimento",
 };
 
@@ -112,15 +114,33 @@ function normalizeDividendType(label) {
 }
 
 /**
- * Busca o histórico de proventos (dividendos/JCP) de um ticker na Brapi.
- * Só funciona sem token para Ações — FIIs retornam 401 nesse endpoint no
- * plano gratuito (mesma limitação de cotação já tratada em fetchQuotes).
+ * Busca o calendário de proventos de um ativo — pagos e já anunciados:
+ * - FIIs/Fiagros: função serverless `/api/proventos` (consulta a B3; a API
+ *   da Brapi exige token pago para FIIs). Só existe quando o app está na
+ *   Vercel — localmente (`npx serve`) a chamada falha e retorna ok:false.
+ * - Ações: Brapi (`dividends=true`), liberado sem token.
+ * Cada item traz a data-com (exDate), usada para saber quantas cotas o
+ * usuário tinha com direito ao provento.
  * @param {string} ticker
- * @returns {Promise<{ dividends: Array<{amount:number, date:string, type:string}>, ok: boolean }>}
+ * @param {string} category categoria do ativo ("FIIs" ou "Ações")
+ * @returns {Promise<{ dividends: Array<{type:string, rate:number, exDate:string|null, paymentDate:string}>, ok: boolean }>}
  */
-export async function fetchDividendHistory(ticker) {
+export async function fetchDividendCalendar(ticker, category) {
+  const symbol = ticker.toUpperCase().trim();
   try {
-    const symbol = ticker.toUpperCase().trim();
+    if (category === "FIIs") {
+      const res = await fetch(`/api/proventos?ticker=${encodeURIComponent(symbol)}`);
+      if (!res.ok) return { dividends: [], ok: false };
+      const data = await res.json();
+      const dividends = (data.dividends || []).map((d) => ({
+        type: normalizeDividendType(d.label),
+        rate: d.rate,
+        exDate: d.exDate,
+        paymentDate: d.paymentDate,
+      }));
+      return { dividends, ok: true };
+    }
+
     const url = BRAPI_TOKEN
       ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true&token=${encodeURIComponent(BRAPI_TOKEN)}`
       : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true`;
@@ -129,21 +149,17 @@ export async function fetchDividendHistory(ticker) {
 
     const data = await res.json();
     const cashDividends = data.results?.[0]?.dividendsData?.cashDividends || [];
-    const today = new Date().toISOString().slice(0, 10);
-
     const dividends = cashDividends
       .filter((d) => typeof d.rate === "number" && d.paymentDate)
       .map((d) => ({
-        amount: d.rate,
-        date: d.paymentDate.slice(0, 10),
         type: normalizeDividendType(d.label),
-      }))
-      // Só proventos já pagos — os anunciados para o futuro ainda não caíram na conta.
-      .filter((d) => d.date <= today);
-
+        rate: d.rate,
+        exDate: d.lastDatePrior ? d.lastDatePrior.slice(0, 10) : null,
+        paymentDate: d.paymentDate.slice(0, 10),
+      }));
     return { dividends, ok: true };
   } catch (err) {
-    console.warn(`Falha ao buscar histórico de proventos de ${ticker} na Brapi:`, err.message);
+    console.warn(`Falha ao buscar proventos de ${ticker}:`, err.message);
     return { dividends: [], ok: false };
   }
 }

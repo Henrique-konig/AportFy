@@ -74,6 +74,71 @@ export function buildMonthlyContributions(investments, monthsCount = 12, referen
   return months;
 }
 
+/**
+ * Quantidade de cotas/ações que o usuário tinha ao fim de uma data (compras
+ * feitas até o dia inclusive) — é o que define o direito a um provento na
+ * data-com.
+ */
+export function sharesOnDate(inv, isoDate) {
+  return getInvestmentPurchases(inv)
+    .filter((p) => String(p.date).slice(0, 10) <= isoDate)
+    .reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+}
+
+const brDateToIso = (br) => {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(br || "").trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+};
+
+/**
+ * Normaliza o `cashDividends` da API pública da B3 (datas dd/mm/aaaa e valor
+ * com vírgula) para datas ISO e números. Descarta itens sem pagamento definido.
+ * @returns {Array<{label:string, rate:number, exDate:string|null, paymentDate:string, approvedOn:string|null, relatedTo:string}>}
+ */
+export function parseB3CashDividends(cashDividends) {
+  const parsed = (Array.isArray(cashDividends) ? cashDividends : [])
+    .map((d) => ({
+      label: String(d.label || ""),
+      rate: Number(String(d.rate ?? "").replace(",", ".")),
+      exDate: brDateToIso(d.lastDatePrior),
+      paymentDate: brDateToIso(d.paymentDate),
+      approvedOn: brDateToIso(d.approvedOn),
+      relatedTo: String(d.relatedTo || ""),
+    }))
+    .filter((d) => Number.isFinite(d.rate) && d.rate > 0 && d.paymentDate);
+
+  // A B3 às vezes lista o mesmo rendimento duas vezes (mesmo mês de referência,
+  // valor e data de pagamento, só com data-com diferente). Conta uma vez só,
+  // ficando com a data-com mais recente.
+  const unique = new Map();
+  parsed.forEach((d) => {
+    const key = `${d.paymentDate}|${d.rate}|${d.label}|${d.relatedTo}`;
+    const existing = unique.get(key);
+    if (!existing || (d.exDate || "") > (existing.exDate || "")) unique.set(key, d);
+  });
+  return [...unique.values()];
+}
+
+/**
+ * Proventos já anunciados e ainda não pagos (pagamento de hoje em diante), com
+ * o total que o usuário receberá = valor por cota × cotas que tinha na data-com.
+ * @param {Array<Object>} investments posições da carteira
+ * @param {Object<string, Array<{type:string, rate:number, exDate:string|null, paymentDate:string}>>} calendars proventos por ticker
+ * @param {string} today data ISO de hoje
+ */
+export function buildUpcomingDividends(investments, calendars, today) {
+  const items = [];
+  investments.forEach((inv) => {
+    (calendars[inv.ticker] || []).forEach((d) => {
+      if (d.paymentDate < today) return;
+      const shares = sharesOnDate(inv, d.exDate || d.paymentDate);
+      if (shares <= 0) return;
+      items.push({ ticker: inv.ticker, type: d.type, rate: d.rate, exDate: d.exDate, paymentDate: d.paymentDate, shares, total: d.rate * shares });
+    });
+  });
+  return items.sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.ticker.localeCompare(b.ticker));
+}
+
 /** Variação percentual entre dois valores (usado nos KPIs do dashboard). */
 export function pctChange(current, previous) {
   if (!previous) return current > 0 ? 100 : 0;
