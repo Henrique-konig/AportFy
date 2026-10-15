@@ -555,10 +555,12 @@ body.mode-couple .dp-day-selected {
 
 .sr-only-select {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  /* !important: classes utilitárias como w-full não podem reabrir o select oculto e gerar rolagem lateral */
+  width: 1px !important;
+  height: 1px !important;
   padding: 0;
   margin: -1px;
+  pointer-events: none;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
