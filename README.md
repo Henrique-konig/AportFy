@@ -33,7 +33,7 @@
 
 ## Sobre
 
-O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, metas e orçamento) e o acompanhamento de uma carteira de investimentos, com atualização em tempo real via Firestore. Funciona em dois modos: **Pessoal** (dados só seus) e **Casal** (dados compartilhados com outra pessoa).
+O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, metas e orçamento) e o acompanhamento de uma carteira de investimentos — compras, vendas, proventos, histórico de movimentações e um diagnóstico da saúde da carteira —, com atualização em tempo real via Firestore. Funciona em dois modos: **Pessoal** (dados só seus) e **Casal** (dados compartilhados com outra pessoa).
 
 É uma aplicação 100% estática: HTML, CSS e JavaScript em ES Modules nativos, sem bundler e sem etapa de build.
 
@@ -56,13 +56,20 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Investimentos**
 - Carteira por ativo, com preço médio recalculado a cada nova compra do mesmo ativo.
-- **Vendas:** registro de venda parcial ou total com o lucro/prejuízo realizado (o preço médio não muda na venda). Posições vendidas por completo saem da carteira, mas continuam no histórico.
+- **Vendas:** registro de venda parcial ou total com o lucro/prejuízo realizado (o preço médio não muda na venda). Posições vendidas por completo saem da carteira, mas continuam no Histórico.
 - Cotações automáticas de **Ações e FIIs da B3** (Brapi), com fallback para o último preço salvo.
-- **Aportes mensais**: quanto foi investido em cada um dos últimos 12 meses, com média e filtro por ativo.
+- **Aportes mensais:** quanto foi investido em cada um dos últimos 12 meses, com média e filtro por ativo.
 - Evolução do capital por categoria, alocação da carteira e detalhe do ativo com histórico de preço.
-- **Proventos Recebidos e a Receber**: painel com os proventos já pagos e os já anunciados de Ações e FIIs (dados da B3), com abas, filtro por mês e total de cada lado. O valor é o provento por cota × as cotas que você tinha na data-com; o JCP é calculado líquido de 15% de IR.
-- **Importação automática**: os proventos já pagos são lançados sozinhos (e alimentam o gráfico "Proventos por Mês", que também mostra o que ainda vai cair). O que você excluir não volta; o botão "Importar da B3" força uma nova busca.
-- **Proventos** (dividendos, JCP e rendimentos): registro manual ou automático, histórico com filtro por mês e yield on cost.
+- Busca, filtros por categoria e ativo e ordenação, aplicados a tabela, indicadores e gráficos.
+
+**Proventos** (dividendos, JCP e rendimentos)
+- **Recebidos e a receber:** painel com os proventos já pagos e os já anunciados de Ações e FIIs (dados da B3), com abas, filtro por mês e total de cada lado. O valor é o provento por cota × as cotas que você tinha na data-com; o JCP é calculado líquido de 15% de IR.
+- **Importação automática:** os pagos são lançados sozinhos. O que você excluir não volta; o botão "Importar da B3" força uma nova busca.
+- Gráfico mensal com o recebido e o que ainda vai cair, histórico com filtro por mês, registro manual e yield on cost.
+
+**Histórico**
+- Linha do tempo de compras, vendas e proventos, agrupada por mês, no estilo de extrato.
+- Filtros por tipo (compras, vendas, proventos), ativo, mês e busca, com totais comprados, vendidos, proventos recebidos e resultado das vendas.
 
 **Notícias**
 - *Minha Carteira*: notícias filtradas pelos ativos cadastrados (Alpha Vantage).
@@ -70,10 +77,6 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Relatórios**
 - Receitas, despesas e economia líquida por mês/ano ou acumulado, maiores categorias e maiores despesas, e fluxo de caixa de 12 meses.
-
-**Histórico**
-- Linha do tempo de compras, vendas e proventos, agrupada por mês, no estilo de extrato.
-- Filtros por tipo (compras, vendas, proventos), ativo, mês e busca, com totais comprados, vendidos, proventos recebidos e resultado das vendas.
 
 **Saúde da Carteira**
 - Nota de 0 a 100 com quatro componentes: alinhamento às metas por categoria, concentração por ativo, diversificação (número efetivo de ativos) e dependência de poucos pagadores de proventos.
@@ -189,7 +192,7 @@ Cada coleção existe nos dois modos: `users/{userId}/…` (Pessoal) e `couples/
 | `goals` | Metas financeiras |
 | `budgets` | Limite de gasto por categoria |
 | `investments` | Posições da carteira, com `purchases` (compras), `sales` (vendas, com o preço médio da época) e `priceHistory` |
-| `dividends` | Proventos recebidos (`ticker`, `type`, `amount`, `date`) |
+| `dividends` | Proventos recebidos (`ticker`, `type`, `amount`, `date`; os importados também guardam `rate`, `shares` e `exDate`) |
 | `settings/portfolio` | Metas de alocação da Saúde da Carteira (`targets` por categoria, `maxAssetPct`, `minAssets`) |
 
 Datas são strings `YYYY-MM-DD`, o que simplifica filtros e agrupamentos por mês.
@@ -229,7 +232,8 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 - **Zero build.** ES Modules nativos e CDNs mantêm o projeto simples de rodar, depurar e hospedar.
 - **Lógica pura separada.** Tudo que é cálculo vive em `calc.js` e é testável em Node, sem simular um navegador.
 - **Tempo real por padrão.** Listeners `onSnapshot` mantêm todas as telas sincronizadas, inclusive entre duas pessoas no Modo Casal.
-- **Falha de rede nunca quebra o app.** Cotações e notícias sempre devolvem um resultado parcial utilizável.
+- **Falha de rede nunca quebra o app.** Cotações, proventos e notícias sempre devolvem um resultado parcial utilizável.
+- **Uma função serverless só onde precisa.** A B3 não libera chamadas diretas do navegador, então `api/proventos.js` faz essa ponte; todo o resto continua estático.
 
 ## Limitações conhecidas
 
