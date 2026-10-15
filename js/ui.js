@@ -23,6 +23,8 @@ import {
   HEALTH_CATEGORIES,
   ALLOCATION_PRESETS,
   DEFAULT_PORTFOLIO_SETTINGS,
+  buildInvestmentHistory,
+  summarizeHistory,
 } from "./calc.js";
 
 /* ---------------------------------------------------------------
@@ -388,6 +390,7 @@ const VIEW_META = {
   goals: { title: "Metas", subtitle: "Acompanhe o progresso dos seus objetivos financeiros" },
   budget: { title: "Orçamento", subtitle: "Acompanhe seus limites de gasto por categoria" },
   investments: { title: "Investimentos", subtitle: "Acompanhe o rendimento da sua carteira de ativos" },
+  history: { title: "Histórico", subtitle: "Compras, vendas e proventos dos seus investimentos" },
   news: { title: "Notícias", subtitle: "Fique por dentro do mercado e dos ativos da sua carteira" },
   reports: { title: "Relatórios", subtitle: "Análise detalhada do seu fluxo de caixa" },
   health: { title: "Saúde da Carteira", subtitle: "Diagnóstico, projeção e onde aportar na sua carteira" },
@@ -1618,11 +1621,12 @@ export function onEditInvestmentPrice(handler) {
 }
 
 /** Aplica ativo, categoria e busca da barra de filtros — usado por tabela, KPIs, gráficos e aportes. */
-function getFilteredInvestments(investments) {
+function getFilteredInvestments(investments, { includeClosed = false } = {}) {
   const term = (el.invSearchInput.value || "").toLowerCase().trim();
   const categoryFilter = el.invCategoryFilter.value;
 
-  let filtered = investments;
+  // Posições vendidas por completo ficam com quantidade 0: somem da carteira, mas seguem no histórico.
+  let filtered = includeClosed ? investments : investments.filter((inv) => (Number(inv.quantity) || 0) > 0);
   if (invAssetFilterValue !== "all") filtered = filtered.filter((inv) => inv.ticker === invAssetFilterValue);
   if (categoryFilter !== "all") filtered = filtered.filter((inv) => inv.category === categoryFilter);
   if (term) {
@@ -1639,7 +1643,8 @@ function refreshInvestmentViews() {
   renderInvestmentsTable(lastInvestments);
   updateInvestmentKPIs(filtered);
   updateInvestmentCharts(filtered);
-  renderMonthlyContributions(filtered);
+  // Aportes contam também as compras de posições já vendidas.
+  renderMonthlyContributions(getFilteredInvestments(lastInvestments, { includeClosed: true }));
 }
 
 function renderInvestmentsTable(investments) {
@@ -1709,6 +1714,9 @@ function renderInvestmentsTable(investments) {
           </td>
           <td class="px-5 sm:px-6 py-4">
             <div class="flex items-center justify-end gap-1.5">
+              <button class="row-action-btn sell-investment-btn" data-id="${inv.id}" title="Registrar venda">
+                <i class="ph-bold ph-hand-coins"></i>
+              </button>
               <button class="row-action-btn edit-investment-btn" data-id="${inv.id}" title="Editar ativo">
                 <i class="ph-bold ph-pencil-simple"></i>
               </button>
@@ -1725,6 +1733,12 @@ function renderInvestmentsTable(investments) {
     btn.addEventListener("click", () => {
       const inv = investments.find((i) => i.id === btn.dataset.id);
       if (inv) openPriceEditModal(inv);
+    });
+  });
+  el.investmentsTbody.querySelectorAll(".sell-investment-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const inv = investments.find((i) => i.id === btn.dataset.id);
+      if (inv) openSellModal(inv);
     });
   });
   el.investmentsTbody.querySelectorAll(".edit-investment-btn").forEach((btn) => {
@@ -2257,6 +2271,7 @@ export function renderDividendsData(dividends) {
   renderDividends(dividends, lastInvestments);
   renderUpcomingDividendsView();
   renderPortfolioHealth();
+  renderHistory();
   renderAssetDetail(lastInvestments, dividends);
 }
 
@@ -2268,6 +2283,7 @@ export function renderInvestments(investments) {
   renderAssetDetail(investments, lastDividends);
   renderDividends(lastDividends, investments);
   renderPortfolioHealth();
+  renderHistory();
 }
 
 export function setQuotesLoading(loading) {
@@ -2941,6 +2957,12 @@ export function bindDatePickers() {
     hiddenInputId: "dividend-date",
     placeholder: DIVIDEND_DATE_PLACEHOLDER,
   });
+  attachDatePicker({
+    triggerId: "sell-date-trigger",
+    labelId: "sell-date-label",
+    hiddenInputId: "sell-date",
+    placeholder: SELL_DATE_PLACEHOLDER,
+  });
 }
 
 export function bindCustomDropdowns() {
@@ -2959,6 +2981,8 @@ export function bindCustomDropdowns() {
     "div-month-filter",
     "div-panel-month-filter",
     "health-preset",
+    "hist-asset-filter",
+    "hist-month-filter",
     "proj-years",
     "dividend-ticker",
     "dividend-type",
@@ -3498,4 +3522,277 @@ export function bindPortfolioHealth() {
   healthEl.projAppreciation?.addEventListener("input", renderHealthProjection);
   healthEl.projYears?.addEventListener("change", renderHealthProjection);
   healthEl.projReinvest?.addEventListener("change", renderHealthProjection);
+}
+
+/* ---------------------------------------------------------------
+   Modal: Registrar Venda (view: Investimentos)
+--------------------------------------------------------------- */
+const sellEl = {
+  modal: document.getElementById("sell-modal"),
+  backdrop: document.getElementById("sell-modal-backdrop"),
+  closeBtn: document.getElementById("sell-modal-close-btn"),
+  form: document.getElementById("sell-form"),
+  id: document.getElementById("sell-id"),
+  ticker: document.getElementById("sell-ticker"),
+  position: document.getElementById("sell-position"),
+  allBtn: document.getElementById("sell-all-btn"),
+  quantity: document.getElementById("sell-quantity"),
+  price: document.getElementById("sell-price"),
+  date: document.getElementById("sell-date"),
+  total: document.getElementById("sell-total"),
+  resultLabel: document.getElementById("sell-result-label"),
+  result: document.getElementById("sell-result"),
+};
+const SELL_DATE_PLACEHOLDER = "Selecionar data";
+let sellSubmitHandler = null;
+let sellingInvestment = null;
+
+export function onSellSubmit(handler) {
+  sellSubmitHandler = handler;
+}
+
+function updateSellPreview() {
+  if (!sellingInvestment) return;
+  const quantity = Number(sellEl.quantity.value) || 0;
+  const price = Number(sellEl.price.value) || 0;
+  const result = (price - (Number(sellingInvestment.avgPrice) || 0)) * quantity;
+  sellEl.total.textContent = formatCurrency(quantity * price);
+  sellEl.resultLabel.textContent = result >= 0 ? "Lucro estimado" : "Prejuízo estimado";
+  sellEl.result.textContent = formatCurrency(Math.abs(result));
+  sellEl.result.classList.toggle("text-emerald-400", result > 0);
+  sellEl.result.classList.toggle("text-red-400", result < 0);
+}
+
+export function openSellModal(investment) {
+  sellingInvestment = investment;
+  sellEl.form.reset();
+  sellEl.id.value = investment.id;
+  sellEl.ticker.textContent = investment.ticker;
+  sellEl.position.textContent = `${formatQuantity(Number(investment.quantity) || 0)} em carteira · preço médio ${formatCurrency(Number(investment.avgPrice) || 0)}`;
+  sellEl.quantity.max = investment.quantity;
+  sellEl.price.value = Number(investment.currentPrice) || "";
+  setDatePickerValue("sell-date", "sell-date-label", todayISO(), SELL_DATE_PLACEHOLDER);
+  updateSellPreview();
+  sellEl.modal.classList.remove("hidden");
+  sellEl.modal.classList.add("flex");
+}
+
+export function closeSellModal() {
+  sellEl.modal.classList.add("hidden");
+  sellEl.modal.classList.remove("flex");
+  closeDatePicker();
+  sellingInvestment = null;
+}
+
+export function bindSellModal() {
+  sellEl.closeBtn?.addEventListener("click", closeSellModal);
+  sellEl.backdrop?.addEventListener("click", closeSellModal);
+  sellEl.quantity?.addEventListener("input", updateSellPreview);
+  sellEl.price?.addEventListener("input", updateSellPreview);
+  sellEl.allBtn?.addEventListener("click", () => {
+    if (!sellingInvestment) return;
+    sellEl.quantity.value = sellingInvestment.quantity;
+    updateSellPreview();
+  });
+  sellEl.form?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!sellingInvestment) return;
+    const quantity = Number(sellEl.quantity.value);
+    const price = Number(sellEl.price.value);
+    const available = Number(sellingInvestment.quantity) || 0;
+    if (!(quantity > 0) || quantity > available + 1e-9) {
+      showToast(`Informe uma quantidade entre 0 e ${formatQuantity(available)}.`, "error");
+      return;
+    }
+    if (!(price >= 0)) {
+      showToast("Informe o preço de venda.", "error");
+      return;
+    }
+    if (!sellEl.date.value) {
+      showToast("Selecione a data da venda.", "error");
+      return;
+    }
+    sellSubmitHandler?.({ id: sellingInvestment.id, quantity, price, date: sellEl.date.value });
+  });
+}
+
+/* ---------------------------------------------------------------
+   Histórico de movimentações (view: Histórico)
+--------------------------------------------------------------- */
+const histEl = {
+  totalBuy: document.getElementById("hist-total-buy"),
+  totalBuyCount: document.getElementById("hist-total-buy-count"),
+  totalSell: document.getElementById("hist-total-sell"),
+  totalSellCount: document.getElementById("hist-total-sell-count"),
+  totalDividend: document.getElementById("hist-total-dividend"),
+  totalDividendCount: document.getElementById("hist-total-dividend-count"),
+  totalResult: document.getElementById("hist-total-result"),
+  totalResultCount: document.getElementById("hist-total-result-count"),
+  tabs: document.querySelectorAll(".hist-tab-btn"),
+  search: document.getElementById("hist-search-input"),
+  asset: document.getElementById("hist-asset-filter"),
+  month: document.getElementById("hist-month-filter"),
+  list: document.getElementById("hist-list"),
+  empty: document.getElementById("hist-empty"),
+  emptyTitle: document.getElementById("hist-empty-title"),
+  emptyDesc: document.getElementById("hist-empty-desc"),
+  moreWrap: document.getElementById("hist-more-wrap"),
+  moreBtn: document.getElementById("hist-more-btn"),
+  moreRemaining: document.getElementById("hist-more-remaining"),
+};
+const HIST_PAGE_SIZE = 40;
+let histKind = "all";
+let histLimit = HIST_PAGE_SIZE;
+
+const HIST_KIND_META = {
+  buy: { label: "Compra", icon: "ph-shopping-cart-simple", color: "#3b82f6" },
+  sell: { label: "Venda", icon: "ph-hand-coins", color: "#f59e0b" },
+  dividend: { label: "Provento", icon: "ph-coins", color: "#34d399" },
+};
+const WEEKDAYS_PT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+function populateHistorySelect(select, values, labelFn, allLabel) {
+  const current = select.value || "all";
+  select.innerHTML = `<option value="all">${allLabel}</option>` + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(labelFn(v))}</option>`).join("");
+  select.value = current === "all" || values.includes(current) ? current : "all";
+  refreshDropdown(select.id);
+}
+
+function historyEventHtml(e) {
+  const meta = HIST_KIND_META[e.kind];
+  const [y, m, d] = e.date.split("-").map(Number);
+  const weekday = WEEKDAYS_PT[new Date(y, m - 1, d).getDay()];
+  const perShare = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+  let detail;
+  if (e.kind === "dividend") {
+    detail = [e.dividendType, e.quantity != null && e.price != null ? `${formatQuantity(e.quantity)} × ${perShare(e.price)}` : null].filter(Boolean).join(" · ");
+  } else {
+    detail = `${formatQuantity(e.quantity)} × ${perShare(e.price)}`;
+  }
+  if (e.category) detail += ` · ${e.category}`;
+
+  let amountHtml;
+  if (e.kind === "buy") {
+    amountHtml = `<p class="text-sm font-bold">${formatCurrency(e.amount)}</p>`;
+  } else if (e.kind === "sell") {
+    const positive = e.result >= 0;
+    amountHtml = `<p class="text-sm font-bold">${formatCurrency(e.amount)}</p>
+      <p class="text-[11px] font-semibold ${positive ? "text-emerald-400" : "text-red-400"}">${positive ? "Lucro" : "Prejuízo"} de ${formatCurrency(Math.abs(e.result))}</p>`;
+  } else {
+    amountHtml = `<p class="text-sm font-bold text-emerald-400">+ ${formatCurrency(e.amount)}</p>`;
+  }
+
+  const approxTag = e.approximate
+    ? ` <span class="text-[10px] font-semibold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded" title="Compra registrada antes do histórico detalhado: mostra a quantidade total na data da última compra.">aprox.</span>`
+    : "";
+
+  return `
+    <div class="flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3.5 hover:bg-slate-800/20 transition-colors animate-fade-in">
+      <div class="w-10 text-center shrink-0">
+        <p class="text-sm font-bold leading-none">${String(d).padStart(2, "0")}</p>
+        <p class="text-[10px] text-slate-500 uppercase mt-1">${weekday}</p>
+      </div>
+      <span class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background:${meta.color}1f;">
+        <i class="ph-bold ${meta.icon} text-lg" style="color:${meta.color};"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold truncate">${meta.label} · ${escapeHtml(e.ticker)}${approxTag}</p>
+        <p class="text-xs text-slate-500 truncate">${escapeHtml(detail)}</p>
+      </div>
+      <div class="text-right shrink-0">${amountHtml}</div>
+    </div>`;
+}
+
+function renderHistory() {
+  if (!histEl.list) return;
+  const all = buildInvestmentHistory(lastInvestments, lastDividends);
+
+  populateHistorySelect(histEl.asset, [...new Set(all.map((e) => e.ticker))].sort(), (t) => t, "Todos os ativos");
+  populateHistorySelect(histEl.month, [...new Set(all.map((e) => e.date.slice(0, 7)))].sort().reverse(), formatMonthLabel, "Todos os meses");
+
+  const term = (histEl.search.value || "").trim().toUpperCase();
+  const asset = histEl.asset.value;
+  const month = histEl.month.value;
+  // Filtros de ativo, mês e busca valem para os totais; a aba de tipo só muda a lista.
+  const scoped = all.filter(
+    (e) => (asset === "all" || e.ticker === asset) && (month === "all" || e.date.startsWith(month)) && (!term || e.ticker.toUpperCase().includes(term))
+  );
+  const events = histKind === "all" ? scoped : scoped.filter((e) => e.kind === histKind);
+
+  const totals = summarizeHistory(scoped);
+  const count = (kind) => scoped.filter((e) => e.kind === kind).length;
+  histEl.totalBuy.textContent = formatCurrency(totals.bought);
+  histEl.totalBuyCount.textContent = plural(count("buy"), "compra", "compras");
+  histEl.totalSell.textContent = formatCurrency(totals.sold);
+  histEl.totalSellCount.textContent = plural(count("sell"), "venda", "vendas");
+  histEl.totalDividend.textContent = formatCurrency(totals.dividends);
+  histEl.totalDividendCount.textContent = plural(count("dividend"), "pagamento", "pagamentos");
+  histEl.totalResult.textContent = formatCurrency(totals.realized);
+  histEl.totalResult.classList.toggle("text-emerald-400", totals.realized > 0);
+  histEl.totalResult.classList.toggle("text-red-400", totals.realized < 0);
+  histEl.totalResultCount.textContent = count("sell") > 0 ? "Lucro/prejuízo realizado nas vendas" : "Nenhuma venda no filtro";
+  histEl.tabs.forEach((b) => b.classList.toggle("active-filter", b.dataset.histKind === histKind));
+
+  const visible = events.slice(0, histLimit);
+  histEl.empty.classList.toggle("hidden", visible.length > 0);
+  histEl.empty.classList.toggle("flex", visible.length === 0);
+  if (visible.length === 0) {
+    histEl.emptyTitle.textContent = all.length === 0 ? "Nenhuma movimentação ainda." : "Nenhuma movimentação neste filtro.";
+    histEl.emptyDesc.textContent =
+      all.length === 0 ? "Registre compras, vendas e proventos em Investimentos para vê-los aqui." : "Ajuste os filtros para ver outras movimentações.";
+  }
+
+  // Agrupa por mês, com o saldo de cada mês (proventos e vendas entram, compras saem).
+  const groups = [];
+  visible.forEach((e) => {
+    const key = e.date.slice(0, 7);
+    if (groups.length === 0 || groups[groups.length - 1].key !== key) groups.push({ key, events: [] });
+    groups[groups.length - 1].events.push(e);
+  });
+  histEl.list.innerHTML = groups
+    .map((g) => {
+      const monthEvents = events.filter((e) => e.date.startsWith(g.key));
+      const t = summarizeHistory(monthEvents);
+      const parts = [
+        t.bought > 0 ? `Compras ${formatCurrency(t.bought)}` : null,
+        t.sold > 0 ? `Vendas ${formatCurrency(t.sold)}` : null,
+        t.dividends > 0 ? `Proventos ${formatCurrency(t.dividends)}` : null,
+      ].filter(Boolean);
+      return `
+        <div>
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-5 sm:px-6 py-3 bg-slate-900/60 border-y border-slate-800/80">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-300">${formatMonthLabel(g.key)}</p>
+            <p class="text-[11px] text-slate-500">${parts.join(" · ")}</p>
+          </div>
+          <div class="divide-y divide-slate-800/50">${g.events.map(historyEventHtml).join("")}</div>
+        </div>`;
+    })
+    .join("");
+
+  const remaining = events.length - histLimit;
+  histEl.moreWrap.classList.toggle("hidden", remaining <= 0);
+  histEl.moreWrap.classList.toggle("flex", remaining > 0);
+  histEl.moreRemaining.textContent = remaining > 0 ? `(${remaining})` : "";
+}
+
+export function bindHistory() {
+  const reset = () => {
+    histLimit = HIST_PAGE_SIZE;
+    renderHistory();
+  };
+  histEl.tabs.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      histKind = btn.dataset.histKind;
+      reset();
+    })
+  );
+  histEl.search?.addEventListener("input", reset);
+  histEl.asset?.addEventListener("change", reset);
+  histEl.month?.addEventListener("change", reset);
+  histEl.moreBtn?.addEventListener("click", () => {
+    histLimit += HIST_PAGE_SIZE;
+    renderHistory();
+  });
 }

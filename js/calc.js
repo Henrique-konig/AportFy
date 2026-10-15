@@ -80,9 +80,35 @@ export function buildMonthlyContributions(investments, monthsCount = 12, referen
  * data-com.
  */
 export function sharesOnDate(inv, isoDate) {
-  return getInvestmentPurchases(inv)
-    .filter((p) => String(p.date).slice(0, 10) <= isoDate)
-    .reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+  const upTo = (list) =>
+    list.filter((x) => String(x.date).slice(0, 10) <= isoDate).reduce((sum, x) => sum + (Number(x.quantity) || 0), 0);
+  return Math.max(0, upTo(getInvestmentPurchases(inv)) - upTo(getInvestmentSales(inv)));
+}
+
+/** Vendas registradas de uma posição (cada uma guarda o preço médio da época). */
+export function getInvestmentSales(inv) {
+  return Array.isArray(inv.sales) ? inv.sales : [];
+}
+
+const roundQty = (q) => Math.round(q * 1e8) / 1e8;
+
+/**
+ * Atualização de uma posição ao registrar uma venda: reduz a quantidade e
+ * guarda a venda com o preço médio da época (o preço médio não muda ao vender).
+ * Também grava o histórico de compras, para posições antigas não perderem a
+ * base de cálculo quando a quantidade diminuir.
+ * @param {{quantity:number, price:number, date:string}} sale
+ */
+export function applyInvestmentSale(inv, { quantity, price, date }) {
+  const current = Number(inv.quantity) || 0;
+  if (!(quantity > 0) || roundQty(quantity) > roundQty(current)) throw new Error("Quantidade de venda inválida.");
+  if (!(price >= 0)) throw new Error("Preço de venda inválido.");
+  const avgPrice = Number(inv.avgPrice) || 0;
+  return {
+    quantity: Math.max(0, roundQty(current - quantity)),
+    purchases: getInvestmentPurchases(inv),
+    sales: [...getInvestmentSales(inv), { date, quantity, price, avgPrice }],
+  };
 }
 
 const brDateToIso = (br) => {
@@ -431,4 +457,81 @@ export function projectPortfolio({ initial, monthlyContribution, annualAppreciat
   }
 
   return { points, finalBalance: balance, totalContributed: contributed, monthlyIncome: balance * monthlyYield, incomeReceived };
+}
+
+/* =========================================================
+   Histórico de movimentações (compras, vendas e proventos)
+   ========================================================= */
+
+const HISTORY_KIND_ORDER = { dividend: 0, sell: 1, buy: 2 };
+
+/**
+ * Linha do tempo de movimentações, da mais recente para a mais antiga.
+ * Compras de posições sem histórico detalhado (anteriores ao campo `purchases`)
+ * aparecem como uma compra única marcada como aproximada.
+ * @returns {Array<{id:string, kind:"buy"|"sell"|"dividend", date:string, ticker:string, category:string, quantity:number|null, price:number|null, amount:number, result?:number, avgPrice?:number, dividendType?:string, approximate?:boolean}>}
+ */
+export function buildInvestmentHistory(investments, dividends) {
+  const events = [];
+  const categoryOf = {};
+
+  investments.forEach((inv) => {
+    categoryOf[inv.ticker] = inv.category;
+    const approximate = !(Array.isArray(inv.purchases) && inv.purchases.length > 0);
+    getInvestmentPurchases(inv).forEach((p, i) => {
+      const quantity = Number(p.quantity) || 0;
+      const price = Number(p.price) || 0;
+      events.push({ id: `buy-${inv.id}-${i}`, kind: "buy", date: p.date, ticker: inv.ticker, category: inv.category, quantity, price, amount: quantity * price, approximate });
+    });
+    getInvestmentSales(inv).forEach((s, i) => {
+      const quantity = Number(s.quantity) || 0;
+      const price = Number(s.price) || 0;
+      const avgPrice = Number(s.avgPrice) || 0;
+      events.push({
+        id: `sell-${inv.id}-${i}`,
+        kind: "sell",
+        date: s.date,
+        ticker: inv.ticker,
+        category: inv.category,
+        quantity,
+        price,
+        avgPrice,
+        amount: quantity * price,
+        result: (price - avgPrice) * quantity,
+      });
+    });
+  });
+
+  dividends.forEach((d) => {
+    events.push({
+      id: `dividend-${d.id}`,
+      kind: "dividend",
+      date: d.date,
+      ticker: d.ticker,
+      category: categoryOf[d.ticker] || "",
+      quantity: d.shares ?? null,
+      price: d.rate ?? null,
+      amount: Number(d.amount) || 0,
+      dividendType: d.type,
+    });
+  });
+
+  return events.sort(
+    (a, b) => String(b.date).localeCompare(String(a.date)) || HISTORY_KIND_ORDER[a.kind] - HISTORY_KIND_ORDER[b.kind] || a.ticker.localeCompare(b.ticker)
+  );
+}
+
+/** Totais de um conjunto de movimentações (compras, vendas, proventos e resultado das vendas). */
+export function summarizeHistory(events) {
+  return events.reduce(
+    (acc, e) => {
+      if (e.kind === "buy") acc.bought += e.amount;
+      else if (e.kind === "sell") {
+        acc.sold += e.amount;
+        acc.realized += e.result || 0;
+      } else acc.dividends += e.amount;
+      return acc;
+    },
+    { bought: 0, sold: 0, dividends: 0, realized: 0 }
+  );
 }

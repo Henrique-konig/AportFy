@@ -17,7 +17,57 @@ import {
   analyzePortfolioHealth,
   suggestContribution,
   projectPortfolio,
+  applyInvestmentSale,
+  buildInvestmentHistory,
+  summarizeHistory,
 } from "../js/calc.js";
+
+describe("applyInvestmentSale", () => {
+  it("reduz a quantidade, mantém o preço médio e grava a venda", () => {
+    const inv = { quantity: 10, avgPrice: 20, purchaseDate: "2026-01-10" };
+    const u = applyInvestmentSale(inv, { quantity: 4, price: 25, date: "2026-05-01" });
+    expect(u.quantity).toBe(6);
+    expect(u.sales).toEqual([{ date: "2026-05-01", quantity: 4, price: 25, avgPrice: 20 }]);
+    // posição antiga sem histórico: as compras são gravadas com a quantidade de antes da venda
+    expect(u.purchases).toEqual([{ date: "2026-01-10", quantity: 10, price: 20 }]);
+  });
+
+  it("recusa vender mais do que tem", () => {
+    expect(() => applyInvestmentSale({ quantity: 3, avgPrice: 1 }, { quantity: 4, price: 1, date: "2026-01-01" })).toThrow();
+    expect(() => applyInvestmentSale({ quantity: 3, avgPrice: 1 }, { quantity: 0, price: 1, date: "2026-01-01" })).toThrow();
+  });
+
+  it("cotas na data descontam as vendas", () => {
+    const inv = { purchases: [{ date: "2026-01-10", quantity: 10, price: 20 }], sales: [{ date: "2026-05-01", quantity: 4, price: 25, avgPrice: 20 }] };
+    expect(sharesOnDate(inv, "2026-04-30")).toBe(10);
+    expect(sharesOnDate(inv, "2026-05-01")).toBe(6);
+  });
+});
+
+describe("buildInvestmentHistory", () => {
+  const investments = [
+    { id: "a", ticker: "MXRF11", category: "FIIs", purchases: [{ date: "2026-01-10", quantity: 10, price: 10 }], sales: [{ date: "2026-06-01", quantity: 5, price: 12, avgPrice: 10 }] },
+    { id: "b", ticker: "PETR4", category: "Ações", quantity: 2, avgPrice: 30, purchaseDate: "2026-03-01" },
+  ];
+  const dividends = [{ id: "d1", ticker: "MXRF11", type: "Rendimento", amount: 1, date: "2026-02-15", rate: 0.1, shares: 10 }];
+
+  it("junta compras, vendas e proventos em ordem do mais recente", () => {
+    const h = buildInvestmentHistory(investments, dividends);
+    expect(h.map((e) => `${e.kind}:${e.ticker}:${e.date}`)).toEqual([
+      "sell:MXRF11:2026-06-01",
+      "buy:PETR4:2026-03-01",
+      "dividend:MXRF11:2026-02-15",
+      "buy:MXRF11:2026-01-10",
+    ]);
+    expect(h[0]).toMatchObject({ amount: 60, result: 10 });
+    expect(h.find((e) => e.ticker === "PETR4").approximate).toBe(true);
+    expect(h.find((e) => e.kind === "dividend").category).toBe("FIIs");
+  });
+
+  it("resume os totais", () => {
+    expect(summarizeHistory(buildInvestmentHistory(investments, dividends))).toEqual({ bought: 160, sold: 60, dividends: 1, realized: 10 });
+  });
+});
 
 describe("dividendNetAmount", () => {
   it("desconta 15% de IR só do JCP", () => {

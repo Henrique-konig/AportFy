@@ -56,6 +56,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Investimentos**
 - Carteira por ativo, com preço médio recalculado a cada nova compra do mesmo ativo.
+- **Vendas:** registro de venda parcial ou total com o lucro/prejuízo realizado (o preço médio não muda na venda). Posições vendidas por completo saem da carteira, mas continuam no histórico.
 - Cotações automáticas de **Ações e FIIs da B3** (Brapi), com fallback para o último preço salvo.
 - **Aportes mensais**: quanto foi investido em cada um dos últimos 12 meses, com média e filtro por ativo.
 - Evolução do capital por categoria, alocação da carteira e detalhe do ativo com histórico de preço.
@@ -69,6 +70,10 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Relatórios**
 - Receitas, despesas e economia líquida por mês/ano ou acumulado, maiores categorias e maiores despesas, e fluxo de caixa de 12 meses.
+
+**Histórico**
+- Linha do tempo de compras, vendas e proventos, agrupada por mês, no estilo de extrato.
+- Filtros por tipo (compras, vendas, proventos), ativo, mês e busca, com totais comprados, vendidos, proventos recebidos e resultado das vendas.
 
 **Saúde da Carteira**
 - Nota de 0 a 100 com quatro componentes: alinhamento às metas por categoria, concentração por ativo, diversificação (número efetivo de ativos) e dependência de poucos pagadores de proventos.
@@ -183,7 +188,7 @@ Cada coleção existe nos dois modos: `users/{userId}/…` (Pessoal) e `couples/
 | `recurrences` | Modelos de transações lançadas automaticamente todo mês |
 | `goals` | Metas financeiras |
 | `budgets` | Limite de gasto por categoria |
-| `investments` | Posições da carteira, com `purchases` (histórico de aportes) e `priceHistory` |
+| `investments` | Posições da carteira, com `purchases` (compras), `sales` (vendas, com o preço médio da época) e `priceHistory` |
 | `dividends` | Proventos recebidos (`ticker`, `type`, `amount`, `date`) |
 | `settings/portfolio` | Metas de alocação da Saúde da Carteira (`targets` por categoria, `maxAssetPct`, `minAssets`) |
 
@@ -204,7 +209,7 @@ npm install
 npm test
 ```
 
-Cobertura atual: métricas e preço médio de investimentos, saúde da carteira (nota, alertas, sugestão de aporte e projeção), aportes mensais, série mensal de fluxo de caixa, orçamento por categoria, recorrências e deduplicação de proventos.
+Cobertura atual: métricas e preço médio de investimentos, vendas e histórico de movimentações, saúde da carteira (nota, alertas, sugestão de aporte e projeção), aportes mensais, série mensal de fluxo de caixa, orçamento por categoria, recorrências e deduplicação de proventos.
 
 ## Deploy
 
@@ -232,4 +237,5 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 - **Histórico de aportes:** posições criadas antes do campo `purchases` aparecem como uma única compra, na data da última compra. Editar quantidade, preço ou data de um ativo também resume o histórico em uma compra única.
 - **Cotações e notícias** dependem de APIs gratuitas de terceiros, sujeitas a limites de uso e indisponibilidade.
 - **Proventos** vêm da API pública (não documentada) da B3 por meio de uma função serverless; o formato pode mudar sem aviso. O cálculo usa o histórico de aportes (`purchases`) para saber as cotas na data-com — para posições antigas sem histórico, vale a data da última compra.
+- **Excluir um ativo** apaga também as compras e vendas dele do histórico (os proventos lançados continuam). Para encerrar uma posição mantendo o histórico, registre a venda.
 - **Valores estimados:** o JCP é calculado com 15% de IR (alguns investidores são isentos) e a corretora pode creditar o provento em data ligeiramente diferente da divulgada.

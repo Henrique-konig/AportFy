@@ -56,6 +56,8 @@ import {
   sharesOnDate,
   buildUpcomingDividends,
   dividendNetAmount,
+  applyInvestmentSale,
+  getInvestmentSales,
 } from "./calc.js";
 import * as ui from "./ui.js";
 
@@ -126,6 +128,8 @@ function initUIBindings() {
   ui.bindReportsFilters();
   ui.bindInvestmentFilters();
   ui.bindPortfolioHealth();
+  ui.bindSellModal();
+  ui.bindHistory();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();
 
@@ -244,8 +248,16 @@ function initUIBindings() {
           purchaseDate: data.purchaseDate,
           // Se só ticker/categoria mudaram, o histórico de aportes é mantido;
           // se quantidade/preço/data foram sobrescritos, ele vira uma compra única.
+          // As vendas registradas são mantidas; a compra única soma o que já foi vendido
+          // para que compras − vendas continue batendo com a quantidade atual.
           ...(numbersChanged && {
-            purchases: [{ date: data.purchaseDate, quantity: data.quantity, price: data.price }],
+            purchases: [
+              {
+                date: data.purchaseDate,
+                quantity: data.quantity + getInvestmentSales(current || {}).reduce((sum, s) => sum + (Number(s.quantity) || 0), 0),
+                price: data.price,
+              },
+            ],
           }),
         });
         ui.showToast("Ativo atualizado com sucesso!", "success");
@@ -296,6 +308,27 @@ function initUIBindings() {
   });
 
   ui.onEditInvestment((investment) => ui.openInvestmentModal(investment));
+
+  ui.onSellSubmit(async ({ id: investmentId, quantity, price, date }) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      const investment = latestInvestments.find((inv) => inv.id === investmentId);
+      if (!investment) throw new Error("Ativo não encontrado.");
+      const update = applyInvestmentSale(investment, { quantity, price, date });
+      await updateInvestment(activeMode, id, investmentId, update);
+
+      const result = (price - (Number(investment.avgPrice) || 0)) * quantity;
+      const resultLabel = `${result >= 0 ? "lucro" : "prejuízo"} de R$ ${Math.abs(result).toFixed(2).replace(".", ",")}`;
+      ui.showToast(
+        update.quantity > 0 ? `Venda de ${investment.ticker} registrada (${resultLabel}).` : `${investment.ticker} vendido por completo (${resultLabel}). Ele segue no Histórico.`,
+        "success"
+      );
+      ui.closeSellModal();
+    } catch (err) {
+      console.error(err);
+      ui.showToast(err.message === "Quantidade de venda inválida." ? err.message : "Erro ao registrar a venda.", "error");
+    }
+  });
 
   ui.onPriceEditSubmit(async (investmentId, price) => {
     try {
@@ -479,7 +512,7 @@ function initUIBindings() {
 async function refreshQuotes({ silent }) {
   if (quotesInFlight) return;
 
-  const eligible = latestInvestments.filter((inv) => B3_CATEGORIES.includes(inv.category));
+  const eligible = latestInvestments.filter((inv) => B3_CATEGORIES.includes(inv.category) && (Number(inv.quantity) || 0) > 0);
   if (eligible.length === 0) {
     if (!silent) ui.showToast("Nenhum ativo da B3 (Ações/FIIs) para atualizar.", "info");
     return;
