@@ -22,6 +22,14 @@ rules_version = '2';
 // aprova (a regra de update do doc raiz exige o pedido existir e só o dono
 // pode adicionar membros). Membros só crescem, nunca encolhem.
 //
+// Validação dos dados: além de "quem pode gravar", cada coleção confere o
+// formato do que é gravado (tipos, limites de valor e tamanho de texto). Assim
+// um cliente alterado não consegue salvar lixo, valores absurdos ou textos
+// gigantes. Coleções desconhecidas não aceitam gravação.
+//
+// E-mail verificado: só quem confirmou o e-mail pode pedir entrada num espaço
+// de casal (o dono vê um e-mail que de fato pertence a quem pede).
+//
 // IMPORTANTE: estas regras precisam ser publicadas junto com o deploy do app
 // que usa joinRequests (Firebase Console > Firestore > Regras > Publicar).
 // =========================================================
@@ -29,14 +37,87 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---------- Validação por coleção (usada no espaço pessoal e no do casal) ----------
+    function isMoney(v) {
+      return v is number && v >= 0 && v < 1000000000000;
+    }
+    function isText(v, max) {
+      return v is string && v.size() <= max;
+    }
+    function isDateText(v) {
+      return v is string && v.size() == 10;
+    }
+    function isOptionalDate(v) {
+      return v == null || (v is string && v.size() <= 10);
+    }
+
+    function validTransaction(d) {
+      return isText(d.description, 200) && d.description.size() > 0
+          && isMoney(d.amount) && d.amount > 0
+          && d.type in ['income', 'expense']
+          && isText(d.category, 80)
+          && isDateText(d.date);
+    }
+    function validGoal(d) {
+      return isText(d.name, 120) && d.name.size() > 0
+          && isMoney(d.targetAmount)
+          && isMoney(d.currentAmount)
+          && isOptionalDate(d.get('deadline', null));
+    }
+    function validInvestment(d) {
+      return isText(d.ticker, 30) && d.ticker.size() > 0
+          && isText(d.category, 40)
+          && isMoney(d.quantity)
+          && isMoney(d.avgPrice)
+          && isMoney(d.currentPrice)
+          && isOptionalDate(d.get('purchaseDate', null))
+          && d.get('purchases', []).size() <= 5000
+          && d.get('sales', []).size() <= 5000;
+    }
+    function validDividend(d) {
+      return isText(d.ticker, 30) && d.ticker.size() > 0
+          && isText(d.type, 30)
+          && isMoney(d.amount)
+          && isDateText(d.date);
+    }
+    function validBudget(d) {
+      return isMoney(d.monthlyLimit);
+    }
+    function validRecurrence(d) {
+      return isText(d.description, 200) && d.description.size() > 0
+          && isMoney(d.amount) && d.amount > 0
+          && d.type in ['income', 'expense']
+          && isText(d.category, 80)
+          && d.dayOfMonth is int && d.dayOfMonth >= 1 && d.dayOfMonth <= 31;
+    }
+    function validSettings(d) {
+      return d.keys().size() <= 30;
+    }
+    function validDoc(collection, d) {
+      return (collection == 'transactions' && validTransaction(d))
+          || (collection == 'goals' && validGoal(d))
+          || (collection == 'investments' && validInvestment(d))
+          || (collection == 'dividends' && validDividend(d))
+          || (collection == 'budgets' && validBudget(d))
+          || (collection == 'recurrences' && validRecurrence(d))
+          || (collection == 'settings' && validSettings(d));
+    }
+
     // Perfil do usuário (coupleId, displayName, email) e suas coleções
     // pessoais (transactions, goals, investments, dividends, budgets,
-    // recurrences) — só o próprio dono acessa.
+    // recurrences, settings) — só o próprio dono acessa.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+                             && isText(request.resource.data.get('displayName', ''), 120)
+                             && isText(request.resource.data.get('email', ''), 320)
+                             && isText(request.resource.data.get('coupleId', ''), 60)
+                             && isText(request.resource.data.get('pendingCoupleId', ''), 60);
 
       match /{collection}/{docId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+                               && validDoc(collection, request.resource.data);
       }
     }
 
@@ -59,6 +140,11 @@ service cloud.firestore {
                      && request.auth.uid == coupleId
                      && request.resource.data.members == [request.auth.uid];
 
+      // O dono pode apagar o espaço quando é o único membro (exclusão da conta).
+      allow delete: if request.auth != null
+                     && request.auth.uid == coupleId
+                     && resource.data.members == [request.auth.uid];
+
       // Só o DONO altera o doc raiz, só o campo "members", só de forma
       // aditiva, e só para incluir (a) ele mesmo ou (b) UM solicitante que
       // tenha um pedido de entrada aberto.
@@ -80,6 +166,7 @@ service cloud.firestore {
         // existe e do qual ainda não é membro.
         allow create: if request.auth != null
                        && request.auth.uid == requesterUid
+                       && request.auth.token.email_verified == true
                        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'status', 'createdAt'])
                        && request.resource.data.uid == requesterUid
                        && request.resource.data.status == 'pending'
@@ -104,9 +191,13 @@ service cloud.firestore {
       // Dados financeiros reais do casal — só quem está em "members"
       // (os pedidos de entrada têm regras próprias acima).
       match /{collection}/{docId} {
-        allow read, write: if request.auth != null
+        allow read, delete: if request.auth != null
                              && collection != 'joinRequests'
                              && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.members;
+        allow create, update: if request.auth != null
+                               && collection != 'joinRequests'
+                               && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.members
+                               && validDoc(collection, request.resource.data);
       }
     }
 

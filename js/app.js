@@ -12,6 +12,10 @@ import {
   translateAuthError,
   updateDisplayName,
   requestPasswordReset,
+  sendVerificationEmail,
+  refreshEmailVerification,
+  reauthenticate,
+  deleteCurrentUser,
 } from "./auth.js";
 import {
   listenToTransactions,
@@ -51,6 +55,8 @@ import {
   listenToJoinRequests,
   approveJoinRequest,
   rejectJoinRequest,
+  deleteAccountData,
+  clearLocalCache,
 } from "./db.js";
 import { fetchQuotes, fetchDividendCalendar, fetchCryptoQuotes, fetchMarketIndices, B3_CATEGORIES, CRYPTO_CATEGORY } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
@@ -64,6 +70,7 @@ import {
   dividendNetAmount,
   applyInvestmentSale,
   getInvestmentSales,
+  passwordProblem,
 } from "./calc.js";
 import * as ui from "./ui.js";
 
@@ -480,6 +487,10 @@ function initUIBindings() {
 
   // Entrar no espaço de outra pessoa exige aprovação do dono: aqui só se envia o pedido.
   ui.onJoinCouple(async (coupleId) => {
+    if (!activeUser.emailVerified) {
+      ui.showToast("Confirme seu e-mail antes de pedir entrada em um espaço de casal (veja o aviso no topo).", "error");
+      return;
+    }
     try {
       await requestJoinCouple(activeUser.uid, coupleId, { email: activeUser.email || "", displayName: activeUser.displayName || "" });
       watchMyJoinRequest(coupleId);
@@ -529,6 +540,20 @@ function initUIBindings() {
     }
   });
 
+  ui.bindAccountSecurity({
+    onResend: async () => {
+      try {
+        await sendVerificationEmail();
+        ui.showToast("E-mail de confirmação enviado! Confira também a caixa de spam.", "success");
+      } catch (err) {
+        console.error(err);
+        ui.showToast(translateAuthError(err), "error");
+      }
+    },
+    onCheck: () => checkEmailVerification({ announce: true }),
+    onDelete: (password) => deleteAccountFlow(password),
+  });
+
   ui.onExportBackup(() => exportBackup());
   ui.onImportBackup((file) => importBackup(file));
 
@@ -545,6 +570,11 @@ function initUIBindings() {
 
     try {
       if (ui.getIsRegisterMode()) {
+        const problem = passwordProblem(password);
+        if (problem) {
+          ui.showAuthError(problem);
+          return;
+        }
         await register(email, password);
       } else {
         await login(email, password);
@@ -1285,6 +1315,71 @@ async function switchMode(mode) {
 }
 
 /* ---------------------------------------------------------------
+   Segurança da conta: e-mail confirmado e exclusão
+--------------------------------------------------------------- */
+async function checkEmailVerification({ announce = false } = {}) {
+  try {
+    const verified = await refreshEmailVerification();
+    if (activeUser) ui.renderAccountSecurity(activeUser);
+    if (announce) {
+      ui.showToast(verified ? "E-mail confirmado! Tudo liberado." : "Ainda não consta como confirmado. Abra o link do e-mail e tente de novo.", verified ? "success" : "info");
+    }
+  } catch (err) {
+    console.warn("Não foi possível conferir a verificação do e-mail:", err);
+    if (announce) ui.showToast(translateAuthError(err), "error");
+  }
+}
+
+function unsubscribeAll() {
+  for (const stop of [unsubscribeTransactions, unsubscribeGoals, unsubscribeInvestments, unsubscribeDividends, unsubscribeBudgets, unsubscribePortfolioSettings, unsubscribeRecurrences]) {
+    stop?.();
+  }
+  unsubscribeTransactions = unsubscribeGoals = unsubscribeInvestments = unsubscribeDividends = null;
+  unsubscribeBudgets = unsubscribePortfolioSettings = unsubscribeRecurrences = null;
+}
+
+let deletingAccount = false;
+
+async function deleteAccountFlow(password) {
+  if (deletingAccount || !activeUser) return;
+  deletingAccount = true;
+  ui.setDeleteAccountBusy(true);
+  try {
+    await reauthenticate(password); // confirma a senha antes de apagar qualquer coisa
+  } catch (err) {
+    deletingAccount = false;
+    ui.setDeleteAccountBusy(false);
+    ui.showDeleteAccountError(err?.code === "auth/invalid-credential" || err?.code === "auth/wrong-password" ? "Senha incorreta." : translateAuthError(err));
+    return;
+  }
+
+  try {
+    const uid = activeUser.uid;
+    stopCoupleInviteListeners();
+    unsubscribeAll();
+    const { keptSharedSpace } = await deleteAccountData(uid);
+    await deleteCurrentUser();
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("aportfy_"))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {
+      /* sem storage */
+    }
+    await clearLocalCache();
+    ui.closeDeleteAccountModal();
+    ui.showToast(keptSharedSpace ? "Conta excluída. O espaço de casal continua com o seu parceiro(a)." : "Conta e dados excluídos.", "info");
+    setTimeout(() => location.reload(), 1500);
+  } catch (err) {
+    console.error(err);
+    deletingAccount = false;
+    ui.setDeleteAccountBusy(false);
+    ui.showDeleteAccountError("Não foi possível concluir a exclusão. Tente de novo; se persistir, saia e entre na conta antes.");
+    if (activeUser) subscribeToActiveCollection();
+  }
+}
+
+/* ---------------------------------------------------------------
    Reação ao estado de autenticação
 --------------------------------------------------------------- */
 onAuthChange(async (user) => {
@@ -1297,6 +1392,9 @@ onAuthChange(async (user) => {
     ui.setActiveMode("personal");
     ui.setActiveView("dashboard");
     ui.renderProfileSettings(user);
+    ui.renderAccountSecurity(user);
+    // Quem confirmou o e-mail em outro aparelho/aba: relê o usuário para liberar o aviso e o token.
+    if (!user.emailVerified) checkEmailVerification();
 
     try {
       await upsertUserProfile(user.uid, { email: user.email, lastLoginAt: new Date().toISOString() });
@@ -1324,34 +1422,7 @@ onAuthChange(async (user) => {
     sessionRegisteredKeys.clear();
     latestBudgets = [];
     latestRecurrences = [];
-    if (unsubscribeTransactions) {
-      unsubscribeTransactions();
-      unsubscribeTransactions = null;
-    }
-    if (unsubscribeGoals) {
-      unsubscribeGoals();
-      unsubscribeGoals = null;
-    }
-    if (unsubscribeInvestments) {
-      unsubscribeInvestments();
-      unsubscribeInvestments = null;
-    }
-    if (unsubscribeDividends) {
-      unsubscribeDividends();
-      unsubscribeDividends = null;
-    }
-    if (unsubscribeBudgets) {
-      unsubscribeBudgets();
-      unsubscribeBudgets = null;
-    }
-    if (unsubscribePortfolioSettings) {
-      unsubscribePortfolioSettings();
-      unsubscribePortfolioSettings = null;
-    }
-    if (unsubscribeRecurrences) {
-      unsubscribeRecurrences();
-      unsubscribeRecurrences = null;
-    }
+    unsubscribeAll();
     ui.showLoginScreen();
   }
 });

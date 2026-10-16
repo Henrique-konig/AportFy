@@ -26,6 +26,7 @@ const html = readFileSync("index.html", "utf8");
 const uiSource = ["js/ui.js", ...readdirSync("js/ui").map((f) => `js/ui/${f}`)].map((f) => readFileSync(f, "utf8")).join("\n");
 
 let ui;
+const accountHandlers = { onResend: vi.fn(async () => {}), onCheck: vi.fn(async () => {}), onDelete: vi.fn() };
 const $ = (id) => document.getElementById(id);
 const text = (id) => $(id).textContent.replace(/\s+/g, " ").trim();
 const fire = (el, type) => el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
@@ -89,6 +90,7 @@ beforeAll(async () => {
   ui.bindTheme();
   ui.bindAccessibility();
   ui.bindOnboarding();
+  ui.bindAccountSecurity({ onResend: accountHandlers.onResend, onCheck: accountHandlers.onCheck, onDelete: accountHandlers.onDelete });
   ui.bindHistory();
   ui.bindPortfolioHealth();
   ui.bindSettingsForms();
@@ -690,5 +692,63 @@ describe("acessibilidade", () => {
     key("Escape");
     expect(popup.classList.contains("hidden")).toBe(true);
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+/* ---------------------------------------------------------------
+   Segurança da conta
+--------------------------------------------------------------- */
+describe("segurança da conta", () => {
+  it("avisa quando o e-mail não foi confirmado e some quando é confirmado", () => {
+    ui.renderAccountSecurity({ email: "ana@exemplo.com", emailVerified: false });
+    expect($("verify-banner").classList.contains("hidden")).toBe(false);
+    expect(text("verify-email")).toBe("ana@exemplo.com");
+    expect(text("settings-email-status")).toContain("ainda não confirmado");
+
+    ui.renderAccountSecurity({ email: "ana@exemplo.com", emailVerified: true });
+    expect($("verify-banner").classList.contains("hidden")).toBe(true);
+    expect(text("settings-email-status")).toContain("E-mail confirmado");
+
+    ui.renderAccountSecurity(null);
+    expect($("verify-banner").classList.contains("hidden")).toBe(true);
+  });
+
+  it("os botões do aviso chamam reenviar e conferir", async () => {
+    $("verify-check-btn").click();
+    expect(accountHandlers.onCheck).toHaveBeenCalledOnce();
+    $("verify-resend-btn").click();
+    expect(accountHandlers.onResend).toHaveBeenCalledOnce();
+    expect($("verify-resend-btn").disabled).toBe(true); // evita vários envios seguidos
+  });
+
+  it("excluir conta exige a senha antes de chamar a exclusão", () => {
+    ui.openDeleteAccountModal();
+    expect($("delete-account-modal").classList.contains("hidden")).toBe(false);
+
+    $("delete-account-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(accountHandlers.onDelete).not.toHaveBeenCalled();
+    expect($("delete-account-error").classList.contains("hidden")).toBe(false);
+
+    $("delete-account-password").value = "minhaSenha123";
+    $("delete-account-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(accountHandlers.onDelete).toHaveBeenCalledWith("minhaSenha123");
+  });
+
+  it("cancelar fecha o modal e limpa a senha digitada", () => {
+    ui.openDeleteAccountModal();
+    $("delete-account-password").value = "segredo123";
+    $("delete-account-cancel-btn").click();
+    expect($("delete-account-modal").classList.contains("hidden")).toBe(true);
+    expect($("delete-account-password").value).toBe("");
+  });
+
+  it("o modo cadastro mostra a regra da senha; o login não", () => {
+    expect($("password-hint").classList.contains("hidden")).toBe(true);
+    ui.toggleAuthMode();
+    expect($("password-hint").classList.contains("hidden")).toBe(false);
+    expect($("login-password").getAttribute("autocomplete")).toBe("new-password");
+    ui.toggleAuthMode();
+    expect($("password-hint").classList.contains("hidden")).toBe(true);
+    expect($("login-password").getAttribute("autocomplete")).toBe("current-password");
   });
 });

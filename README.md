@@ -92,8 +92,9 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Metas de alocação configuráveis (perfis Conservador, Moderado e Arrojado como ponto de partida, ou personalizadas). A análise é educativa e não indica ativos específicos.
 
 **Conta e dados**
-- Login com e-mail e senha, perfil e redefinição de senha por e-mail (em Configurações).
-- **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal.
+- Login com e-mail e senha, perfil e redefinição de senha por e-mail (em Configurações). Contas novas exigem senha de 8+ caracteres com letras e números e **confirmação do e-mail** (um aviso no topo permite reenviar o link).
+- **Excluir conta** (em Configurações): apaga todos os seus dados e a conta, pedindo a senha para confirmar.
+- **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal. Para pedir entrada é preciso ter o e-mail confirmado.
 - **Backup e restauração** de transações, metas, investimentos e proventos em arquivo `.json`.
 
 **App e acessibilidade**
@@ -224,11 +225,25 @@ Datas são strings `YYYY-MM-DD`, o que simplifica filtros e agrupamentos por mê
 
 ## Segurança
 
-- As regras em [`firestore.rules`](firestore.rules) restringem as coleções pessoais ao próprio dono (`auth.uid == userId`) e as do casal aos membros do espaço.
-- As credenciais do Firebase em `firebase-config.js` identificam o projeto e não são secretas; quem protege os dados são as regras do Firestore. Publique-as antes de usar dados reais.
-- **Modo Casal com convite:** quem tem o código só cria um *pedido de entrada*; apenas o dono do espaço aprova (o doc do espaço só aceita membros novos vindos do dono e com pedido aberto). Isso é verificado por testes automatizados das regras.
+**O que o projeto já faz**
+
+- As regras em [`firestore.rules`](firestore.rules) restringem as coleções pessoais ao próprio dono (`auth.uid == userId`) e as do casal aos membros do espaço. Tudo que não está nas regras é negado.
+- **Validação dos dados:** além de *quem* grava, as regras conferem *o quê*: tipos, valores entre 0 e 1 trilhão, textos com limite de tamanho, tipo da transação (`income`/`expense`), dia da recorrência (1–31) etc. Um cliente alterado não grava lixo nem valores absurdos. Coleções desconhecidas não aceitam gravação.
+- **Modo Casal com convite:** quem tem o código só cria um *pedido de entrada*; apenas o dono do espaço aprova (o doc do espaço só aceita membros novos vindos do dono e com pedido aberto). O pedido também exige **e-mail verificado** (`email_verified` do token).
+- **Cadastro:** senha de 8 a 128 caracteres com letras e números, e e-mail de confirmação enviado na criação da conta. O login não aplica essa regra, para não trancar contas antigas.
+- **Exclusão de conta:** pede a senha de novo (reautenticação), apaga todos os dados do Firestore (e o espaço de casal, se a pessoa for a única integrante), exclui o usuário e limpa o cache local do navegador.
+- **Cabeçalhos HTTP** (`vercel.json`): `X-Content-Type-Options`, `X-Frame-Options: DENY` (sem embutir o site em outras páginas), `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy` e `Cross-Origin-Opener-Policy`.
+- As credenciais do Firebase em `firebase-config.js` identificam o projeto e não são secretas; quem protege os dados são as regras do Firestore. A chave da Alpha Vantage fica só no servidor.
 - **Mudou as regras? Publique-as.** O deploy do app não publica o `firestore.rules`: cole o arquivo em **Firestore Database → Regras → Publicar** (ou `firebase deploy --only firestore:rules`).
-- Faça backups periódicos em **Configurações → Backup e Restauração**. A restauração **adiciona** os dados do arquivo e nunca apaga o que já existe.
+- Faça backups periódicos em **Configurações → Backup e Restauração**. A restauração **adiciona** os dados do arquivo e nunca apaga o que já existe (e passa pela mesma validação das regras).
+
+**Ajustes no Firebase / Google Cloud (feitos pelo console, não pelo código)**
+
+1. **Política de senha:** Firebase Console → Authentication → Settings → *Password policy*: exija mínimo de 8 caracteres (e, se quiser, maiúscula, número e símbolo). Vale para todas as contas novas, inclusive de quem chamar a API direto.
+2. **Restringir a chave de API:** Google Cloud Console → APIs e serviços → Credenciais → a chave "Browser key" do projeto → *Restrições de aplicativo* → *Referenciadores HTTP*: `aportfy.vercel.app/*`, `ecofy-c332d.firebaseapp.com/*` e, para desenvolver, `localhost/*`. Em *Restrições de API*, deixe só Identity Toolkit, Token Service, Cloud Firestore e Firebase Installations/Analytics.
+3. **Domínios autorizados:** Authentication → Settings → *Authorized domains*: deixe só `aportfy.vercel.app`, `ecofy-c332d.firebaseapp.com` e `localhost`.
+4. **App Check** (opcional, recomendado): Firebase Console → App Check → registre o app web com **reCAPTCHA v3**, copie a *site key* para `APP_CHECK_SITE_KEY` em [`js/firebase-config.js`](js/firebase-config.js), publique o site e, só depois de ver o tráfego "verificado" no console, ative a **imposição** para Firestore e Authentication.
+5. **Modelo de e-mail:** Authentication → Templates: ajuste o texto/idioma do e-mail de verificação e de redefinição de senha para português.
 
 ## Testes
 
@@ -249,7 +264,7 @@ npm test
 npm run test:rules
 ```
 
-Cobrem quem lê o quê, o fluxo de convite do Modo Casal (pedido, aprovação, recusa) e que ninguém entra num espaço sem a aprovação do dono.
+Cobrem quem lê o quê, o fluxo de convite do Modo Casal (pedido, aprovação, recusa, e-mail verificado), a validação do formato dos dados de cada coleção e a exclusão da conta.
 
 ## Deploy
 
@@ -274,6 +289,7 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 
 ## Limitações conhecidas
 
+- **Excluir conta no Modo Casal:** se o espaço tem mais de uma pessoa, ele continua com a outra (os dados compartilhados não são apagados); só os seus dados pessoais e a sua conta saem.
 - **Modo Casal:** só o dono aprova novos membros, e membros não podem ser removidos pela interface (a lista só cresce). O código sozinho não dá acesso, mas ainda vale compartilhá-lo só com quem você confia.
 - **Nome do projeto Firebase:** o ID do projeto (`ecofy-c332d`) é de antes do rebrand e não pode ser renomeado; só o nome de exibição muda (Console do Firebase → Configurações do projeto). Usuários e dados ficam nele.
 - **Histórico de aportes:** posições criadas antes do campo `purchases` aparecem como uma única compra, na data da última compra. Editar quantidade, preço ou data de um ativo também resume o histórico em uma compra única.

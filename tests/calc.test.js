@@ -28,6 +28,7 @@ import {
   shiftMonth,
   financialIndependencePlan,
   buildAlerts,
+  passwordProblem,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -577,5 +578,26 @@ describe("buildAlerts", () => {
     // ids estáveis mesmo quando o percentual muda
     const again = buildAlerts({ today, health: { alerts: [{ level: "critical", title: "TVRI11 representa 41,3% da carteira", detail: "x" }] } });
     expect(again[0].id).toBe(alerts.find((a) => a.view === "health").id);
+  });
+});
+
+describe("passwordProblem (senha de cadastro)", () => {
+  it("aceita senha com 8+ caracteres, letras e números", () => {
+    expect(passwordProblem("minhaSenha123")).toBeNull();
+    expect(passwordProblem("Senha-forte-2026!")).toBeNull();
+    expect(passwordProblem("açaí2026x")).toBeNull();
+  });
+
+  it("recusa curta, só letras, só números e repetida", () => {
+    expect(passwordProblem("abc123")).toMatch(/pelo menos 8/);
+    expect(passwordProblem("somenteletras")).toMatch(/letras e números/);
+    expect(passwordProblem("123456789")).toMatch(/letras e números/);
+    expect(passwordProblem("aaaaaaaa")).toMatch(/letras e números|menos óbvia/);
+    expect(passwordProblem("")).toMatch(/pelo menos 8/);
+    expect(passwordProblem(undefined)).toMatch(/pelo menos 8/);
+  });
+
+  it("recusa senha gigante", () => {
+    expect(passwordProblem("a1".repeat(70))).toMatch(/no máximo 128/);
   });
 });

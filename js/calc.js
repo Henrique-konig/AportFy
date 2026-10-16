@@ -696,6 +696,20 @@ export function buildDividendCalendar(yyyyMm, events) {
 }
 
 /** Mês anterior/seguinte no formato "AAAA-MM". */
+/**
+ * Confere a senha de um NOVO cadastro: mínimo de 8 caracteres, com letras e números.
+ * Devolve a mensagem do problema, ou null se a senha serve. (O login não usa isto,
+ * para não trancar quem criou a conta com a regra antiga.)
+ */
+export function passwordProblem(password) {
+  const p = String(password ?? "");
+  if (p.length < 8) return "A senha precisa ter pelo menos 8 caracteres.";
+  if (p.length > 128) return "A senha pode ter no máximo 128 caracteres.";
+  if (!/[A-Za-zÀ-ÿ]/.test(p) || !/\d/.test(p)) return "Use letras e números na senha.";
+  if (/^(.)\1+$/.test(p)) return "Escolha uma senha menos óbvia.";
+  return null;
+}
+
 export function shiftMonth(yyyyMm, delta) {
   const [y, m] = yyyyMm.split("-").map(Number);
   const d = new Date(y, m - 1 + delta, 1);

@@ -91,13 +91,14 @@
       <form id="login-form" class="space-y-4">
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1.5" for="login-email">E-mail</label>
-          <input required type="email" id="login-email" placeholder="voce@email.com"
+          <input required type="email" id="login-email" autocomplete="email" placeholder="voce@email.com"
             class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1.5" for="login-password">Senha</label>
-          <input required type="password" id="login-password" placeholder="••••••••" minlength="6"
+          <input required type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" maxlength="128" aria-describedby="password-hint"
             class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          <p id="password-hint" class="hidden text-[11px] text-slate-500 mt-1.5">Mínimo de 8 caracteres, com letras e números.</p>
         </div>
 
         <button type="submit" id="login-submit-btn"
@@ -282,6 +283,16 @@
 
         <!-- SCROLLABLE CONTENT -->
         <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto custom-scroll px-4 sm:px-6 lg:px-8 py-6 space-y-6 focus:outline-none">
+
+          <!-- AVISO: E-MAIL NÃO CONFIRMADO -->
+          <div id="verify-banner" class="hidden glass-card rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 !border-amber-500/30" role="status">
+            <i class="ph-fill ph-envelope-simple text-amber-400 text-xl shrink-0" aria-hidden="true"></i>
+            <p class="text-sm flex-1 min-w-[12rem]"><strong>Confirme seu e-mail.</strong> Enviamos um link para <span id="verify-email" class="font-semibold break-all"></span>. A confirmação é necessária para entrar no espaço de um parceiro(a) no Modo Casal.</p>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" id="verify-resend-btn" class="text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-lg transition-colors">Reenviar e-mail</button>
+              <button type="button" id="verify-check-btn" class="text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-2 rounded-lg transition-colors">Já confirmei</button>
+            </div>
+          </div>
 
           <!-- Page title (compartilhado entre views) -->
           <div class="flex items-center justify-between animate-fade-in">
@@ -1414,8 +1425,17 @@
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
               <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-shield-check text-lg"></i> Segurança</h3>
               <p class="text-xs text-slate-500 mb-4">Enviaremos um e-mail com um link para você redefinir sua senha.</p>
+              <p id="settings-email-status" class="text-xs mb-4 flex items-center gap-1.5"></p>
               <button id="settings-reset-password-btn" type="button" class="bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">
                 Enviar e-mail de redefinição
+              </button>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up !border-red-500/25">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2 text-red-400"><i class="ph-bold ph-warning text-lg" aria-hidden="true"></i> Excluir conta</h3>
+              <p class="text-xs text-slate-500 mb-4">Apaga a sua conta e todos os seus dados (transações, metas, investimentos, proventos e orçamentos). Não dá para desfazer — baixe um backup antes, se quiser guardar algo.</p>
+              <button id="settings-delete-account-btn" type="button" class="bg-red-600/15 hover:bg-red-600/25 text-red-400 text-sm font-semibold px-5 py-2.5 rounded-xl border border-red-500/30 transition-all">
+                Excluir minha conta
               </button>
             </section>
           </div>
@@ -1964,6 +1984,30 @@
         <button id="delete-cancel-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">Cancelar</button>
         <button id="delete-confirm-btn" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">Excluir</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: EXCLUIR CONTA ============ -->
+  <div id="delete-account-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="delete-account-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-sm glass-card rounded-3xl p-6 sm:p-7 animate-scale-in">
+      <div class="w-14 h-14 rounded-2xl bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+        <i class="ph-fill ph-warning text-2xl text-red-400" aria-hidden="true"></i>
+      </div>
+      <h3 class="text-lg font-bold mb-1.5 text-center" id="delete-account-title">Excluir sua conta?</h3>
+      <p class="text-sm text-slate-400 mb-4 text-center">Todos os seus dados serão apagados para sempre. Se você divide um espaço de casal com outra pessoa, o espaço continua com ela.</p>
+      <form id="delete-account-form" class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="delete-account-password">Digite sua senha para confirmar</label>
+          <input required type="password" id="delete-account-password" autocomplete="current-password" maxlength="128"
+            class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/60 focus:border-red-500 transition-all" />
+        </div>
+        <div id="delete-account-error" class="hidden text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2" role="alert"></div>
+        <div class="flex gap-3 pt-1">
+          <button type="button" id="delete-account-cancel-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">Cancelar</button>
+          <button type="submit" id="delete-account-confirm-btn" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">Excluir tudo</button>
+        </div>
+      </form>
     </div>
   </div>
 

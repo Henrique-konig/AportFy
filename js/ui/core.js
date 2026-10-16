@@ -497,6 +497,10 @@ export function toggleAuthMode() {
   el.toggleAuthModeBtn.innerHTML = state.isRegisterMode
     ? `Já tem uma conta? <span class="text-blue-400 font-semibold">Entrar</span>`
     : `Não tem uma conta? <span class="text-blue-400 font-semibold">Criar conta</span>`;
+  // Cadastro: senha nova e regra visível. Login: sem regra (contas antigas podem ter senha curta).
+  const hint = document.getElementById("password-hint");
+  hint?.classList.toggle("hidden", !state.isRegisterMode);
+  el.loginPassword.setAttribute("autocomplete", state.isRegisterMode ? "new-password" : "current-password");
   clearAuthError();
 }
 

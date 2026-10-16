@@ -27,6 +27,18 @@ const firebaseConfig = {
 // Inicializa o app Firebase
 const app = initializeApp(firebaseConfig);
 
+// App Check (opcional): com uma chave reCAPTCHA v3 aqui, o Firebase só aceita chamadas vindas
+// do site de verdade, não de scripts avulsos. Passo a passo no README ("Segurança").
+// Enquanto estiver vazio, nada muda.
+const APP_CHECK_SITE_KEY = "";
+if (APP_CHECK_SITE_KEY) {
+  import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app-check.js")
+    .then(({ initializeAppCheck, ReCaptchaV3Provider }) => {
+      initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    })
+    .catch((err) => console.warn("App Check indisponível:", err));
+}
+
 // Serviços exportados para uso em outros módulos
 export const auth = getAuth(app);
 // Cache local (IndexedDB): o app abre com os últimos dados mesmo sem internet e sincroniza

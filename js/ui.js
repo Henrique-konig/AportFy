@@ -25,3 +25,4 @@ export * from "./ui/pwa.js";
 export * from "./ui/theme.js";
 export * from "./ui/a11y.js";
 export * from "./ui/onboarding.js";
+export * from "./ui/account.js";

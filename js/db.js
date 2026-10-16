@@ -19,8 +19,12 @@ import {
   serverTimestamp,
   setDoc,
   getDoc,
+  getDocs,
+  writeBatch,
   arrayUnion,
   deleteField,
+  terminate,
+  clearIndexedDbPersistence,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 /**
@@ -672,4 +676,60 @@ export function listenToPortfolioSettings(mode, id, callback) {
 export async function savePortfolioSettings(mode, id, settings) {
   // merge: a meta de renda e as metas de alocação são salvas em momentos diferentes.
   return setDoc(getPortfolioSettingsRef(mode, id), { ...settings, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/* ---------------------------------------------------------------
+   Exclusão da conta
+--------------------------------------------------------------- */
+
+const ACCOUNT_COLLECTIONS = ["transactions", "goals", "investments", "dividends", "budgets", "recurrences", "settings"];
+
+/** Apaga todos os documentos de uma coleção, em lotes (o Firestore limita 500 por lote). */
+async function deleteCollection(path) {
+  const snap = await getDocs(collection(db, path));
+  let batch = writeBatch(db);
+  let count = 0;
+  for (const d of snap.docs) {
+    batch.delete(d.ref);
+    count++;
+    if (count === 400) {
+      await batch.commit();
+      batch = writeBatch(db);
+      count = 0;
+    }
+  }
+  if (count > 0) await batch.commit();
+}
+
+/**
+ * Apaga tudo o que o usuário tem no Firestore: dados pessoais, perfil e o espaço de casal
+ * dele — este só se ele for o único membro (com parceiro(a), o espaço continua com o outro).
+ * @returns {Promise<{ keptSharedSpace: boolean }>}
+ */
+export async function deleteAccountData(userId) {
+  let keptSharedSpace = false;
+  const coupleRef = doc(db, "couples", userId);
+  const couple = await getDoc(coupleRef);
+  if (couple.exists()) {
+    const members = couple.data().members || [];
+    if (members.length <= 1) {
+      for (const name of [...ACCOUNT_COLLECTIONS, "joinRequests"]) await deleteCollection(`couples/${userId}/${name}`);
+      await deleteDoc(coupleRef);
+    } else {
+      keptSharedSpace = true;
+    }
+  }
+  for (const name of ACCOUNT_COLLECTIONS) await deleteCollection(`users/${userId}/${name}`);
+  await deleteDoc(doc(db, "users", userId));
+  return { keptSharedSpace };
+}
+
+/** Limpa o cache offline do Firestore deste navegador (melhor esforço). */
+export async function clearLocalCache() {
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch (err) {
+    console.warn("Não foi possível limpar o cache local:", err);
+  }
 }
