@@ -19,7 +19,34 @@ function ensurePopup() {
   popupEl = document.createElement("div");
   popupEl.id = "dropdown-popup";
   popupEl.className = "hidden fixed z-[70] glass-card rounded-2xl p-1.5 animate-scale-in max-h-72 overflow-y-auto custom-scroll";
+  popupEl.setAttribute("role", "listbox");
   document.body.appendChild(popupEl);
+
+  // Teclado: setas/Home/End navegam, Esc fecha e devolve o foco, Tab fecha.
+  popupEl.addEventListener("keydown", (e) => {
+    const options = [...popupEl.querySelectorAll(".dd-option")];
+    const index = options.indexOf(document.activeElement);
+    const focusAt = (i) => options[Math.max(0, Math.min(options.length - 1, i))]?.focus();
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      focusAt(index + 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      focusAt(index - 1);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      focusAt(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      focusAt(options.length - 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDropdown({ restoreFocus: true });
+    } else if (e.key === "Tab") {
+      closeDropdown({ restoreFocus: true });
+    }
+  });
 
   document.addEventListener("click", (e) => {
     if (!activeField) return;
@@ -27,7 +54,7 @@ function ensurePopup() {
     closeDropdown();
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && activeField) closeDropdown();
+    if (e.key === "Escape" && activeField) closeDropdown({ restoreFocus: true });
   });
   // Rolar a própria lista de opções não deve fechá-la — só fecha quando o
   // scroll acontece fora do popup (ex: a página ou um modal por trás dele).
@@ -71,7 +98,7 @@ function renderOptions() {
     .map((opt) => {
       const isSelected = opt.value === selectEl.value;
       const safeValue = opt.value.replace(/"/g, "&quot;");
-      return `<button type="button" class="dd-option w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isSelected ? "dd-option-selected" : ""}" data-value="${safeValue}">${opt.textContent}</button>`;
+      return `<button type="button" role="option" aria-selected="${isSelected}" class="dd-option w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isSelected ? "dd-option-selected" : ""}" data-value="${safeValue}">${opt.textContent}</button>`;
     })
     .join("");
 
@@ -87,15 +114,19 @@ function selectOption(value) {
   const { selectEl, labelEl } = activeField;
   selectEl.value = value;
   labelEl.textContent = selectEl.options[selectEl.selectedIndex]?.textContent || "";
+  updateTriggerName(activeField);
   selectEl.dispatchEvent(new Event("change", { bubbles: true }));
-  closeDropdown();
+  closeDropdown({ restoreFocus: true });
 }
 
-export function closeDropdown() {
+export function closeDropdown({ restoreFocus = false } = {}) {
   if (!popupEl || popupEl.classList.contains("hidden")) return;
   popupEl.classList.add("hidden");
-  activeField?.triggerBtn.classList.remove("dp-trigger-open");
+  const trigger = activeField?.triggerBtn;
+  trigger?.classList.remove("dp-trigger-open");
+  trigger?.setAttribute("aria-expanded", "false");
   activeField = null;
+  if (restoreFocus) trigger?.focus();
 }
 
 function openDropdownFor(field) {
@@ -109,6 +140,15 @@ function openDropdownFor(field) {
   renderOptions();
   popupEl.classList.remove("hidden");
   field.triggerBtn.classList.add("dp-trigger-open");
+  field.triggerBtn.setAttribute("aria-expanded", "true");
+  (popupEl.querySelector(".dd-option-selected") || popupEl.querySelector(".dd-option"))?.focus({ preventScroll: true });
+}
+
+/** Nome acessível do botão: "Rótulo do campo: valor escolhido". */
+function updateTriggerName(field) {
+  const value = field.labelEl.textContent.trim();
+  const fieldLabel = document.querySelector(`label[for="${field.selectEl.id}"]`)?.textContent.trim() || field.selectEl.getAttribute("aria-label") || "";
+  field.triggerBtn.setAttribute("aria-label", fieldLabel ? `${fieldLabel}: ${value}` : value);
 }
 
 /**
@@ -126,14 +166,26 @@ export function enhanceSelect(selectId) {
   triggerBtn.className = `${selectEl.className} date-trigger flex items-center justify-between gap-2 text-left`;
   triggerBtn.innerHTML = `<span class="dd-label truncate"></span><i class="ph-bold ph-caret-down text-slate-500 text-xs shrink-0"></i>`;
 
+  triggerBtn.setAttribute("aria-haspopup", "listbox");
+  triggerBtn.setAttribute("aria-expanded", "false");
+
+  // O <select> original continua guardando o valor, mas sai da ordem do Tab e
+  // da árvore de acessibilidade (quem fala com o usuário é o botão).
   selectEl.classList.add("sr-only-select");
+  selectEl.tabIndex = -1;
+  selectEl.setAttribute("aria-hidden", "true");
   selectEl.insertAdjacentElement("afterend", triggerBtn);
+  document.querySelector(`label[for="${selectId}"]`)?.addEventListener("click", (e) => {
+    e.preventDefault();
+    triggerBtn.focus();
+  });
 
   const labelEl = triggerBtn.querySelector(".dd-label");
   labelEl.textContent = selectEl.options[selectEl.selectedIndex]?.textContent || "";
 
   const field = { selectEl, triggerBtn, labelEl };
   registry.set(selectId, field);
+  updateTriggerName(field);
 
   triggerBtn.addEventListener("click", () => openDropdownFor(field));
 }
@@ -148,4 +200,5 @@ export function refreshDropdown(selectId) {
   const field = registry.get(selectId);
   if (!field) return;
   field.labelEl.textContent = field.selectEl.options[field.selectEl.selectedIndex]?.textContent || "";
+  updateTriggerName(field);
 }

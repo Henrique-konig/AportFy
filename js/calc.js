@@ -535,3 +535,300 @@ export function summarizeHistory(events) {
     { bought: 0, sold: 0, dividends: 0, realized: 0 }
   );
 }
+
+/* =========================================================
+   Carteira x Mercado (CDI, IBOV, IFIX)
+   Compara a carteira com o que os MESMOS aportes e vendas, nas mesmas
+   datas, teriam virado se tivessem ido para cada índice.
+   ========================================================= */
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const parseBrNumber = (v) => Number(String(v).replace(/\./g, "").replace(",", "."));
+
+/**
+ * Converte a matriz dia × mês da B3 (GetPortfolioDay: { day, rateValue1..12 }, valores
+ * "160.538,69") em pontos [data ISO, valor], em ordem cronológica.
+ */
+export function parseB3IndexYear(results, year) {
+  const points = [];
+  (Array.isArray(results) ? results : []).forEach((row) => {
+    for (let month = 1; month <= 12; month++) {
+      const raw = row[`rateValue${month}`];
+      if (raw == null || raw === "") continue;
+      const value = parseBrNumber(raw);
+      if (Number.isFinite(value) && value > 0) points.push([`${year}-${pad2(month)}-${pad2(row.day)}`, value]);
+    }
+  });
+  return points.sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/** Índice acumulado do CDI a partir das taxas diárias (% ao dia): [[data, índice]], começando em 1. */
+export function buildCdiIndex(rows) {
+  let index = 1;
+  return [...rows]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((r) => {
+      index *= 1 + (Number(r.rate) || 0) / 100;
+      return [r.date, index];
+    });
+}
+
+/** Valor da série na data (último ponto até a data; antes do início, o primeiro ponto). */
+function valueAt(series, date) {
+  let lo = 0;
+  let hi = series.length - 1;
+  if (date < series[0][0]) return series[0][1];
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (series[mid][0] <= date) lo = mid;
+    else hi = mid - 1;
+  }
+  return series[lo][1];
+}
+
+/** Fluxos de caixa da carteira: compras entram (+), vendas saem (−), em ordem de data. */
+export function investmentCashFlows(investments) {
+  const flows = [];
+  investments.forEach((inv) => {
+    getInvestmentPurchases(inv).forEach((p) => flows.push({ date: String(p.date).slice(0, 10), amount: (Number(p.quantity) || 0) * (Number(p.price) || 0) }));
+    getInvestmentSales(inv).forEach((s) => flows.push({ date: String(s.date).slice(0, 10), amount: -(Number(s.quantity) || 0) * (Number(s.price) || 0) }));
+  });
+  return flows.filter((f) => f.amount !== 0).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Valor, em cada data, dos mesmos fluxos aplicados na série do índice. */
+export function simulateBenchmark(flows, series, dates) {
+  if (!Array.isArray(series) || series.length === 0) return null;
+  return dates.map((date) => {
+    const valueOnDate = valueAt(series, date);
+    return flows.filter((f) => f.date <= date).reduce((sum, f) => sum + (f.amount * valueOnDate) / valueAt(series, f.date), 0);
+  });
+}
+
+/**
+ * Comparação completa para a tela: carteira (valor atual + proventos recebidos) contra
+ * CDI, IBOV e IFIX com os mesmos aportes e vendas.
+ * @param {{cdi:Array<{date:string, rate:number}>, ibov:Array<[string, number]>, ifix:Array<[string, number]>}} indices
+ */
+export function buildMarketComparison(investments, dividends, indices, today) {
+  const flows = investmentCashFlows(investments).filter((f) => f.date <= today);
+  if (flows.length === 0) return { empty: true };
+
+  const firstDate = flows[0].date;
+  const tickers = new Set(investments.map((inv) => inv.ticker));
+  const netInvested = flows.reduce((sum, f) => sum + f.amount, 0);
+  const portfolioValue = investments.reduce((sum, inv) => sum + calcInvestmentMetrics(inv).totalValue, 0);
+  const dividendsReceived = dividends
+    .filter((d) => tickers.has(d.ticker) && d.date >= firstDate && d.date <= today)
+    .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const portfolioTotal = portfolioValue + dividendsReceived;
+  const pctOf = (value) => (netInvested > 0 ? ((value - netInvested) / netInvested) * 100 : null);
+
+  // Um ponto por fim de mês, do primeiro aporte até hoje.
+  const dates = [];
+  const [fy, fm] = firstDate.split("-").map(Number);
+  const [ty, tm] = today.split("-").map(Number);
+  for (let y = fy, m = fm; y < ty || (y === ty && m < tm); m === 12 ? (y++, (m = 1)) : m++) {
+    dates.push(`${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`);
+  }
+  dates.push(today);
+
+  const series = { cdi: buildCdiIndex(indices?.cdi || []), ibov: indices?.ibov || [], ifix: indices?.ifix || [] };
+  const benchmarks = {};
+  for (const [key, s] of Object.entries(series)) {
+    const values = simulateBenchmark(flows, s, dates);
+    benchmarks[key] = values ? { values, final: values[values.length - 1], pct: pctOf(values[values.length - 1]) } : null;
+  }
+
+  return {
+    empty: false,
+    firstDate,
+    dates,
+    invested: dates.map((d) => flows.filter((f) => f.date <= d).reduce((sum, f) => sum + f.amount, 0)),
+    netInvested,
+    portfolioValue,
+    dividendsReceived,
+    portfolioTotal,
+    portfolioPct: pctOf(portfolioTotal),
+    benchmarks,
+  };
+}
+
+/* =========================================================
+   Calendário de proventos
+   ========================================================= */
+
+/**
+ * Grade de um mês (semanas de domingo a sábado) com os proventos de cada dia.
+ * @param {string} yyyyMm mês, ex: "2026-10"
+ * @param {Array<{paymentDate:string, total:number, status:"received"|"upcoming"}>} events
+ * @returns {{ weeks: Array<Array<null|{date:string, day:number, received:number, upcoming:number, count:number}>>, received:number, upcoming:number }}
+ */
+export function buildDividendCalendar(yyyyMm, events) {
+  const [year, month] = yyyyMm.split("-").map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+
+  const byDate = {};
+  let received = 0;
+  let upcoming = 0;
+  events
+    .filter((e) => String(e.paymentDate).startsWith(yyyyMm))
+    .forEach((e) => {
+      const cell = (byDate[e.paymentDate] ||= { received: 0, upcoming: 0, count: 0 });
+      const amount = Number(e.total) || 0;
+      cell[e.status === "upcoming" ? "upcoming" : "received"] += amount;
+      cell.count += 1;
+      if (e.status === "upcoming") upcoming += amount;
+      else received += amount;
+    });
+
+  const cells = Array.from({ length: firstWeekday }, () => null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${yyyyMm}-${String(day).padStart(2, "0")}`;
+    cells.push({ date, day, received: 0, upcoming: 0, count: 0, ...byDate[date] });
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return { weeks, received, upcoming };
+}
+
+/** Mês anterior/seguinte no formato "AAAA-MM". */
+export function shiftMonth(yyyyMm, delta) {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/* =========================================================
+   Independência financeira
+   ========================================================= */
+
+/**
+ * Quando a renda de proventos alcança a meta mensal, seguindo a mesma simulação da
+ * projeção (aportes mensais, valorização e dividend yield, com proventos reinvestidos).
+ * @returns {{ requiredWealth:number|null, months:number|null, reachedAlready:boolean }}
+ *   requiredWealth: patrimônio que, com o yield informado, paga a meta;
+ *   months: meses até chegar lá (null se não chega em `maxYears`).
+ */
+export function financialIndependencePlan({ initial, monthlyContribution, annualAppreciation, annualYield, targetMonthlyIncome, maxYears = 60 }) {
+  const target = Number(targetMonthlyIncome) || 0;
+  const yieldPct = Number(annualYield) || 0;
+  if (target <= 0 || yieldPct <= 0) return { requiredWealth: null, months: null, reachedAlready: false };
+
+  const requiredWealth = (target * 12) / (yieldPct / 100);
+  if ((Number(initial) || 0) >= requiredWealth) return { requiredWealth, months: 0, reachedAlready: true };
+
+  const { points } = projectPortfolio({ initial, monthlyContribution, annualAppreciation, annualYield: yieldPct, reinvest: true, years: maxYears });
+  const hit = points.find((p) => p.balance >= requiredWealth);
+  return { requiredWealth, months: hit ? hit.month : null, reachedAlready: false };
+}
+
+/* =========================================================
+   Central de alertas
+   ========================================================= */
+
+const brl = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+const shortDate = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const addDays = (iso, days) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString("sv-SE");
+};
+const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000);
+const listTickers = (items) => {
+  const tickers = [...new Set(items.map((i) => i.ticker))];
+  return tickers.slice(0, 3).join(", ") + (tickers.length > 3 ? ` e mais ${tickers.length - 3}` : "");
+};
+
+/**
+ * Alertas a partir dos dados do app. Cada alerta tem um `id` estável, para o app saber
+ * quais o usuário já viu (o id muda quando a situação muda — ex: mês, valor, quantidade).
+ * @returns {Array<{id:string, level:"critical"|"warning"|"success"|"info", icon:string, title:string, detail:string, view:string}>}
+ */
+export function buildAlerts({ today, dividends = [], upcoming = [], budgets = [], transactions = [], investments = [], health = null, goals = [], joinRequests = 0 }) {
+  const alerts = [];
+  const month = today.slice(0, 7);
+
+  // Proventos que caíram hoje
+  const paidToday = dividends.filter((d) => d.date === today);
+  if (paidToday.length > 0) {
+    const total = paidToday.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    alerts.push({ id: `div-today-${today}-${paidToday.length}`, level: "success", icon: "ph-coins", title: `Caíram ${brl(total)} em proventos hoje`, detail: listTickers(paidToday), view: "investments" });
+  }
+
+  // Proventos dos próximos 7 dias
+  const nextWeek = upcoming.filter((u) => u.paymentDate > today && u.paymentDate <= addDays(today, 7));
+  if (nextWeek.length > 0) {
+    const total = nextWeek.reduce((sum, u) => sum + (Number(u.total) || 0), 0);
+    const detail = nextWeek
+      .slice()
+      .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate))
+      .slice(0, 3)
+      .map((u) => `${u.ticker} ${shortDate(u.paymentDate)}`)
+      .join(", ");
+    alerts.push({ id: `div-week-${today}-${nextWeek.length}`, level: "info", icon: "ph-calendar-check", title: `${brl(total)} em proventos nos próximos 7 dias`, detail, view: "investments" });
+  }
+
+  // Orçamentos do mês
+  budgets.forEach((b) => {
+    const limit = Number(b.monthlyLimit) || 0;
+    if (limit <= 0) return;
+    const spent = calcBudgetSpent(b.category, transactions, new Date(`${today}T00:00:00`));
+    const pct = (spent / limit) * 100;
+    if (pct >= 100) {
+      alerts.push({ id: `budget-${b.category}-${month}-over`, level: "critical", icon: "ph-warning-octagon", title: `Orçamento de ${b.category} estourado`, detail: `${brl(spent)} gastos de ${brl(limit)} no mês.`, view: "budget" });
+    } else if (pct >= 90) {
+      alerts.push({ id: `budget-${b.category}-${month}-near`, level: "warning", icon: "ph-warning", title: `${b.category} já usou ${Math.floor(pct)}% do orçamento`, detail: `Restam ${brl(limit - spent)} para o mês.`, view: "budget" });
+    }
+  });
+
+  // Saúde da carteira: só os pontos críticos (o resto fica na aba)
+  (health?.alerts || [])
+    .filter((a) => a.level === "critical")
+    .forEach((a) => alerts.push({ id: `health-${a.title.replace(/[\d.,]+/g, "#")}`, level: "warning", icon: "ph-heartbeat", title: a.title, detail: a.detail, view: "health" }));
+
+  // Cotações que não atualizaram
+  const staleQuotes = investments.filter((inv) => inv.lastQuoteError && (Number(inv.quantity) || 0) > 0);
+  if (staleQuotes.length > 0) {
+    alerts.push({
+      id: `quotes-${today}-${staleQuotes.length}`,
+      level: "warning",
+      icon: "ph-plugs",
+      title: `Cotação desatualizada em ${staleQuotes.length} ativo${staleQuotes.length === 1 ? "" : "s"}`,
+      detail: `${listTickers(staleQuotes)}: mostrando o último preço salvo.`,
+      view: "investments",
+    });
+  }
+
+  // Metas com prazo perto ou vencido
+  goals.forEach((g) => {
+    if (!g.deadline) return;
+    const target = Number(g.targetAmount) || 0;
+    const progress = target > 0 ? Math.min(100, ((Number(g.currentAmount) || 0) / target) * 100) : 0;
+    if (progress >= 100) return;
+    const days = daysBetween(today, g.deadline);
+    if (days < 0) {
+      alerts.push({ id: `goal-${g.id}-overdue`, level: "warning", icon: "ph-target", title: `Prazo da meta "${g.name}" passou`, detail: `${Math.round(progress)}% concluída. Revise o prazo ou o valor.`, view: "goals" });
+    } else if (days <= 30) {
+      alerts.push({ id: `goal-${g.id}-soon-${g.deadline}`, level: "info", icon: "ph-target", title: `Meta "${g.name}" vence em ${days} dia${days === 1 ? "" : "s"}`, detail: `${Math.round(progress)}% concluída.`, view: "goals" });
+    }
+  });
+
+  // Pedidos de entrada no espaço de casal
+  if (joinRequests > 0) {
+    alerts.push({
+      id: `join-${joinRequests}`,
+      level: "warning",
+      icon: "ph-user-plus",
+      title: `${joinRequests} pedido${joinRequests === 1 ? "" : "s"} para entrar no seu espaço de casal`,
+      detail: "Aprove ou recuse em Configurações.",
+      view: "settings",
+    });
+  }
+
+  const order = { critical: 0, warning: 1, success: 2, info: 3 };
+  return alerts.sort((a, b) => order[a.level] - order[b.level]);
+}

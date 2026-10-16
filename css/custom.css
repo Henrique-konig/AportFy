@@ -599,3 +599,291 @@ body.mode-couple .dd-option-selected {
   background: linear-gradient(135deg, #9333ea, #a855f7) !important;
 }
 
+/* ---------- Escolha do tema (Configurações) ---------- */
+.theme-opt-btn {
+  color: #94a3b8;
+}
+.theme-opt-btn[aria-pressed="true"] {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+html.theme-light .theme-opt-btn {
+  color: #64748b;
+}
+html.theme-light .theme-opt-btn[aria-pressed="true"] {
+  color: #1d4ed8;
+}
+
+/* =========================================================
+   Acessibilidade: foco visível, movimento reduzido, link de pular
+   ========================================================= */
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible,
+.date-trigger:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  padding: 0.6rem 1rem;
+  border-radius: 0.75rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.skip-link:focus {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================
+   Tema claro (html.theme-light)
+   O app foi desenhado no escuro, com as cores direto nas classes
+   do Tailwind; aqui elas são remapeadas para uma paleta clara.
+   ========================================================= */
+html.theme-light {
+  color-scheme: light;
+}
+html.theme-light body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  background-image: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%), radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.06) 0px, transparent 50%);
+}
+html.theme-light .glow-orb {
+  opacity: 0.25;
+}
+
+/* Superfícies */
+html.theme-light .glass-card,
+html.theme-light #datepicker-popup,
+html.theme-light #dropdown-popup {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(203, 213, 225, 0.9);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+html.theme-light .glass-card:hover {
+  border-color: rgba(148, 163, 184, 0.9);
+}
+html.theme-light .bg-slate-950 {
+  background-color: #f1f5f9;
+}
+html.theme-light .bg-slate-950\/60,
+html.theme-light .bg-slate-950\/40 {
+  background-color: rgba(255, 255, 255, 0.75);
+}
+/* fundo escurecido atrás dos modais */
+html.theme-light .bg-slate-950\/70 {
+  background-color: rgba(15, 23, 42, 0.35);
+}
+html.theme-light .bg-slate-900\/80,
+html.theme-light .bg-slate-900\/70,
+html.theme-light .bg-slate-900\/60 {
+  background-color: #ffffff;
+}
+html.theme-light .bg-slate-900\/50,
+html.theme-light .bg-slate-900\/40 {
+  background-color: #f8fafc;
+}
+html.theme-light .bg-slate-800 {
+  background-color: #e2e8f0;
+}
+html.theme-light .bg-slate-800\/60 {
+  background-color: rgba(226, 232, 240, 0.8);
+}
+html.theme-light .bg-slate-800\/20 {
+  background-color: rgba(226, 232, 240, 0.45);
+}
+html.theme-light .bg-slate-600 {
+  background-color: #94a3b8;
+}
+html.theme-light .bg-slate-200 {
+  background-color: #334155;
+}
+html.theme-light .hover\:bg-slate-700:hover {
+  background-color: #cbd5e1;
+}
+html.theme-light .hover\:bg-slate-800\/60:hover,
+html.theme-light .hover\:bg-slate-800\/40:hover,
+html.theme-light .hover\:bg-slate-800\/30:hover,
+html.theme-light .hover\:bg-slate-800\/20:hover,
+html.theme-light .hover\:bg-slate-900\/60:hover {
+  background-color: rgba(226, 232, 240, 0.7);
+}
+
+/* Bordas e divisórias */
+html.theme-light .border-slate-800,
+html.theme-light .border-slate-800\/80,
+html.theme-light .border-slate-800\/60,
+html.theme-light .border-slate-800\/40 {
+  border-color: #e2e8f0;
+}
+html.theme-light .border-slate-700,
+html.theme-light .border-slate-400\/70 {
+  border-color: #cbd5e1;
+}
+html.theme-light .divide-slate-800\/60 > * + *,
+html.theme-light .divide-slate-800\/50 > * + * {
+  border-color: #e2e8f0;
+}
+html.theme-light .ring-slate-950 {
+  --tw-ring-color: #f1f5f9;
+}
+
+/* Texto */
+html.theme-light .text-slate-100,
+html.theme-light .text-slate-200 {
+  color: #0f172a;
+}
+html.theme-light .text-slate-300 {
+  color: #334155;
+}
+html.theme-light .text-slate-400,
+html.theme-light .text-slate-500,
+html.theme-light .text-slate-600 {
+  color: #64748b;
+}
+html.theme-light .text-slate-700 {
+  color: #cbd5e1;
+}
+/* texto branco só vira escuro fora de botões/selos coloridos */
+html.theme-light .text-white:not([class*="bg-gradient"]):not([class*="bg-blue-"]):not([class*="bg-purple-"]):not([class*="bg-red-"]):not([class*="bg-emerald-"]) {
+  color: #0f172a;
+}
+html.theme-light .hover\:text-white:hover,
+html.theme-light .hover\:text-slate-200:hover {
+  color: #0f172a;
+}
+
+/* Cores de destaque: um tom mais escuro para manter o contraste no fundo claro */
+html.theme-light .text-emerald-400,
+html.theme-light .text-emerald-300 {
+  color: #059669;
+}
+html.theme-light .text-red-400,
+html.theme-light .hover\:text-red-400:hover {
+  color: #dc2626;
+}
+html.theme-light .text-amber-400 {
+  color: #b45309;
+}
+html.theme-light .text-blue-400,
+html.theme-light .hover\:text-blue-300:hover {
+  color: #2563eb;
+}
+html.theme-light .text-purple-400,
+html.theme-light .text-purple-300 {
+  color: #9333ea;
+}
+html.theme-light .text-purple-200 {
+  color: #6b21a8;
+}
+html.theme-light .text-orange-400 {
+  color: #c2410c;
+}
+
+/* Componentes do custom.css */
+html.theme-light .custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+}
+html.theme-light .custom-scroll {
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+html.theme-light .nav-item {
+  color: #475569;
+}
+html.theme-light .nav-item:hover {
+  background: rgba(226, 232, 240, 0.8);
+  color: #0f172a;
+}
+html.theme-light .nav-item.active-nav {
+  color: #1d4ed8;
+}
+html.theme-light body.mode-couple .nav-item.active-nav {
+  color: #7e22ce;
+}
+html.theme-light .mode-btn {
+  color: #64748b;
+}
+html.theme-light .category-badge {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+html.theme-light .row-action-btn {
+  color: #64748b;
+}
+html.theme-light .row-action-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+html.theme-light .type-btn {
+  color: #64748b;
+}
+html.theme-light #transactions-tbody tr,
+html.theme-light #transactions-full-tbody tr {
+  border-bottom-color: #e2e8f0;
+}
+html.theme-light #transactions-tbody tr:hover,
+html.theme-light #transactions-full-tbody tr:hover {
+  background: #f8fafc;
+}
+html.theme-light .txn-filter-btn,
+html.theme-light .div-tab-btn,
+html.theme-light .hist-tab-btn,
+html.theme-light .news-tab-btn {
+  color: #64748b;
+}
+html.theme-light .txn-filter-btn.active-filter,
+html.theme-light .div-tab-btn.active-filter,
+html.theme-light .hist-tab-btn.active-filter,
+html.theme-light .news-tab-btn.active-news-tab {
+  color: #1d4ed8;
+}
+html.theme-light .health-ring {
+  background: conic-gradient(var(--ring-color) calc(var(--score) * 1%), rgba(203, 213, 225, 0.9) 0);
+}
+html.theme-light .health-ring-inner {
+  background: #ffffff;
+}
+html.theme-light .skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+}
+html.theme-light .dp-nav-btn,
+html.theme-light .dp-day {
+  color: #334155;
+}
+html.theme-light .dp-day-outside {
+  color: #cbd5e1;
+}
+html.theme-light .dd-option {
+  color: #334155;
+}
+html.theme-light .dd-option:hover {
+  background: #f1f5f9;
+}
+html.theme-light input:not([type="checkbox"]):not([type="radio"]),
+html.theme-light select {
+  color: #0f172a;
+}
+html.theme-light input::placeholder {
+  color: #94a3b8;
+}

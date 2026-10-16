@@ -176,3 +176,96 @@ export async function fetchDividendCalendar(ticker, category) {
     return { dividends: [], ok: false };
   }
 }
+
+/* ---------------------------------------------------------------
+   Cotações de criptomoedas
+   Fonte principal: Binance (um único pedido traz todos os pares; moedas
+   sem par em real são convertidas via USDT). Reserva: CoinGecko, para as
+   moedas mais comuns. As duas liberam chamada direta do navegador.
+--------------------------------------------------------------- */
+export const CRYPTO_CATEGORY = "Criptomoedas";
+
+const BINANCE_PRICES_URL = "https://api.binance.com/api/v3/ticker/price";
+const COINGECKO_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price";
+const COINGECKO_IDS = {
+  BTC: "bitcoin", ETH: "ethereum", SOL: "solana", BNB: "binancecoin", XRP: "ripple", ADA: "cardano",
+  DOGE: "dogecoin", DOT: "polkadot", LTC: "litecoin", LINK: "chainlink", AVAX: "avalanche-2", TRX: "tron",
+  SHIB: "shiba-inu", MATIC: "matic-network", POL: "polygon-ecosystem-token", USDT: "tether", USDC: "usd-coin",
+  ATOM: "cosmos", UNI: "uniswap", XLM: "stellar", BCH: "bitcoin-cash", TON: "the-open-network", NEAR: "near",
+};
+
+/** "BTC", "btc-brl", "BTCUSDT" -> "BTC". */
+export function cryptoBaseSymbol(ticker) {
+  const t = String(ticker).toUpperCase().trim();
+  const base = t.replace(/[-/]?(BRL|USDT|USD)$/, "");
+  return base || t;
+}
+
+/**
+ * Preço em reais de cada cripto informada (chave = ticker em maiúsculas, como cadastrado).
+ * @returns {Promise<{ prices: Object<string, number>, failedTickers: string[], networkError: boolean }>}
+ */
+export async function fetchCryptoQuotes(tickers) {
+  const wanted = [...new Set(tickers.map((t) => String(t).toUpperCase().trim()).filter(Boolean))];
+  const prices = {};
+  let binanceOk = false;
+  let coingeckoOk = false;
+
+  try {
+    const res = await fetch(BINANCE_PRICES_URL);
+    if (res.ok) {
+      const map = Object.fromEntries((await res.json()).map((p) => [p.symbol, Number(p.price)]));
+      const usdtBrl = map.USDTBRL;
+      binanceOk = true;
+      wanted.forEach((ticker) => {
+        const base = cryptoBaseSymbol(ticker);
+        const price = base === "USDT" ? usdtBrl : map[`${base}BRL`] ?? (map[`${base}USDT`] && usdtBrl ? map[`${base}USDT`] * usdtBrl : undefined);
+        if (Number.isFinite(price) && price > 0) prices[ticker] = price;
+      });
+    }
+  } catch (err) {
+    console.warn("Falha ao buscar cotações na Binance:", err.message);
+  }
+
+  const missing = wanted.filter((t) => !(t in prices) && COINGECKO_IDS[cryptoBaseSymbol(t)]);
+  if (missing.length > 0) {
+    try {
+      const ids = [...new Set(missing.map((t) => COINGECKO_IDS[cryptoBaseSymbol(t)]))].join(",");
+      const res = await fetch(`${COINGECKO_PRICE_URL}?ids=${ids}&vs_currencies=brl`);
+      if (res.ok) {
+        const data = await res.json();
+        coingeckoOk = true;
+        missing.forEach((ticker) => {
+          const price = data[COINGECKO_IDS[cryptoBaseSymbol(ticker)]]?.brl;
+          if (Number.isFinite(price) && price > 0) prices[ticker] = price;
+        });
+      }
+    } catch (err) {
+      console.warn("Falha ao buscar cotações na CoinGecko:", err.message);
+    }
+  }
+
+  return {
+    prices,
+    failedTickers: wanted.filter((t) => !(t in prices)),
+    networkError: !binanceOk && !coingeckoOk,
+  };
+}
+
+/* ---------------------------------------------------------------
+   Índices de mercado (CDI, IBOV, IFIX) — função serverless /api/indices
+--------------------------------------------------------------- */
+/**
+ * Séries diárias desde a data informada. Só existe com o app na Vercel.
+ * @returns {Promise<{ ok: boolean, data: {from:string, cdi:Array, ibov:Array, ifix:Array}|null }>}
+ */
+export async function fetchMarketIndices(desde) {
+  try {
+    const res = await fetch(`/api/indices?desde=${encodeURIComponent(desde)}`);
+    if (!res.ok) return { ok: false, data: null };
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    console.warn("Falha ao buscar índices de mercado:", err.message);
+    return { ok: false, data: null };
+  }
+}

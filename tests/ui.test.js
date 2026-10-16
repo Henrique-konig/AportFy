@@ -3,11 +3,27 @@
 // Testes de tela: carregam o index.html real em um DOM simulado (jsdom) e exercitam o
 // ui.js como o app faz — filtros, modais, abas e totais. Pegam regressões como filtros
 // "mortos", proventos duplicados ou ids que sumiram do HTML.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 
+// O Node 26 tem um localStorage global experimental (indefinido sem --localstorage-file)
+// que esconde o do jsdom; usa um armazenamento em memória nos testes.
+if (!globalThis.localStorage) {
+  const store = new Map();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+      clear: () => store.clear(),
+    },
+  });
+}
+
 const html = readFileSync("index.html", "utf8");
-const uiSource = readFileSync("js/ui.js", "utf8");
+// Código de toda a interface (fachada + módulos em js/ui/).
+const uiSource = ["js/ui.js", ...readdirSync("js/ui").map((f) => `js/ui/${f}`)].map((f) => readFileSync(f, "utf8")).join("\n");
 
 let ui;
 const $ = (id) => document.getElementById(id);
@@ -67,6 +83,12 @@ beforeAll(async () => {
   ui.bindReportsFilters();
   ui.bindInvestmentFilters();
   ui.bindSellModal();
+  ui.bindDividendCalendar();
+  ui.bindFinancialIndependence();
+  ui.bindAlerts();
+  ui.bindTheme();
+  ui.bindAccessibility();
+  ui.bindOnboarding();
   ui.bindHistory();
   ui.bindPortfolioHealth();
   ui.bindSettingsForms();
@@ -90,6 +112,7 @@ beforeEach(() => {
 describe("estrutura da página", () => {
   it("todos os ids que o ui.js busca existem no index.html", () => {
     const ids = [...uiSource.matchAll(/getElementById\("([^"]+)"\)/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(200); // garante que o teste está lendo os módulos de verdade
     const missing = [...new Set(ids)].filter((id) => !$(id));
     expect(missing).toEqual([]);
   });
@@ -457,5 +480,215 @@ describe("convite ao espaço de casal", () => {
     setValue("settings-join-input", " abcdefghijklmnopqrstuvwxyz12 ");
     fire($("settings-join-form"), "submit");
     expect(join).toHaveBeenCalledWith("abcdefghijklmnopqrstuvwxyz12");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Calendário de proventos e independência financeira
+--------------------------------------------------------------- */
+describe("calendário de proventos", () => {
+  const thisMonth = new Date().toLocaleDateString("sv-SE").slice(0, 7);
+  const day = (d) => `${thisMonth}-${String(d).padStart(2, "0")}`;
+
+  beforeEach(() => {
+    ui.renderDividendsData([{ id: "d1", ticker: "MXRF11", type: "Rendimento", amount: 22, date: day(15) }]);
+    ui.renderUpcomingDividends([{ ticker: "VGIR11", type: "Rendimento", rate: 0.13, exDate: day(13), paymentDate: day(28), shares: 100, total: 13 }], { failed: [], hasEligible: true });
+    $("div-cal-today").click(); // volta ao mês atual
+  });
+
+  it("mostra os totais do mês e marca os dias com proventos", () => {
+    expect(text("div-cal-received")).toBe("R$ 22,00");
+    expect(text("div-cal-upcoming")).toBe("R$ 13,00");
+    expect(document.querySelector(`[data-cal-date="${day(15)}"]`).getAttribute("aria-label")).toContain("1 provento");
+    expect(document.querySelector(`[data-cal-date="${day(28)}"]`).getAttribute("aria-label")).toContain("a receber");
+  });
+
+  it("clicar no dia lista os proventos dele", () => {
+    document.querySelector(`[data-cal-date="${day(15)}"]`).click();
+    expect(text("div-cal-detail")).toContain("MXRF11");
+    expect(text("div-cal-detail")).toContain("recebido");
+  });
+
+  it("navega para o mês seguinte e volta", () => {
+    const current = text("div-cal-month");
+    $("div-cal-next").click();
+    expect(text("div-cal-month")).not.toBe(current);
+    expect(text("div-cal-received")).toBe("R$ 0,00");
+    $("div-cal-prev").click();
+    expect(text("div-cal-month")).toBe(current);
+  });
+});
+
+describe("independência financeira", () => {
+  beforeEach(() => {
+    ui.renderInvestments(portfolio());
+    goTo("health");
+    setValue("proj-contribution", "1000");
+    setValue("proj-appreciation", "0");
+    setValue("proj-yield", "12");
+  });
+
+  it("calcula patrimônio necessário e previsão a partir da meta", () => {
+    setValue("fi-target-input", "2000");
+    expect(text("fi-required")).toBe("R$ 200.000,00"); // 2.000 × 12 / 12%
+    expect(text("fi-eta")).not.toBe("—");
+    expect(text("fi-eta-note")).toMatch(/^Em /);
+    expect($("fi-progress").getAttribute("aria-valuenow")).toMatch(/^\d+$/);
+  });
+
+  it("salva a meta ao terminar de editar e trata meta vazia", () => {
+    const save = vi.fn();
+    ui.onFinancialIndependenceTargetChange(save);
+    setValue("fi-target-input", "3500", "change");
+    expect(save).toHaveBeenCalledWith(3500);
+
+    setValue("fi-target-input", "");
+    expect(text("fi-required")).toBe("—");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Central de alertas
+--------------------------------------------------------------- */
+describe("central de alertas", () => {
+  const today = new Date().toLocaleDateString("sv-SE");
+  const flush = () => new Promise((r) => setTimeout(r, 5));
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("conta os não lidos, abre o painel e leva para a tela do alerta", async () => {
+    ui.renderBudgets([{ category: "Lazer", monthlyLimit: 100 }], [{ id: "t", type: "expense", category: "Lazer", amount: 150, date: today, description: "x" }]);
+    ui.renderDividendsData([{ id: "d1", ticker: "MXRF11", type: "Rendimento", amount: 22, date: today }]);
+    await flush();
+
+    expect($("notif-dot").classList.contains("hidden")).toBe(false);
+    expect(Number(text("notif-count"))).toBeGreaterThanOrEqual(2);
+    expect($("notif-btn").getAttribute("aria-label")).toMatch(/não lido/);
+
+    $("notif-btn").click();
+    expect($("notif-panel").classList.contains("hidden")).toBe(false);
+    expect(text("notif-list")).toContain("Orçamento de Lazer estourado");
+    expect(text("notif-list")).toContain("em proventos hoje");
+
+    document.querySelector('#notif-list [data-alert-view="budget"]').click();
+    expect($("notif-panel").classList.contains("hidden")).toBe(true);
+    expect($("view-budget").classList.contains("hidden")).toBe(false);
+  });
+
+  it("marcar como lidos zera o contador, mas mantém os alertas na lista", async () => {
+    ui.renderDividendsData([{ id: "d1", ticker: "MXRF11", type: "Rendimento", amount: 22, date: today }]);
+    await flush();
+    $("notif-btn").click();
+    $("notif-mark-read").click();
+    expect($("notif-dot").classList.contains("hidden")).toBe(true);
+    expect(text("notif-list")).toContain("em proventos hoje");
+    fire(document, "keydown");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect($("notif-panel").classList.contains("hidden")).toBe(true);
+  });
+
+  it("sem alertas, mostra a mensagem vazia e esconde o contador", async () => {
+    ui.renderBudgets([], []);
+    ui.renderDividendsData([]);
+    ui.renderInvestments([]);
+    ui.renderJoinRequests([]);
+    await flush();
+    expect($("notif-dot").classList.contains("hidden")).toBe(true);
+    expect(text("notif-list")).toContain("Nenhum alerta");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Tema, primeiros passos e acessibilidade
+--------------------------------------------------------------- */
+describe("tema claro/escuro", () => {
+  it("o botão do cabeçalho alterna e lembra a escolha", () => {
+    ui.setThemePreference("dark");
+    expect(document.documentElement.classList.contains("theme-light")).toBe(false);
+    $("theme-toggle").click();
+    expect(document.documentElement.classList.contains("theme-light")).toBe(true);
+    expect(localStorage.getItem("aportfy_theme")).toBe("light");
+    expect($("theme-toggle").getAttribute("aria-label")).toBe("Ativar tema escuro");
+    $("theme-toggle").click();
+    expect(document.documentElement.classList.contains("theme-light")).toBe(false);
+  });
+
+  it("as opções de Configurações marcam a escolhida", () => {
+    document.querySelector('[data-theme-option="system"]').click();
+    expect(localStorage.getItem("aportfy_theme")).toBe("system");
+    const pressed = [...document.querySelectorAll("[data-theme-option]")].filter((b) => b.getAttribute("aria-pressed") === "true");
+    expect(pressed.map((b) => b.dataset.themeOption)).toEqual(["system"]);
+    ui.setThemePreference("dark");
+  });
+});
+
+describe("primeiros passos", () => {
+  it("aparece só depois que os dados chegam e conta o que já foi feito", () => {
+    ui.renderBudgets([], []);
+    ui.updateOnboarding({ uid: "u1", ready: false });
+    expect($("onboarding-card").classList.contains("hidden")).toBe(true);
+    ui.updateOnboarding({ uid: "u1", ready: true });
+    expect($("onboarding-card").classList.contains("hidden")).toBe(false);
+    // a carteira de teste já tem investimentos
+    expect(text("onboarding-progress")).toBe("1 de 4 concluídos");
+    expect(document.querySelector('[data-onboarding-step="investment"]').disabled).toBe(true);
+  });
+
+  it("dispensar esconde e é lembrado por usuário", () => {
+    ui.updateOnboarding({ uid: "u1", ready: true });
+    $("onboarding-dismiss").click();
+    expect($("onboarding-card").classList.contains("hidden")).toBe(true);
+    ui.updateOnboarding({ uid: "u1", ready: true });
+    expect($("onboarding-card").classList.contains("hidden")).toBe(true);
+    ui.updateOnboarding({ uid: "u2", ready: true });
+    expect($("onboarding-card").classList.contains("hidden")).toBe(false);
+    ui.updateOnboarding({ uid: null, ready: false });
+  });
+});
+
+describe("acessibilidade", () => {
+  it("modais viram diálogos com título", () => {
+    const modal = $("transaction-modal");
+    expect(modal.getAttribute("role")).toBe("dialog");
+    expect(modal.getAttribute("aria-modal")).toBe("true");
+    expect(document.getElementById(modal.getAttribute("aria-labelledby"))).not.toBeNull();
+  });
+
+  it("Esc fecha o modal aberto pelo botão de fechar", () => {
+    const modal = $("transaction-modal");
+    const close = vi.fn(() => modal.classList.add("hidden"));
+    $("modal-close-btn").addEventListener("click", close, { once: true });
+    modal.classList.remove("hidden");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(close).toHaveBeenCalledOnce();
+    expect(modal.classList.contains("hidden")).toBe(true);
+  });
+
+  it("navegação marca a página atual e ícones são decorativos", () => {
+    goTo("investments");
+    expect(document.querySelector('.nav-item[data-view="investments"]').getAttribute("aria-current")).toBe("page");
+    expect(document.querySelector('.nav-item[data-view="dashboard"]').hasAttribute("aria-current")).toBe(false);
+    const icons = [...document.querySelectorAll('i[class*="ph-"]')];
+    expect(icons.every((i) => i.getAttribute("aria-hidden") === "true")).toBe(true);
+    goTo("dashboard");
+  });
+
+  it("selects customizados funcionam pelo teclado", () => {
+    const select = $("inv-category-filter");
+    const trigger = select.nextElementSibling;
+    expect(trigger.getAttribute("aria-haspopup")).toBe("listbox");
+    trigger.click();
+    const popup = document.getElementById("dropdown-popup");
+    expect(popup.classList.contains("hidden")).toBe(false);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const key = (k) => document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    key("End");
+    const options = [...popup.querySelectorAll('[role="option"]')];
+    expect(document.activeElement).toBe(options[options.length - 1]);
+    key("Escape");
+    expect(popup.classList.contains("hidden")).toBe(true);
+    expect(document.activeElement).toBe(trigger);
   });
 });

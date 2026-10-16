@@ -8,7 +8,26 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg" />
-  <link rel="apple-touch-icon" href="assets/images/favicon.svg" />
+  <link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png" />
+
+  <!-- Tema salvo (aplicado antes de a página aparecer, para não piscar) -->
+  <script>
+    try {
+      var p = localStorage.getItem("aportfy_theme") || "dark";
+      if (p === "light" || (p === "system" && matchMedia("(prefers-color-scheme: light)").matches)) {
+        document.documentElement.classList.add("theme-light");
+        document.documentElement.classList.remove("dark");
+      }
+    } catch (e) {}
+  </script>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#020617" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AportFy" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -49,6 +68,7 @@
   <link rel="stylesheet" href="css/custom.css" />
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased overflow-x-hidden">
+  <a href="#main-content" id="skip-link" class="skip-link">Pular para o conteúdo</a>
 
   <!-- ============ LOGIN SCREEN ============ -->
   <section id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 px-4">
@@ -128,7 +148,7 @@
           </button>
         </div>
 
-        <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto custom-scroll">
+        <nav aria-label="Navegação principal" class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto custom-scroll">
           <button data-view="dashboard" class="nav-item active-nav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-fill ph-squares-four text-lg shrink-0"></i>
             <span class="sidebar-label">Dashboard</span>
@@ -203,7 +223,7 @@
 
             <div class="relative hidden sm:block w-full max-w-xs">
               <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
-              <input id="search-input" type="text" placeholder="Buscar transações..."
+              <input id="search-input" type="search" aria-label="Buscar transações" placeholder="Buscar transações..."
                 class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
             </div>
 
@@ -224,10 +244,23 @@
                 </button>
               </div>
 
-              <button class="relative text-slate-400 hover:text-white transition-colors shrink-0" id="notif-btn">
-                <i class="ph-bold ph-bell text-xl"></i>
-                <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-950" id="notif-dot"></span>
+              <button type="button" id="theme-toggle" class="text-slate-400 hover:text-white transition-colors shrink-0" aria-label="Ativar tema claro" title="Ativar tema claro">
+                <i class="ph-bold ph-sun text-xl" aria-hidden="true"></i>
               </button>
+
+              <div class="relative shrink-0">
+                <button type="button" class="relative text-slate-400 hover:text-white transition-colors" id="notif-btn" aria-label="Alertas" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel">
+                  <i class="ph-bold ph-bell text-xl" aria-hidden="true"></i>
+                  <span class="hidden absolute -top-1.5 -right-2 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-blue-500 ring-2 ring-slate-950 text-[10px] font-bold text-white flex items-center justify-center" id="notif-dot"><span id="notif-count">0</span></span>
+                </button>
+                <div id="notif-panel" class="hidden absolute right-0 top-full mt-3 w-[22rem] max-w-[calc(100vw-2rem)] glass-card rounded-2xl shadow-2xl z-[65] overflow-hidden" role="region" aria-label="Alertas">
+                  <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800/80">
+                    <p class="text-sm font-bold">Alertas</p>
+                    <button type="button" id="notif-mark-read" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors">Marcar todos como lidos</button>
+                  </div>
+                  <div id="notif-list" class="max-h-[60vh] overflow-y-auto custom-scroll divide-y divide-slate-800/60"></div>
+                </div>
+              </div>
 
               <button id="new-transaction-btn"
                 class="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-3 sm:px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
@@ -241,14 +274,14 @@
           <div id="mobile-search-row" class="hidden sm:hidden px-4 pb-3">
             <div class="relative w-full">
               <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
-              <input id="mobile-search-input" type="text" placeholder="Buscar transações..."
+              <input id="mobile-search-input" type="search" aria-label="Buscar transações" placeholder="Buscar transações..."
                 class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
             </div>
           </div>
         </header>
 
         <!-- SCROLLABLE CONTENT -->
-        <main class="flex-1 overflow-y-auto custom-scroll px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto custom-scroll px-4 sm:px-6 lg:px-8 py-6 space-y-6 focus:outline-none">
 
           <!-- Page title (compartilhado entre views) -->
           <div class="flex items-center justify-between animate-fade-in">
@@ -263,6 +296,21 @@
 
           <!-- ======================= VIEW: DASHBOARD ======================= -->
           <div id="view-dashboard" class="view-section space-y-6">
+
+            <!-- PRIMEIROS PASSOS -->
+            <section id="onboarding-card" class="hidden glass-card rounded-2xl p-5 sm:p-6 animate-slide-up" aria-labelledby="onboarding-title">
+              <div class="flex items-start justify-between gap-3 mb-4">
+                <div class="min-w-0">
+                  <h3 id="onboarding-title" class="font-bold text-base">Primeiros passos no AportFy</h3>
+                  <p class="text-xs text-slate-500 mt-0.5" id="onboarding-progress">0 de 4 concluídos</p>
+                </div>
+                <button type="button" id="onboarding-dismiss" class="text-xs font-semibold text-slate-400 hover:text-white transition-colors shrink-0">Dispensar</button>
+              </div>
+              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-4" aria-hidden="true">
+                <div id="onboarding-bar" class="h-full rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700" style="width: 0%"></div>
+              </div>
+              <ol id="onboarding-steps" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></ol>
+            </section>
 
             <!-- PERIOD FILTER -->
             <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -354,14 +402,14 @@
                   </div>
                 </div>
                 <div class="h-72">
-                  <canvas id="cashflow-chart"></canvas>
+                  <canvas id="cashflow-chart" role="img" aria-label="Gráfico de receitas e despesas nos últimos meses"></canvas>
                 </div>
               </div>
 
               <div class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col">
                 <h3 class="font-bold text-base mb-4">Despesas por Categoria</h3>
                 <div class="h-56 flex items-center justify-center">
-                  <canvas id="category-chart"></canvas>
+                  <canvas id="category-chart" role="img" aria-label="Gráfico de despesas por categoria"></canvas>
                 </div>
                 <div id="category-legend" class="mt-4 space-y-2 text-xs"></div>
               </div>
@@ -528,10 +576,10 @@
 
             <!-- Toolbar: busca, filtros, ações -->
             <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up">
-              <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div class="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3">
                 <div class="relative w-full lg:max-w-xs">
                   <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                  <input id="inv-search-input" type="text" placeholder="Buscar por nome ou ticker..."
+                  <input id="inv-search-input" type="search" aria-label="Buscar ativo por nome ou ticker" placeholder="Buscar por nome ou ticker..."
                     class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
                 </div>
 
@@ -605,7 +653,7 @@
               </div>
               <p class="text-xs text-slate-500 mb-2">Evolução do preço registrada a cada atualização de cotação</p>
               <div id="asset-detail-chart-wrap" class="h-52">
-                <canvas id="asset-detail-chart"></canvas>
+                <canvas id="asset-detail-chart" role="img" aria-label="Gráfico da evolução do preço do ativo"></canvas>
               </div>
               <p id="asset-detail-empty-hint" class="hidden text-xs text-slate-600 text-center py-10">Ainda não há histórico de preço para este ativo — atualize as cotações ou edite o preço para começar a registrar.</p>
             </section>
@@ -704,7 +752,7 @@
                 <h3 class="font-bold text-base mb-1">Evolução por Categoria</h3>
                 <p class="text-xs text-slate-500 mb-4">Capital aportado por categoria nos últimos 6 meses</p>
                 <div class="h-72">
-                  <canvas id="inv-evolution-chart"></canvas>
+                  <canvas id="inv-evolution-chart" role="img" aria-label="Gráfico do capital aportado por categoria"></canvas>
                 </div>
                 <div id="inv-evolution-legend" class="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-[11px]"></div>
               </div>
@@ -712,7 +760,7 @@
               <div class="glass-card rounded-2xl p-5 sm:p-6 flex flex-col">
                 <h3 class="font-bold text-base mb-4">Alocação por Categoria</h3>
                 <div class="h-56 flex items-center justify-center">
-                  <canvas id="inv-allocation-chart"></canvas>
+                  <canvas id="inv-allocation-chart" role="img" aria-label="Gráfico da alocação da carteira por categoria"></canvas>
                 </div>
                 <div id="inv-allocation-legend" class="mt-4 space-y-2 text-xs"></div>
               </div>
@@ -737,7 +785,7 @@
                 </div>
               </div>
               <div class="h-64">
-                <canvas id="inv-contrib-chart"></canvas>
+                <canvas id="inv-contrib-chart" role="img" aria-label="Gráfico dos aportes de cada mês"></canvas>
               </div>
               <div class="overflow-x-auto custom-scroll mt-5">
                 <table class="w-full text-sm">
@@ -753,13 +801,27 @@
               </div>
             </section>
 
+            <!-- Carteira x Mercado -->
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <div class="mb-5">
+                <h3 class="font-bold text-base">Carteira x Mercado</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Quanto valeriam hoje os mesmos aportes e vendas, nas mesmas datas, se tivessem ido para o CDI, o IBOV ou o IFIX.</p>
+              </div>
+              <div id="market-cards" class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5"></div>
+              <div id="market-chart-wrap" class="h-72">
+                <canvas id="market-chart" aria-label="Gráfico da carteira comparada com CDI, IBOV e IFIX" role="img"></canvas>
+              </div>
+              <p id="market-status" class="hidden text-xs text-slate-500 text-center py-10"></p>
+              <p class="text-[11px] text-slate-600 mt-3">Carteira = valor de mercado atual + proventos recebidos. IBOV e IFIX são índices de retorno total (já reinvestem dividendos). Sem impostos nem custos.</p>
+            </section>
+
             <!-- Proventos -->
             <section class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-slide-up">
-              <div>
+              <div class="min-w-0">
                 <h3 class="font-bold text-lg">Proventos</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Dividendos, JCP e rendimentos recebidos — respeita o filtro de ativo acima.</p>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 shrink-0">
                 <button id="import-dividends-btn" title="Importa os proventos já pagos das suas Ações e FIIs, calculados pelas cotas que você tinha na data-com"
                   class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
                   <i id="import-dividends-icon" class="ph-bold ph-download-simple text-base"></i>
@@ -852,11 +914,36 @@
               </div>
             </section>
 
+            <!-- Calendário de proventos -->
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div class="min-w-0">
+                  <h3 class="font-bold text-base">Calendário de Proventos</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Clique em um dia para ver o que caiu (ou vai cair) nele.</p>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" id="div-cal-prev" class="row-action-btn" aria-label="Mês anterior"><i class="ph-bold ph-caret-left" aria-hidden="true"></i></button>
+                  <p id="div-cal-month" class="text-sm font-semibold w-36 text-center capitalize" aria-live="polite">—</p>
+                  <button type="button" id="div-cal-next" class="row-action-btn" aria-label="Próximo mês"><i class="ph-bold ph-caret-right" aria-hidden="true"></i></button>
+                  <button type="button" id="div-cal-today" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors ml-1">Hoje</button>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-x-5 gap-y-1 text-xs mb-3">
+                <span class="text-slate-400">Recebido no mês: <b id="div-cal-received" class="text-emerald-400">R$ 0,00</b></span>
+                <span class="text-slate-400">A receber no mês: <b id="div-cal-upcoming" class="text-amber-400">R$ 0,00</b></span>
+              </div>
+              <div class="grid grid-cols-7 gap-1 text-[11px] text-slate-500 text-center mb-1" aria-hidden="true">
+                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+              </div>
+              <div id="div-cal-grid" class="grid grid-cols-7 gap-1"></div>
+              <div id="div-cal-detail" class="mt-4 space-y-2" aria-live="polite"></div>
+            </section>
+
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
               <h3 class="font-bold text-base mb-1">Proventos por Mês</h3>
               <p class="text-xs text-slate-500 mb-4">Últimos 6 meses</p>
               <div class="h-56">
-                <canvas id="div-chart"></canvas>
+                <canvas id="div-chart" role="img" aria-label="Gráfico de proventos recebidos e a receber por mês"></canvas>
               </div>
             </section>
 
@@ -960,7 +1047,7 @@
               <h3 class="font-bold text-base mb-1">Fluxo de Caixa Anual</h3>
               <p class="text-xs text-slate-500 mb-4">Receitas x Despesas nos últimos 12 meses</p>
               <div class="h-80">
-                <canvas id="reports-cashflow-chart"></canvas>
+                <canvas id="reports-cashflow-chart" role="img" aria-label="Gráfico do fluxo de caixa de 12 meses"></canvas>
               </div>
             </section>
 
@@ -968,7 +1055,7 @@
               <div class="glass-card rounded-2xl p-5 sm:p-6">
                 <h3 class="font-bold text-base mb-4">Despesas por Categoria</h3>
                 <div class="h-64">
-                  <canvas id="reports-category-chart"></canvas>
+                  <canvas id="reports-category-chart" role="img" aria-label="Gráfico das despesas por categoria no período"></canvas>
                 </div>
               </div>
               <div class="glass-card rounded-2xl p-5 sm:p-6">
@@ -1004,7 +1091,7 @@
             </section>
 
             <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up">
-              <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div class="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3">
                 <div class="flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-xl p-1 shrink-0 overflow-x-auto">
                   <button type="button" data-hist-kind="all" class="hist-tab-btn active-filter px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap">Todos</button>
                   <button type="button" data-hist-kind="buy" class="hist-tab-btn px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap">Compras</button>
@@ -1013,7 +1100,7 @@
                 </div>
                 <div class="relative w-full lg:max-w-xs lg:ml-auto">
                   <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                  <input id="hist-search-input" type="text" placeholder="Buscar por ticker..."
+                  <input id="hist-search-input" type="search" aria-label="Buscar movimentação por ticker" placeholder="Buscar por ticker..."
                     class="w-full bg-slate-900/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
                 </div>
                 <select id="hist-asset-filter" class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all lg:w-44">
@@ -1180,7 +1267,47 @@
                   </div>
                 </div>
                 <div class="h-72">
-                  <canvas id="health-projection-chart"></canvas>
+                  <canvas id="health-projection-chart" role="img" aria-label="Gráfico da projeção do patrimônio em três cenários"></canvas>
+                </div>
+              </section>
+
+              <!-- Independência financeira -->
+              <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-base">Independência Financeira</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Quando os seus proventos pagam a renda mensal que você quer, usando os parâmetros da projeção acima.</p>
+                  </div>
+                  <div class="w-full sm:w-56 shrink-0">
+                    <label for="fi-target-input" class="block text-[11px] font-medium text-slate-500 mb-1.5">Renda mensal desejada (R$)</label>
+                    <input id="fi-target-input" type="number" min="0" step="100" placeholder="Ex: 5000" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+                  </div>
+                </div>
+                <div class="mb-5">
+                  <div class="flex items-center justify-between text-xs mb-1.5">
+                    <span class="text-slate-400">Renda passiva atual: <b class="text-slate-200" id="fi-current">R$ 0,00</b>/mês</span>
+                    <span class="font-semibold text-emerald-400" id="fi-progress-label">0%</span>
+                  </div>
+                  <div id="fi-progress" class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden" role="progressbar" aria-label="Progresso até a renda mensal desejada" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div id="fi-progress-bar" class="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4">
+                    <p class="text-[11px] text-slate-500">Patrimônio necessário</p>
+                    <p class="text-xl font-extrabold mt-0.5" id="fi-required">—</p>
+                    <p class="text-[11px] text-slate-500 mt-1" id="fi-required-note">—</p>
+                  </div>
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4">
+                    <p class="text-[11px] text-slate-500">Quanto falta</p>
+                    <p class="text-xl font-extrabold mt-0.5" id="fi-missing">—</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Em relação ao patrimônio atual</p>
+                  </div>
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4">
+                    <p class="text-[11px] text-slate-500">Previsão (cenário base)</p>
+                    <p class="text-xl font-extrabold text-emerald-400 mt-0.5" id="fi-eta">—</p>
+                    <p class="text-[11px] text-slate-500 mt-1" id="fi-eta-note">—</p>
+                  </div>
                 </div>
               </section>
 
@@ -1192,6 +1319,16 @@
 
           <!-- ======================= VIEW: CONFIGURAÇÕES ======================= -->
           <div id="view-settings" class="view-section hidden space-y-6 max-w-2xl">
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-palette text-lg" aria-hidden="true"></i> Aparência</h3>
+              <p class="text-xs text-slate-500 mb-4">Escolha o tema. "Sistema" acompanha a configuração do seu aparelho.</p>
+              <div class="inline-flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-xl p-1" role="group" aria-label="Tema">
+                <button type="button" data-theme-option="dark" class="theme-opt-btn flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all" aria-pressed="true"><i class="ph-bold ph-moon" aria-hidden="true"></i> Escuro</button>
+                <button type="button" data-theme-option="light" class="theme-opt-btn flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all" aria-pressed="false"><i class="ph-bold ph-sun" aria-hidden="true"></i> Claro</button>
+                <button type="button" data-theme-option="system" class="theme-opt-btn flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all" aria-pressed="false"><i class="ph-bold ph-desktop" aria-hidden="true"></i> Sistema</button>
+              </div>
+            </section>
 
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
               <h3 class="font-bold text-base mb-4 flex items-center gap-2"><i class="ph-bold ph-user-circle text-lg"></i> Perfil</h3>
@@ -1213,13 +1350,23 @@
             </section>
 
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-device-mobile text-lg" aria-hidden="true"></i> Instalar o app</h3>
+              <p class="text-xs text-slate-500 mb-4" id="install-app-text">Instale o AportFy no celular ou no computador para abrir como um aplicativo, mais rápido e funcionando mesmo sem internet.</p>
+              <button type="button" id="install-app-btn"
+                class="hidden items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all active:scale-[0.97]">
+                <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Instalar AportFy
+              </button>
+              <p id="install-app-status" class="hidden text-xs text-slate-400"></p>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
               <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-fill ph-heart text-lg text-purple-400"></i> Espaço do Casal</h3>
               <p class="text-xs text-slate-500 mb-4">Compartilhe o código abaixo com seu parceiro(a). Ele(a) envia um pedido de entrada e você aprova aqui — só quem você aprovar vê as mesmas transações no Modo Casal.</p>
 
               <label class="block text-xs font-medium text-slate-400 mb-1.5">Seu código de casal</label>
               <div class="flex gap-2 mb-5">
                 <input type="text" id="settings-couple-id" readonly
-                  class="flex-1 bg-slate-900/40 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-400 font-mono" />
+                  class="flex-1 min-w-0 bg-slate-900/40 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-400 font-mono" />
                 <button id="settings-copy-couple-btn" type="button"
                   class="shrink-0 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 rounded-xl transition-all" title="Copiar">
                   <i class="ph-bold ph-copy"></i>
@@ -1235,7 +1382,7 @@
                 <label class="block text-xs font-medium text-slate-400 mb-1.5" for="settings-join-input">Pedir para entrar no espaço de outra pessoa</label>
                 <div class="flex gap-2">
                   <input type="text" id="settings-join-input" placeholder="Cole aqui o código do seu parceiro(a)"
-                    class="flex-1 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/60 focus:border-purple-500 transition-all" />
+                    class="flex-1 min-w-0 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/60 focus:border-purple-500 transition-all" />
                   <button type="submit" class="shrink-0 bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 rounded-xl transition-all">
                     Pedir entrada
                   </button>
@@ -1821,7 +1968,7 @@
   </div>
 
   <!-- ============ TOAST CONTAINER ============ -->
-  <div id="toast-container" class="fixed bottom-6 right-6 z-[60] flex flex-col gap-2.5"></div>
+  <div id="toast-container" class="fixed bottom-6 right-6 z-[60] flex flex-col gap-2.5" role="status" aria-live="polite"></div>
 
   <!-- App Scripts (ES Modules) -->
   <script type="module" src="js/firebase-config.js"></script>

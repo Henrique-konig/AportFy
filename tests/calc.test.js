@@ -20,6 +20,14 @@ import {
   applyInvestmentSale,
   buildInvestmentHistory,
   summarizeHistory,
+  parseB3IndexYear,
+  buildCdiIndex,
+  simulateBenchmark,
+  buildMarketComparison,
+  buildDividendCalendar,
+  shiftMonth,
+  financialIndependencePlan,
+  buildAlerts,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -403,5 +411,171 @@ describe("projectPortfolio", () => {
     expect(withIncome.finalBalance).toBeCloseTo(1200);
     expect(withIncome.incomeReceived).toBeCloseTo(144);
     expect(withIncome.monthlyIncome).toBeCloseTo(12);
+  });
+});
+
+describe("parseB3IndexYear", () => {
+  it("converte a matriz dia × mês da B3 em pontos ordenados, pulando dias vazios", () => {
+    const results = [
+      { day: 2, rateValue1: "3.778,89", rateValue2: null, rateValue3: "" },
+      { day: 1, rateValue1: null, rateValue2: "3.853,10" },
+    ];
+    expect(parseB3IndexYear(results, 2026)).toEqual([
+      ["2026-01-02", 3778.89],
+      ["2026-02-01", 3853.1],
+    ]);
+  });
+});
+
+describe("buildCdiIndex", () => {
+  it("acumula as taxas diárias", () => {
+    const idx = buildCdiIndex([{ date: "2026-01-02", rate: 1 }, { date: "2026-01-01", rate: 1 }]);
+    expect(idx[0][0]).toBe("2026-01-01");
+    expect(idx[1][1]).toBeCloseTo(1.0201);
+  });
+});
+
+describe("simulateBenchmark e buildMarketComparison", () => {
+  // Índice que dobra entre jan e mar.
+  const series = [["2026-01-01", 100], ["2026-02-01", 150], ["2026-03-01", 200]];
+
+  it("aplica cada aporte na data em que foi feito", () => {
+    const flows = [{ date: "2026-01-01", amount: 1000 }, { date: "2026-02-01", amount: 1500 }];
+    expect(simulateBenchmark(flows, series, ["2026-03-01"])).toEqual([2000 + 2000]);
+    expect(simulateBenchmark(flows, [], ["2026-03-01"])).toBeNull();
+  });
+
+  it("vendas retiram dinheiro da simulação na data da venda", () => {
+    const flows = [{ date: "2026-01-01", amount: 1000 }, { date: "2026-02-01", amount: -750 }];
+    // 1000 -> 2000 em mar; os 750 tirados em fev valeriam 1000 em mar
+    expect(simulateBenchmark(flows, series, ["2026-03-01"])[0]).toBeCloseTo(1000);
+  });
+
+  it("compara a carteira (valor atual + proventos) com cada índice", () => {
+    const investments = [
+      { ticker: "A11", category: "FIIs", quantity: 10, avgPrice: 100, currentPrice: 120, purchases: [{ date: "2026-01-01", quantity: 10, price: 100 }] },
+    ];
+    const dividends = [{ ticker: "A11", amount: 30, date: "2026-02-15" }, { ticker: "OUTRO", amount: 999, date: "2026-02-15" }];
+    const indices = { cdi: [{ date: "2026-01-01", rate: 0 }], ibov: series, ifix: [] };
+    const c = buildMarketComparison(investments, dividends, indices, "2026-03-01");
+
+    expect(c.netInvested).toBe(1000);
+    expect(c.portfolioTotal).toBe(1230); // 1200 em carteira + 30 de proventos
+    expect(c.portfolioPct).toBeCloseTo(23);
+    expect(c.benchmarks.ibov.final).toBeCloseTo(2000);
+    expect(c.benchmarks.ibov.pct).toBeCloseTo(100);
+    expect(c.benchmarks.cdi.final).toBeCloseTo(1000);
+    expect(c.benchmarks.ifix).toBeNull();
+    expect(c.dates).toEqual(["2026-01-31", "2026-02-28", "2026-03-01"]);
+    expect(c.invested).toEqual([1000, 1000, 1000]);
+  });
+
+  it("sem aportes, devolve vazio", () => {
+    expect(buildMarketComparison([], [], {}, "2026-03-01").empty).toBe(true);
+  });
+});
+
+describe("buildDividendCalendar", () => {
+  const events = [
+    { paymentDate: "2026-10-15", total: 10, status: "received" },
+    { paymentDate: "2026-10-15", total: 5, status: "received" },
+    { paymentDate: "2026-10-20", total: 30, status: "upcoming" },
+    { paymentDate: "2026-11-01", total: 99, status: "upcoming" },
+  ];
+
+  it("monta as semanas do mês (domingo a sábado) com os totais de cada dia", () => {
+    const cal = buildDividendCalendar("2026-10", events);
+    // 01/10/2026 é uma quinta-feira: 4 células vazias antes
+    expect(cal.weeks[0].slice(0, 4)).toEqual([null, null, null, null]);
+    expect(cal.weeks[0][4]).toMatchObject({ date: "2026-10-01", day: 1, count: 0 });
+    expect(cal.weeks.every((w) => w.length === 7)).toBe(true);
+    const all = cal.weeks.flat().filter(Boolean);
+    expect(all).toHaveLength(31);
+    expect(all.find((c) => c.day === 15)).toMatchObject({ received: 15, upcoming: 0, count: 2 });
+    expect(all.find((c) => c.day === 20)).toMatchObject({ received: 0, upcoming: 30, count: 1 });
+    expect(cal.received).toBe(15);
+    expect(cal.upcoming).toBe(30);
+  });
+
+  it("navega entre meses", () => {
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+    expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+  });
+});
+
+describe("financialIndependencePlan", () => {
+  it("calcula o patrimônio necessário e quando a renda alcança a meta", () => {
+    const plan = financialIndependencePlan({ initial: 100000, monthlyContribution: 1000, annualAppreciation: 0, annualYield: 12, targetMonthlyIncome: 2000 });
+    expect(plan.requiredWealth).toBeCloseTo(200000); // 2.000 × 12 / 12%
+    expect(plan.months).toBeGreaterThan(0);
+    expect(plan.months).toBeLessThan(12 * 10);
+  });
+
+  it("já atingida, sem meta ou sem yield", () => {
+    expect(financialIndependencePlan({ initial: 300000, monthlyContribution: 0, annualAppreciation: 0, annualYield: 12, targetMonthlyIncome: 2000 })).toMatchObject({ months: 0, reachedAlready: true });
+    expect(financialIndependencePlan({ initial: 1, monthlyContribution: 0, annualAppreciation: 0, annualYield: 12, targetMonthlyIncome: 0 }).months).toBeNull();
+    expect(financialIndependencePlan({ initial: 1, monthlyContribution: 0, annualAppreciation: 0, annualYield: 0, targetMonthlyIncome: 2000 }).requiredWealth).toBeNull();
+  });
+
+  it("não alcançada no prazo máximo", () => {
+    const plan = financialIndependencePlan({ initial: 10, monthlyContribution: 0, annualAppreciation: 0, annualYield: 1, targetMonthlyIncome: 1e9, maxYears: 5 });
+    expect(plan.months).toBeNull();
+  });
+});
+
+describe("buildAlerts", () => {
+  const today = "2026-10-16";
+
+  it("sem nada relevante, nenhum alerta", () => {
+    expect(buildAlerts({ today })).toEqual([]);
+  });
+
+  it("proventos de hoje e dos próximos 7 dias", () => {
+    const alerts = buildAlerts({
+      today,
+      dividends: [{ ticker: "MXRF11", amount: 2.2, date: today }, { ticker: "TVRI11", amount: 50, date: "2026-10-01" }],
+      upcoming: [
+        { ticker: "VGIR11", total: 30, paymentDate: "2026-10-20" },
+        { ticker: "ISAE4", total: 16, paymentDate: "2026-12-07" }, // fora da semana
+      ],
+    });
+    expect(alerts.map((a) => a.title.replace(/\s/g, " "))).toEqual(["Caíram R$ 2,20 em proventos hoje", "R$ 30,00 em proventos nos próximos 7 dias"]);
+    expect(alerts[1].detail).toBe("VGIR11 20/10");
+  });
+
+  it("orçamento estourado e perto do limite", () => {
+    const transactions = [
+      { type: "expense", category: "Alimentação", amount: 1100, date: "2026-10-05" },
+      { type: "expense", category: "Lazer", amount: 460, date: "2026-10-05" },
+      { type: "expense", category: "Lazer", amount: 999, date: "2026-09-05" }, // outro mês
+    ];
+    const alerts = buildAlerts({ today, transactions, budgets: [{ category: "Alimentação", monthlyLimit: 1000 }, { category: "Lazer", monthlyLimit: 500 }] });
+    expect(alerts[0]).toMatchObject({ level: "critical", title: "Orçamento de Alimentação estourado" });
+    expect(alerts[1]).toMatchObject({ level: "warning", title: "Lazer já usou 92% do orçamento" });
+  });
+
+  it("metas, cotações, saúde crítica e pedidos de entrada", () => {
+    const alerts = buildAlerts({
+      today,
+      goals: [
+        { id: "g1", name: "Viagem", targetAmount: 1000, currentAmount: 500, deadline: "2026-10-26" },
+        { id: "g2", name: "Carro", targetAmount: 1000, currentAmount: 100, deadline: "2026-09-01" },
+        { id: "g3", name: "Feita", targetAmount: 100, currentAmount: 100, deadline: "2026-10-20" },
+      ],
+      investments: [{ ticker: "PETR4", quantity: 1, lastQuoteError: true }, { ticker: "OLD", quantity: 0, lastQuoteError: true }],
+      health: { alerts: [{ level: "critical", title: "TVRI11 representa 40,0% da carteira", detail: "x" }, { level: "info", title: "Falta Ações", detail: "y" }] },
+      joinRequests: 2,
+    });
+    const titles = alerts.map((a) => a.title.replace(/\s/g, " "));
+    expect(titles).toContain('Meta "Viagem" vence em 10 dias');
+    expect(titles).toContain('Prazo da meta "Carro" passou');
+    expect(titles.some((t) => t.includes("Feita"))).toBe(false);
+    expect(titles).toContain("Cotação desatualizada em 1 ativo");
+    expect(titles).toContain("TVRI11 representa 40,0% da carteira");
+    expect(titles).not.toContain("Falta Ações");
+    expect(titles).toContain("2 pedidos para entrar no seu espaço de casal");
+    // ids estáveis mesmo quando o percentual muda
+    const again = buildAlerts({ today, health: { alerts: [{ level: "critical", title: "TVRI11 representa 41,3% da carteira", detail: "x" }] } });
+    expect(again[0].id).toBe(alerts.find((a) => a.view === "health").id);
   });
 });

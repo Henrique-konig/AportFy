@@ -52,7 +52,7 @@ import {
   approveJoinRequest,
   rejectJoinRequest,
 } from "./db.js";
-import { fetchQuotes, fetchDividendCalendar, B3_CATEGORIES } from "./api.js";
+import { fetchQuotes, fetchDividendCalendar, fetchCryptoQuotes, fetchMarketIndices, B3_CATEGORIES, CRYPTO_CATEGORY } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
 import {
   mergeInvestmentPurchase,
@@ -138,6 +138,13 @@ function initUIBindings() {
   ui.bindInvestmentFilters();
   ui.bindPortfolioHealth();
   ui.bindSellModal();
+  ui.bindAlerts();
+  ui.bindInstallApp();
+  ui.bindTheme();
+  ui.bindAccessibility();
+  ui.bindOnboarding();
+  ui.bindDividendCalendar();
+  ui.bindFinancialIndependence();
   ui.bindHistory();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();
@@ -378,6 +385,17 @@ function initUIBindings() {
   ui.onImportDividends(() => importDividendsFromB3());
 
   /* -------------------- Saúde da Carteira -------------------- */
+  ui.onFinancialIndependenceTargetChange(async (fiMonthlyIncome) => {
+    try {
+      const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
+      await savePortfolioSettings(activeMode, id, { fiMonthlyIncome });
+      ui.showToast(fiMonthlyIncome ? "Meta de renda mensal salva!" : "Meta de renda mensal removida.", "success");
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao salvar a meta de renda mensal.", "error");
+    }
+  });
+
   ui.onPortfolioSettingsSubmit(async (settings) => {
     try {
       const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
@@ -396,12 +414,15 @@ function initUIBindings() {
   ui.onFetchB3Price(async (ticker, category) => {
     ui.setB3PriceFetchLoading(true);
     try {
-      const { prices, networkError } = await fetchQuotes([ticker]);
+      const isCrypto = category === CRYPTO_CATEGORY;
+      const { prices, networkError } = isCrypto ? await fetchCryptoQuotes([ticker]) : await fetchQuotes([ticker]);
       const price = prices[ticker.toUpperCase()];
       if (typeof price === "number") {
         ui.fillInvestmentPrice(price);
       } else if (networkError) {
-        ui.showInvestmentPriceHint("Sem conexão com a B3 agora. Informe o preço manualmente.", true);
+        ui.showInvestmentPriceHint(`Sem conexão com ${isCrypto ? "as fontes de cotação de cripto" : "a B3"} agora. Informe o preço manualmente.`, true);
+      } else if (isCrypto) {
+        ui.showInvestmentPriceHint(`Não encontramos a cotação de "${ticker}". Use o símbolo da moeda (ex: BTC, ETH) ou informe o preço manualmente.`, true);
       } else {
         ui.showInvestmentPriceHint(
           `Não foi possível buscar "${ticker}" na B3${category === "FIIs" ? " (FIIs exigem token da Brapi)" : ""}. Informe o preço manualmente.`,
@@ -549,9 +570,10 @@ function initUIBindings() {
 async function refreshQuotes({ silent }) {
   if (quotesInFlight) return;
 
-  const eligible = latestInvestments.filter((inv) => B3_CATEGORIES.includes(inv.category) && (Number(inv.quantity) || 0) > 0);
+  const isAutoQuoted = (inv) => B3_CATEGORIES.includes(inv.category) || inv.category === CRYPTO_CATEGORY;
+  const eligible = latestInvestments.filter((inv) => isAutoQuoted(inv) && (Number(inv.quantity) || 0) > 0);
   if (eligible.length === 0) {
-    if (!silent) ui.showToast("Nenhum ativo da B3 (Ações/FIIs) para atualizar.", "info");
+    if (!silent) ui.showToast("Nenhum ativo com cotação automática (Ações, FIIs ou Criptomoedas) para atualizar.", "info");
     return;
   }
 
@@ -559,8 +581,16 @@ async function refreshQuotes({ silent }) {
   ui.setQuotesLoading(true);
 
   try {
-    const tickers = eligible.map((inv) => inv.ticker);
-    const { prices, failedTickers, networkError } = await fetchQuotes(tickers);
+    const empty = { prices: {}, failedTickers: [], networkError: false };
+    const b3Tickers = eligible.filter((inv) => inv.category !== CRYPTO_CATEGORY).map((inv) => inv.ticker);
+    const cryptoTickers = eligible.filter((inv) => inv.category === CRYPTO_CATEGORY).map((inv) => inv.ticker);
+    const [b3, crypto] = await Promise.all([
+      b3Tickers.length ? fetchQuotes(b3Tickers) : empty,
+      cryptoTickers.length ? fetchCryptoQuotes(cryptoTickers) : empty,
+    ]);
+    const prices = { ...b3.prices, ...crypto.prices };
+    const failedTickers = [...b3.failedTickers, ...crypto.failedTickers];
+    const networkError = (b3Tickers.length === 0 || b3.networkError) && (cryptoTickers.length === 0 || crypto.networkError);
     const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
 
     let updated = 0;
@@ -584,7 +614,7 @@ async function refreshQuotes({ silent }) {
     );
 
     if (networkError) {
-      ui.showToast("Não foi possível conectar à B3 agora. Mantendo os últimos preços salvos.", "error");
+      ui.showToast("Não foi possível conectar às fontes de cotação agora. Mantendo os últimos preços salvos.", "error");
     } else if (updated > 0) {
       const failMsg = failedTickers.length ? ` (${failedTickers.length} ticker(s) não encontrado(s))` : "";
       ui.showToast(`${updated} cotação(ões) atualizada(s)${failMsg}.`, "success");
@@ -593,7 +623,7 @@ async function refreshQuotes({ silent }) {
     }
   } catch (err) {
     console.error(err);
-    ui.showToast("Erro ao buscar cotações da B3.", "error");
+    ui.showToast("Erro ao buscar cotações.", "error");
   } finally {
     quotesInFlight = false;
     ui.setQuotesLoading(false);
@@ -1017,6 +1047,15 @@ function subscribeToActiveCollection() {
   const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
   if (!id) return;
 
+  // Primeiros passos: só no espaço pessoal e depois que transações e investimentos chegaram.
+  const onboardingUid = activeMode === "personal" ? activeUser.uid : null;
+  const loadedForOnboarding = { transactions: false, investments: false };
+  const syncOnboarding = (key) => {
+    loadedForOnboarding[key] = true;
+    ui.updateOnboarding({ uid: onboardingUid, ready: loadedForOnboarding.transactions && loadedForOnboarding.investments });
+  };
+  ui.updateOnboarding({ uid: onboardingUid, ready: false });
+
   unsubscribeTransactions = listenToTransactions(activeMode, id, (transactions, error) => {
     if (error) {
       ui.showToast("Erro ao carregar transações em tempo real.", "error");
@@ -1024,6 +1063,7 @@ function subscribeToActiveCollection() {
     }
     latestTransactions = transactions;
     refreshDashboard();
+    syncOnboarding("transactions");
   });
 
   unsubscribeGoals = listenToGoals(activeMode, id, (goals, error) => {
@@ -1044,16 +1084,20 @@ function subscribeToActiveCollection() {
     latestInvestments = investments;
     ui.renderInvestments(investments);
     refreshUpcomingDividends();
+    refreshMarketIndices();
+    syncOnboarding("investments");
   });
 
-  unsubscribeDividends = listenToDividends(activeMode, id, (dividends, error) => {
+  unsubscribeDividends = listenToDividends(activeMode, id, (dividends, error, meta) => {
     if (error) {
       ui.showToast("Erro ao carregar proventos em tempo real.", "error");
       return;
     }
-    const firstLoad = !dividendsLoaded;
+    // A importação automática só confia na lista confirmada pelo servidor (o cache local
+    // pode não ter proventos lançados por outro aparelho, o que geraria duplicados).
+    const firstLoad = !dividendsLoaded && !meta?.fromCache;
     latestDividends = dividends;
-    dividendsLoaded = true;
+    if (!meta?.fromCache) dividendsLoaded = true;
     ui.renderDividendsData(dividends);
     if (firstLoad) refreshUpcomingDividends();
   });
@@ -1075,14 +1119,15 @@ function subscribeToActiveCollection() {
     ui.renderBudgets(latestBudgets, latestTransactions);
   });
 
-  unsubscribeRecurrences = listenToRecurrences(activeMode, id, (recurrences, error) => {
+  unsubscribeRecurrences = listenToRecurrences(activeMode, id, (recurrences, error, meta) => {
     if (error) {
       ui.showToast("Erro ao carregar recorrências em tempo real.", "error");
       return;
     }
     latestRecurrences = recurrences;
     ui.renderRecurrences(recurrences);
-    processRecurrences(recurrences);
+    // Lançar recorrências com dado do cache local poderia duplicar o que outro aparelho já lançou.
+    if (!meta?.fromCache) processRecurrences(recurrences);
   });
 }
 
@@ -1193,6 +1238,45 @@ function stopCoupleInviteListeners() {
   ui.renderJoinRequests([]);
 }
 
+/* -------------------- Carteira x Mercado -------------------- */
+const INDICES_CACHE_KEY = "aportfy_market_indices";
+const INDICES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+let indicesLoadedFrom = null; // data inicial das séries já carregadas nesta sessão
+let indicesLoading = false;
+
+/** Busca CDI/IBOV/IFIX desde o primeiro aporte (com cache local de 6h) e entrega para a tela. */
+async function refreshMarketIndices() {
+  const firstFlow = latestInvestments
+    .flatMap((inv) => getInvestmentPurchases(inv).map((p) => String(p.date).slice(0, 10)))
+    .sort()[0];
+  if (!firstFlow) return ui.setMarketIndices(null, "idle");
+  if (indicesLoading || (indicesLoadedFrom && indicesLoadedFrom <= firstFlow)) return;
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(INDICES_CACHE_KEY) || "null");
+    if (cached && Date.now() - cached.at < INDICES_CACHE_TTL_MS && cached.desde <= firstFlow) {
+      indicesLoadedFrom = cached.desde;
+      return ui.setMarketIndices(cached.data, "ready");
+    }
+  } catch {
+    /* cache indisponível */
+  }
+
+  indicesLoading = true;
+  ui.setMarketIndices(null, "loading");
+  const { ok, data } = await fetchMarketIndices(firstFlow);
+  indicesLoading = false;
+  if (!ok) return ui.setMarketIndices(null, "error");
+
+  indicesLoadedFrom = firstFlow;
+  ui.setMarketIndices(data, "ready");
+  try {
+    localStorage.setItem(INDICES_CACHE_KEY, JSON.stringify({ at: Date.now(), desde: firstFlow, data }));
+  } catch {
+    /* cota do storage cheia: segue sem cache */
+  }
+}
+
 async function switchMode(mode) {
   if (mode === activeMode) return;
   activeMode = mode;
@@ -1231,6 +1315,7 @@ onAuthChange(async (user) => {
     stopCoupleInviteListeners();
     activeUser = null;
     activeCoupleId = null;
+    ui.updateOnboarding({ uid: null, ready: false });
     latestTransactions = [];
     latestGoals = [];
     latestInvestments = [];
@@ -1277,3 +1362,10 @@ onAuthChange(async (user) => {
 document.addEventListener("DOMContentLoaded", () => {
   initUIBindings();
 });
+
+/* -------------------- PWA: service worker -------------------- */
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("Service worker não registrado:", err));
+  });
+}

@@ -442,9 +442,10 @@ export function listenToDividends(mode, id, callback) {
 
   return onSnapshot(
     q,
+    { includeMetadataChanges: true },
     (snapshot) => {
       const dividends = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      callback(dividends);
+      callback(dividends, null, { fromCache: snapshot.metadata.fromCache });
     },
     (error) => {
       console.error("Erro ao escutar proventos:", error);
@@ -585,9 +586,10 @@ export function listenToRecurrences(mode, id, callback) {
 
   return onSnapshot(
     colRef,
+    { includeMetadataChanges: true },
     (snapshot) => {
       const recurrences = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      callback(recurrences);
+      callback(recurrences, null, { fromCache: snapshot.metadata.fromCache });
     },
     (error) => {
       console.error("Erro ao escutar recorrências:", error);
@@ -668,5 +670,6 @@ export function listenToPortfolioSettings(mode, id, callback) {
  * @param {{preset:string, targets:Object<string,number>, maxAssetPct:number, minAssets:number}} settings
  */
 export async function savePortfolioSettings(mode, id, settings) {
-  return setDoc(getPortfolioSettingsRef(mode, id), { ...settings, updatedAt: serverTimestamp() });
+  // merge: a meta de renda e as metas de alocação são salvas em momentos diferentes.
+  return setDoc(getPortfolioSettingsRef(mode, id), { ...settings, updatedAt: serverTimestamp() }, { merge: true });
 }
