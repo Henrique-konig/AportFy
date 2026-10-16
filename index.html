@@ -215,7 +215,7 @@
       <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         <!-- HEADER -->
-        <header class="shrink-0 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur-xl">
+        <header class="relative z-30 shrink-0 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur-xl">
           <div class="h-20 flex items-center gap-4 px-4 sm:px-6">
             <button id="mobile-sidebar-toggle" class="lg:hidden text-slate-400 hover:text-white shrink-0">
               <i class="ph-bold ph-list text-xl"></i>
@@ -253,7 +253,7 @@
                   <i class="ph-bold ph-bell text-xl" aria-hidden="true"></i>
                   <span class="hidden absolute -top-1.5 -right-2 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-blue-500 ring-2 ring-slate-950 text-[10px] font-bold text-white flex items-center justify-center" id="notif-dot"><span id="notif-count">0</span></span>
                 </button>
-                <div id="notif-panel" class="hidden absolute right-0 top-full mt-3 w-[22rem] max-w-[calc(100vw-2rem)] glass-card rounded-2xl shadow-2xl z-[65] overflow-hidden" role="region" aria-label="Alertas">
+                <div id="notif-panel" class="hidden fixed left-4 right-4 top-[4.5rem] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-3 sm:w-[22rem] glass-card notif-panel rounded-2xl shadow-2xl z-[65] overflow-hidden" role="region" aria-label="Alertas">
                   <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800/80">
                     <p class="text-sm font-bold">Alertas</p>
                     <button type="button" id="notif-mark-read" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors">Marcar todos como lidos</button>

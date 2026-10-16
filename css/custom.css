@@ -887,3 +887,11 @@ html.theme-light select {
 html.theme-light input::placeholder {
   color: #94a3b8;
 }
+
+/* Painel de alertas: fica acima do conteúdo e com fundo opaco para o texto de trás não aparecer */
+.notif-panel {
+  background: rgb(15, 23, 42);
+}
+html.theme-light .notif-panel {
+  background: #fff;
+}
