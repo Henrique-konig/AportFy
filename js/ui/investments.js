@@ -865,7 +865,12 @@ export function renderMarketComparison(investments) {
 
   if (marketStatus === "loading") return showStatus("Buscando CDI, IBOV e IFIX…");
   if (marketStatus === "error") return showStatus("Não foi possível buscar os índices agora (disponível com o app publicado na Vercel).");
-  if (marketStatus !== "ready") return showStatus("");
+  if (marketStatus !== "ready") {
+    // Sem índices (ainda não pedidos): esconde o gráfico em vez de mostrar um desenho antigo.
+    showStatus("");
+    marketEl.chartWrap.classList.add("hidden");
+    return;
+  }
   showStatus("");
 
   if (!marketChart) return;

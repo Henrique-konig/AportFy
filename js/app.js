@@ -1272,6 +1272,7 @@ function stopCoupleInviteListeners() {
 const INDICES_CACHE_KEY = "aportfy_market_indices";
 const INDICES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 let indicesLoadedFrom = null; // data inicial das séries já carregadas nesta sessão
+let indicesData = null; // as séries em si (a tela as perde ao trocar de modo e precisa recebê-las de novo)
 let indicesLoading = false;
 
 /** Busca CDI/IBOV/IFIX desde o primeiro aporte (com cache local de 6h) e entrega para a tela. */
@@ -1280,12 +1281,14 @@ async function refreshMarketIndices() {
     .flatMap((inv) => getInvestmentPurchases(inv).map((p) => String(p.date).slice(0, 10)))
     .sort()[0];
   if (!firstFlow) return ui.setMarketIndices(null, "idle");
-  if (indicesLoading || (indicesLoadedFrom && indicesLoadedFrom <= firstFlow)) return;
+  if (indicesLoading) return;
+  if (indicesData && indicesLoadedFrom <= firstFlow) return ui.setMarketIndices(indicesData, "ready");
 
   try {
     const cached = JSON.parse(localStorage.getItem(INDICES_CACHE_KEY) || "null");
     if (cached && Date.now() - cached.at < INDICES_CACHE_TTL_MS && cached.desde <= firstFlow) {
       indicesLoadedFrom = cached.desde;
+      indicesData = cached.data;
       return ui.setMarketIndices(cached.data, "ready");
     }
   } catch {
@@ -1299,6 +1302,7 @@ async function refreshMarketIndices() {
   if (!ok) return ui.setMarketIndices(null, "error");
 
   indicesLoadedFrom = firstFlow;
+  indicesData = data;
   ui.setMarketIndices(data, "ready");
   try {
     localStorage.setItem(INDICES_CACHE_KEY, JSON.stringify({ at: Date.now(), desde: firstFlow, data }));

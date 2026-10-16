@@ -752,3 +752,40 @@ describe("segurança da conta", () => {
     expect($("login-password").getAttribute("autocomplete")).toBe("current-password");
   });
 });
+
+/* ---------------------------------------------------------------
+   Carteira x Mercado
+--------------------------------------------------------------- */
+describe("Carteira x Mercado", () => {
+  const days = (from, n) => Array.from({ length: n }, (_, i) => new Date(Date.UTC(2026, 2, 1 + i)).toISOString().slice(0, 10)).filter((d) => d >= from);
+  const sample = () => ({
+    from: "2026-03-01",
+    cdi: days("2026-03-01", 300).map((date) => ({ date, rate: 0.05 })),
+    ibov: days("2026-03-01", 300).map((date, i) => [date, 100000 + i * 100]),
+    ifix: days("2026-03-01", 300).map((date, i) => [date, 3000 + i]),
+  });
+  const cardsText = () => text("market-cards");
+
+  it("com os índices carregados, os cartões mostram valores e o gráfico aparece", () => {
+    ui.setMarketIndices(sample(), "ready");
+    expect(cardsText()).toContain("CDI");
+    expect(cardsText()).not.toMatch(/CDI R\$\s?0,00/);
+    expect($("market-chart-wrap").classList.contains("hidden")).toBe(false);
+  });
+
+  it("sem índices (estado inicial) o gráfico some em vez de mostrar um desenho antigo", () => {
+    ui.setMarketIndices(sample(), "ready");
+    ui.setMarketIndices(null, "idle");
+    expect($("market-chart-wrap").classList.contains("hidden")).toBe(true);
+  });
+
+  it("reenviar os índices depois de perdê-los recupera os cartões (troca de modo)", () => {
+    const data = sample();
+    ui.setMarketIndices(data, "ready");
+    const before = cardsText();
+    ui.setMarketIndices(null, "idle"); // ex.: o modo Casal não tem investimentos
+    ui.setMarketIndices(data, "ready"); // o app reenvia ao voltar
+    expect(cardsText()).toBe(before);
+    expect($("market-chart-wrap").classList.contains("hidden")).toBe(false);
+  });
+});
