@@ -20,6 +20,7 @@ import {
   setDoc,
   getDoc,
   arrayUnion,
+  deleteField,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 /**
@@ -154,21 +155,110 @@ export async function addCoupleMember(coupleId, uid) {
   return updateDoc(ref, { members: arrayUnion(uid) });
 }
 
+/* ---------------------------------------------------------------
+   Convite ao espaço de casal (com aprovação do dono)
+   Quem tem o código cria um pedido em
+     couples/{coupleId}/joinRequests/{uid}
+   e só vira membro quando o DONO do espaço (coupleId == uid do dono) aprova.
+--------------------------------------------------------------- */
+
+/** Código de casal = UID do dono (letras e números, ~28 caracteres). */
+export const COUPLE_CODE_PATTERN = /^[A-Za-z0-9]{20,40}$/;
+
+function getJoinRequestRef(coupleId, userId) {
+  return doc(db, "couples", coupleId, "joinRequests", userId);
+}
+
 /**
- * Associa o usuário ao espaço de casal de outra pessoa a partir de um
- * código de casal (coupleId) compartilhado. Valida que o espaço existe
- * antes de entrar — sem isso, qualquer string era aceita silenciosamente.
+ * Pede para entrar no espaço de casal de outra pessoa. O pedido fica pendente
+ * até o dono aprovar. As regras do Firestore recusam o pedido se o código não
+ * existir ou se a pessoa já for membro.
  * @param {string} userId
- * @param {string} coupleId
+ * @param {string} coupleId código compartilhado pelo dono
+ * @param {{email?:string, displayName?:string}} info
  */
-export async function joinCouple(userId, coupleId) {
-  const coupleDoc = await getCoupleDoc(coupleId);
-  if (!coupleDoc) {
-    throw new Error("Código de casal inválido — não existe nenhum espaço com esse código.");
+export async function requestJoinCouple(userId, coupleId, { email = "", displayName = "" } = {}) {
+  if (!COUPLE_CODE_PATTERN.test(coupleId)) {
+    throw new Error("Código de casal inválido. Confira se copiou o código inteiro.");
+  }
+  if (coupleId === userId) {
+    throw new Error("Esse é o seu próprio código. Compartilhe-o com o seu parceiro(a).");
   }
 
-  await addCoupleMember(coupleId, userId);
-  return upsertUserProfile(userId, { coupleId });
+  const ref = getJoinRequestRef(coupleId, userId);
+  // Um pedido antigo (ex: recusado) é apagado antes, pois só o dono altera pedidos existentes.
+  await deleteDoc(ref).catch(() => {});
+  try {
+    await setDoc(ref, { uid: userId, email, displayName, status: "pending", createdAt: serverTimestamp() });
+  } catch (err) {
+    if (err?.code === "permission-denied") {
+      throw new Error("Não foi possível enviar o pedido. Confira o código — ou você já faz parte desse espaço.");
+    }
+    throw err;
+  }
+  return upsertUserProfile(userId, { pendingCoupleId: coupleId });
+}
+
+/**
+ * Escuta o próprio pedido de entrada (status: pending | approved | rejected).
+ * O callback recebe null se o pedido não existe mais.
+ * @returns {() => void} unsubscribe
+ */
+export function listenToMyJoinRequest(coupleId, userId, callback) {
+  return onSnapshot(
+    getJoinRequestRef(coupleId, userId),
+    (snap) => callback(snap.exists() ? snap.data() : null),
+    (error) => {
+      console.error("Erro ao acompanhar o pedido de entrada:", error);
+      callback(null, error);
+    }
+  );
+}
+
+/**
+ * Conclui o pedido do lado de quem pediu: se aprovado, o espaço passa a ser o
+ * do perfil; em qualquer caso o pedido é apagado e o pendente, limpo.
+ */
+export async function finishJoinRequest(userId, coupleId, approved) {
+  await deleteDoc(getJoinRequestRef(coupleId, userId)).catch(() => {});
+  return upsertUserProfile(userId, approved ? { coupleId, pendingCoupleId: deleteField() } : { pendingCoupleId: deleteField() });
+}
+
+/** Cancela o pedido pendente (solicitante). */
+export async function cancelJoinRequest(userId, coupleId) {
+  return finishJoinRequest(userId, coupleId, false);
+}
+
+/**
+ * Escuta, para o dono do espaço, os pedidos de entrada ainda pendentes.
+ * @returns {() => void} unsubscribe
+ */
+export function listenToJoinRequests(ownerCoupleId, callback) {
+  return onSnapshot(
+    collection(db, "couples", ownerCoupleId, "joinRequests"),
+    (snapshot) => {
+      const requests = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((r) => r.status === "pending")
+        .sort((x, y) => (x.createdAt?.seconds || 0) - (y.createdAt?.seconds || 0));
+      callback(requests);
+    },
+    (error) => {
+      console.error("Erro ao escutar pedidos de entrada:", error);
+      callback([], error);
+    }
+  );
+}
+
+/** Dono aprova: adiciona o solicitante aos membros e marca o pedido como aprovado. */
+export async function approveJoinRequest(ownerCoupleId, requesterUid) {
+  await addCoupleMember(ownerCoupleId, requesterUid);
+  return updateDoc(getJoinRequestRef(ownerCoupleId, requesterUid), { status: "approved" });
+}
+
+/** Dono recusa o pedido. */
+export async function rejectJoinRequest(ownerCoupleId, requesterUid) {
+  return updateDoc(getJoinRequestRef(ownerCoupleId, requesterUid), { status: "rejected" });
 }
 
 /* ---------------------------------------------------------------

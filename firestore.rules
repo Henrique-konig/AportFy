@@ -8,20 +8,22 @@ rules_version = '2';
 //   couples/{coupleId}             -> doc raiz, guarda só a lista de
 //                                      membros (não é dado financeiro)
 //   couples/{coupleId}/**          -> só quem está em "members"
+//   couples/{coupleId}/joinRequests/{uid}
+//                                  -> pedido de entrada: criado por quem quer
+//                                     entrar, aprovado/recusado só pelo dono
+//                                     do espaço (coupleId == uid do dono)
 //
 // Deploy: Firebase Console > Firestore Database > Regras > colar este
 // arquivo > Publicar. Ou, com o Firebase CLI instalado e o projeto
 // linkado (firebase use ecofy-c332d): `firebase deploy --only firestore:rules`.
 //
-// Limitação conhecida: qualquer usuário autenticado que descubra um
-// coupleId (o UID de 28 caracteres do criador do espaço) consegue se
-// adicionar aos "members" e ganhar acesso de leitura/escrita aos dados
-// financeiros daquele casal — não há convite/aprovação bilateral.
-// O coupleId não é público (só aparece na tela de Configurações do
-// próprio dono e é compartilhado manualmente), mas não é secreto o
-// suficiente pra ser a única barreira num app mais sensível. Uma vez
-// dentro, o "members" só pode crescer, nunca encolher, então ninguém
-// consegue remover o parceiro à força.
+// Entrada no espaço de casal: quem tem o código NÃO entra sozinho. Cria um
+// pedido em joinRequests e só passa a ser membro quando o DONO do espaço
+// aprova (a regra de update do doc raiz exige o pedido existir e só o dono
+// pode adicionar membros). Membros só crescem, nunca encolhem.
+//
+// IMPORTANTE: estas regras precisam ser publicadas junto com o deploy do app
+// que usa joinRequests (Firebase Console > Firestore > Regras > Publicar).
 // =========================================================
 
 service cloud.firestore {
@@ -40,10 +42,16 @@ service cloud.firestore {
 
     // Espaço de casal.
     match /couples/{coupleId} {
-      // Leitura liberada pra qualquer autenticado: é só a lista de
-      // membros, necessária pra outras regras conseguirem checar
-      // pertencimento via get() antes de liberar as subcoleções.
-      allow read: if request.auth != null;
+      // Membros que entram numa atualização do doc raiz (novo array menos o antigo).
+      function addedMembers() {
+        return request.resource.data.members.removeAll(resource.data.members);
+      }
+
+      // Só o dono (coupleId == uid) e os membros leem o doc raiz. Quem não é
+      // membro não consegue nem confirmar que um código existe por aqui.
+      allow read: if request.auth != null
+                   && (request.auth.uid == coupleId
+                       || (resource != null && request.auth.uid in resource.data.members));
 
       // Só pode criar o PRÓPRIO espaço (coupleId == seu uid), e só com
       // ele mesmo como único membro inicial.
@@ -51,17 +59,53 @@ service cloud.firestore {
                      && request.auth.uid == coupleId
                      && request.resource.data.members == [request.auth.uid];
 
-      // Atualização do doc raiz só pode mexer no campo "members", e só
-      // de forma aditiva (o novo array precisa conter todo o antigo) —
-      // isso é o que permite "entrar no espaço de outra pessoa" sem
-      // abrir brecha pra excluir/travar o parceiro fora.
+      // Só o DONO altera o doc raiz, só o campo "members", só de forma
+      // aditiva, e só para incluir (a) ele mesmo ou (b) UM solicitante que
+      // tenha um pedido de entrada aberto.
       allow update: if request.auth != null
+                     && request.auth.uid == coupleId
                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
-                     && request.resource.data.members.hasAll(resource.data.members);
+                     && request.resource.data.members.hasAll(resource.data.members)
+                     && (
+                       addedMembers().hasOnly([coupleId])
+                       || (
+                         addedMembers().size() == 1
+                         && exists(/databases/$(database)/documents/couples/$(coupleId)/joinRequests/$(addedMembers()[0]))
+                       )
+                     );
 
-      // Dados financeiros reais do casal — só quem está em "members".
+      // Pedidos de entrada no espaço.
+      match /joinRequests/{requesterUid} {
+        // Cada pessoa cria só o PRÓPRIO pedido, pendente, para um espaço que
+        // existe e do qual ainda não é membro.
+        allow create: if request.auth != null
+                       && request.auth.uid == requesterUid
+                       && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'status', 'createdAt'])
+                       && request.resource.data.uid == requesterUid
+                       && request.resource.data.status == 'pending'
+                       && exists(/databases/$(database)/documents/couples/$(coupleId))
+                       && !(request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.members);
+
+        // O solicitante vê o próprio pedido; o dono vê todos.
+        allow read: if request.auth != null
+                     && (request.auth.uid == requesterUid || request.auth.uid == coupleId);
+
+        // O dono aprova ou recusa (muda só o status).
+        allow update: if request.auth != null
+                       && request.auth.uid == coupleId
+                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                       && request.resource.data.status in ['approved', 'rejected'];
+
+        // Solicitante (cancelar/encerrar) e dono (limpar) podem apagar.
+        allow delete: if request.auth != null
+                       && (request.auth.uid == requesterUid || request.auth.uid == coupleId);
+      }
+
+      // Dados financeiros reais do casal — só quem está em "members"
+      // (os pedidos de entrada têm regras próprias acima).
       match /{collection}/{docId} {
         allow read, write: if request.auth != null
+                             && collection != 'joinRequests'
                              && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.members;
       }
     }

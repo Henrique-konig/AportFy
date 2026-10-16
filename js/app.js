@@ -41,10 +41,16 @@ import {
   deleteRecurrence,
   getUserProfile,
   upsertUserProfile,
-  joinCouple,
   createCoupleSpace,
   getCoupleDoc,
   addCoupleMember,
+  requestJoinCouple,
+  listenToMyJoinRequest,
+  finishJoinRequest,
+  cancelJoinRequest,
+  listenToJoinRequests,
+  approveJoinRequest,
+  rejectJoinRequest,
 } from "./db.js";
 import { fetchQuotes, fetchDividendCalendar, B3_CATEGORIES } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
@@ -70,6 +76,9 @@ let unsubscribeInvestments = null;
 let unsubscribeDividends = null;
 let unsubscribeBudgets = null;
 let unsubscribePortfolioSettings = null;
+let unsubscribeMyJoinRequest = null;
+let unsubscribeJoinRequests = null;
+let pendingJoinCoupleId = null;
 let unsubscribeRecurrences = null;
 let activeUser = null;
 let activeMode = "personal";
@@ -448,16 +457,44 @@ function initUIBindings() {
     }
   });
 
+  // Entrar no espaço de outra pessoa exige aprovação do dono: aqui só se envia o pedido.
   ui.onJoinCouple(async (coupleId) => {
     try {
-      await joinCouple(activeUser.uid, coupleId);
-      activeCoupleId = coupleId;
-      ui.renderCoupleSettings(activeCoupleId);
-      if (activeMode === "couple") subscribeToActiveCollection();
-      ui.showToast("Você entrou no espaço de casal com sucesso!", "success");
+      await requestJoinCouple(activeUser.uid, coupleId, { email: activeUser.email || "", displayName: activeUser.displayName || "" });
+      watchMyJoinRequest(coupleId);
+      ui.showToast("Pedido enviado! Assim que o dono do espaço aprovar, você entra.", "success");
     } catch (err) {
       console.error(err);
-      ui.showToast(err.message || "Erro ao entrar no espaço de casal.", "error");
+      ui.showToast(err.message || "Erro ao enviar o pedido de entrada.", "error");
+    }
+  });
+
+  ui.onCancelJoinRequest(async () => {
+    if (!pendingJoinCoupleId) return;
+    try {
+      const coupleId = pendingJoinCoupleId;
+      stopWatchingMyJoinRequest();
+      await cancelJoinRequest(activeUser.uid, coupleId);
+      ui.showToast("Pedido cancelado.", "info");
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao cancelar o pedido.", "error");
+    }
+  });
+
+  // Dono do espaço: aprova ou recusa pedidos de entrada.
+  ui.onJoinRequestDecision(async (requesterUid, decision) => {
+    try {
+      if (decision === "approve") {
+        await approveJoinRequest(activeUser.uid, requesterUid);
+        ui.showToast("Pedido aprovado! A pessoa agora faz parte do seu espaço.", "success");
+      } else {
+        await rejectJoinRequest(activeUser.uid, requesterUid);
+        ui.showToast("Pedido recusado.", "info");
+      }
+    } catch (err) {
+      console.error(err);
+      ui.showToast("Erro ao responder o pedido.", "error");
     }
   });
 
@@ -667,7 +704,7 @@ function newsErrorMessage(reason, target) {
   if (reason === "no_key") {
     return {
       title: "Busca de notícias ainda não configurada.",
-      desc: "Cadastre uma chave gratuita em alphavantage.co e cole em ALPHA_VANTAGE_KEY (js/news.js) para ativar este feed.",
+      desc: "Cadastre uma chave gratuita em alphavantage.co e configure a variável de ambiente ALPHA_VANTAGE_KEY na Vercel para ativar este feed.",
     };
   }
   if (reason === "rate_limited") {
@@ -1056,17 +1093,33 @@ function subscribeToActiveCollection() {
  */
 async function ensureCoupleId(user) {
   const profile = await getUserProfile(user.uid);
-  const coupleId = profile?.coupleId || user.uid;
+  let coupleId = profile?.coupleId || user.uid;
 
-  // Migração: quem já usava o Modo Casal antes do doc raiz couples/{id}
-  // existir (ou o parceiro que ainda não está no array "members" desse
-  // doc) é corrigido automaticamente aqui, no login — sem isso, as
-  // regras do Firestore baseadas em "members" bloqueariam o acesso dele.
-  const coupleDoc = await getCoupleDoc(coupleId);
-  if (!coupleDoc) {
-    await createCoupleSpace(coupleId, user.uid);
-  } else if (!coupleDoc.members?.includes(user.uid)) {
-    await addCoupleMember(coupleId, user.uid);
+  // O perfil sozinho não dá acesso ao espaço de outra pessoa: só vale se o
+  // usuário for mesmo um dos membros. Caso contrário, volta ao espaço próprio.
+  if (coupleId !== user.uid) {
+    let isMember = false;
+    try {
+      isMember = (await getCoupleDoc(coupleId))?.members?.includes(user.uid) === true;
+    } catch {
+      isMember = false;
+    }
+    if (!isMember) {
+      console.warn("Usuário não é membro do espaço de casal do perfil; voltando ao espaço próprio.");
+      coupleId = user.uid;
+      await upsertUserProfile(user.uid, { coupleId });
+      ui.showToast("Você não faz parte do espaço de casal anterior. Voltamos para o seu espaço.", "info");
+    }
+  }
+
+  // Espaço próprio: cria se ainda não existe (o dono sempre pode ler o próprio espaço).
+  if (coupleId === user.uid) {
+    const coupleDoc = await getCoupleDoc(coupleId);
+    if (!coupleDoc) {
+      await createCoupleSpace(coupleId, user.uid);
+    } else if (!coupleDoc.members?.includes(user.uid)) {
+      await addCoupleMember(coupleId, user.uid);
+    }
   }
 
   if (!profile?.coupleId) {
@@ -1074,6 +1127,70 @@ async function ensureCoupleId(user) {
   }
 
   return coupleId;
+}
+
+/* -------------------- Convite ao espaço de casal -------------------- */
+function stopWatchingMyJoinRequest() {
+  unsubscribeMyJoinRequest?.();
+  unsubscribeMyJoinRequest = null;
+  pendingJoinCoupleId = null;
+  ui.renderJoinStatus(null);
+}
+
+/** Acompanha o pedido de entrada enviado: aprovado -> entra no espaço; recusado -> avisa. */
+function watchMyJoinRequest(coupleId) {
+  unsubscribeMyJoinRequest?.();
+  pendingJoinCoupleId = coupleId;
+  ui.renderJoinStatus({ coupleId });
+
+  unsubscribeMyJoinRequest = listenToMyJoinRequest(coupleId, activeUser.uid, async (request, error) => {
+    if (error) return;
+    if (!request) {
+      stopWatchingMyJoinRequest();
+      return;
+    }
+    if (request.status === "approved") {
+      stopWatchingMyJoinRequest();
+      try {
+        await finishJoinRequest(activeUser.uid, coupleId, true);
+        activeCoupleId = coupleId;
+        ui.renderCoupleSettings(activeCoupleId);
+        if (activeMode === "couple") subscribeToActiveCollection();
+        ui.showToast("Seu pedido foi aprovado! Você entrou no espaço de casal.", "success");
+      } catch (err) {
+        console.error(err);
+        ui.showToast("Pedido aprovado, mas não foi possível concluir a entrada. Recarregue a página.", "error");
+      }
+    } else if (request.status === "rejected") {
+      stopWatchingMyJoinRequest();
+      await finishJoinRequest(activeUser.uid, coupleId, false).catch(() => {});
+      ui.showToast("O dono do espaço recusou o seu pedido de entrada.", "error");
+    }
+  });
+}
+
+/** Dono: acompanha em tempo real os pedidos de entrada no próprio espaço. */
+function watchJoinRequestsToMySpace() {
+  unsubscribeJoinRequests?.();
+  let previousCount = null;
+  unsubscribeJoinRequests = listenToJoinRequests(activeUser.uid, (requests, error) => {
+    if (error) return;
+    ui.renderJoinRequests(requests);
+    if (previousCount !== null && requests.length > previousCount) {
+      ui.showToast("Novo pedido de entrada no seu espaço de casal. Veja em Configurações.", "info");
+    }
+    previousCount = requests.length;
+  });
+}
+
+function stopCoupleInviteListeners() {
+  unsubscribeJoinRequests?.();
+  unsubscribeJoinRequests = null;
+  unsubscribeMyJoinRequest?.();
+  unsubscribeMyJoinRequest = null;
+  pendingJoinCoupleId = null;
+  ui.renderJoinStatus(null);
+  ui.renderJoinRequests([]);
 }
 
 async function switchMode(mode) {
@@ -1101,12 +1218,17 @@ onAuthChange(async (user) => {
       await upsertUserProfile(user.uid, { email: user.email, lastLoginAt: new Date().toISOString() });
       activeCoupleId = await ensureCoupleId(user);
       ui.renderCoupleSettings(activeCoupleId);
+
+      watchJoinRequestsToMySpace();
+      const profile = await getUserProfile(user.uid);
+      if (profile?.pendingCoupleId) watchMyJoinRequest(profile.pendingCoupleId);
     } catch (err) {
       console.warn("Não foi possível preparar o perfil/espaço de casal do usuário:", err);
     }
 
     subscribeToActiveCollection();
   } else {
+    stopCoupleInviteListeners();
     activeUser = null;
     activeCoupleId = null;
     latestTransactions = [];

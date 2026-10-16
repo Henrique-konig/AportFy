@@ -11,12 +11,10 @@
 // devem quebrar o app — sempre retornam um resultado tratável pela UI.
 // =========================================================
 
-const ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query";
-
-// Cole aqui sua chave gratuita da Alpha Vantage (cadastro em
-// alphavantage.co/support/#api-key). Sem ela, "Minha Carteira" volta
-// vazia com reason:"no_key" — a UI mostra o aviso.
-const ALPHA_VANTAGE_KEY = "3MAPSBYUQHHK9BYH";
+// A chave da Alpha Vantage fica na variável de ambiente ALPHA_VANTAGE_KEY da
+// Vercel e é usada só pela função /api/noticias — nunca chega ao navegador.
+// Sem ela (ou fora da Vercel), "Minha Carteira" volta vazia com reason:"no_key".
+const NEWS_API = "/api/noticias";
 
 // Plano gratuito é limitado (25 requisições/dia) — cache local evita
 // gastar a cota toda vez que o usuário troca de aba.
@@ -93,20 +91,14 @@ export async function fetchPortfolioNews(tickers) {
   const cached = readCache(cacheKey);
   if (cached) return { items: cached, ok: true, reason: null };
 
-  if (!ALPHA_VANTAGE_KEY) return { items: [], ok: false, reason: "no_key" };
-
-  const url = `${ALPHA_VANTAGE_BASE}?function=NEWS_SENTIMENT&apikey=${encodeURIComponent(ALPHA_VANTAGE_KEY)}&tickers=${encodeURIComponent(symbols.join(","))}`;
-
   try {
-    const res = await fetch(url);
+    const res = await fetch(`${NEWS_API}?tickers=${encodeURIComponent(symbols.join(","))}`);
+    if (res.status === 503) return { items: [], ok: false, reason: "no_key" };
+    if (res.status === 429) return { items: [], ok: false, reason: "rate_limited" };
     if (!res.ok) return { items: [], ok: false, reason: "network_error" };
 
     const data = await res.json();
-    // Limite de requisições ou chave inválida: a API responde 200 com
-    // "Note"/"Information" em vez do array `feed`.
-    if (data.Note || data.Information || !Array.isArray(data.feed)) {
-      return { items: [], ok: false, reason: "rate_limited" };
-    }
+    if (!Array.isArray(data.feed)) return { items: [], ok: false, reason: "rate_limited" };
 
     const items = data.feed.map(normalizeAlphaVantageItem);
     writeCache(cacheKey, items);

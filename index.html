@@ -1214,7 +1214,7 @@
 
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
               <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-fill ph-heart text-lg text-purple-400"></i> Espaço do Casal</h3>
-              <p class="text-xs text-slate-500 mb-4">Compartilhe o código abaixo com seu parceiro(a) para que vocês vejam as mesmas transações no Modo Casal.</p>
+              <p class="text-xs text-slate-500 mb-4">Compartilhe o código abaixo com seu parceiro(a). Ele(a) envia um pedido de entrada e você aprova aqui — só quem você aprovar vê as mesmas transações no Modo Casal.</p>
 
               <label class="block text-xs font-medium text-slate-400 mb-1.5">Seu código de casal</label>
               <div class="flex gap-2 mb-5">
@@ -1226,14 +1226,23 @@
                 </button>
               </div>
 
+              <div id="settings-join-requests" class="hidden mb-5">
+                <p class="text-xs font-semibold text-purple-300 mb-2 flex items-center gap-1.5"><i class="ph-fill ph-bell-ringing"></i> Pedidos de entrada no seu espaço</p>
+                <div id="settings-join-requests-list" class="space-y-2"></div>
+              </div>
+
               <form id="settings-join-form" class="space-y-2">
-                <label class="block text-xs font-medium text-slate-400 mb-1.5" for="settings-join-input">Entrar no espaço de outra pessoa</label>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5" for="settings-join-input">Pedir para entrar no espaço de outra pessoa</label>
                 <div class="flex gap-2">
                   <input type="text" id="settings-join-input" placeholder="Cole aqui o código do seu parceiro(a)"
                     class="flex-1 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/60 focus:border-purple-500 transition-all" />
                   <button type="submit" class="shrink-0 bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 rounded-xl transition-all">
-                    Entrar
+                    Pedir entrada
                   </button>
+                </div>
+                <div id="settings-join-status" class="hidden items-center justify-between gap-3 bg-purple-500/10 border border-purple-500/25 rounded-xl px-4 py-3 mt-2">
+                  <p class="text-xs text-purple-200" data-join-status-text>—</p>
+                  <button type="button" data-join-cancel class="text-xs font-semibold text-slate-400 hover:text-white transition-colors shrink-0">Cancelar</button>
                 </div>
               </form>
             </section>

@@ -30,6 +30,7 @@
 - [Deploy](#deploy)
 - [Decisões de projeto](#decisões-de-projeto)
 - [Limitações conhecidas](#limitações-conhecidas)
+- [Licença](#licença)
 
 ## Sobre
 
@@ -87,7 +88,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Conta e dados**
 - Login com e-mail e senha, perfil e redefinição de senha por e-mail (em Configurações).
-- **Espaço do Casal**: código de compartilhamento para ver as mesmas transações em conjunto.
+- **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal.
 - **Backup e restauração** de transações, metas, investimentos e proventos em arquivo `.json`.
 
 ## Stack
@@ -123,12 +124,17 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── dropdown.js       # Dropdown customizado para os selects
 │   └── firebase-config.js# Inicialização do Firebase SDK
 ├── api/
-│   └── proventos.js      # Função serverless (Vercel): proventos de Ações e FIIs na API da B3
+│   ├── proventos.js      # Função serverless (Vercel): proventos de Ações e FIIs na API da B3
+│   └── noticias.js       # Função serverless (Vercel): notícias por ticker (chave da Alpha Vantage no servidor)
 ├── tests/
-│   └── calc.test.js      # Testes unitários de calc.js
+│   ├── calc.test.js      # Testes unitários de calc.js
+│   ├── ui.test.js        # Testes de tela (jsdom): filtros, modais, abas e totais
+│   └── rules/            # Testes das regras do Firestore (emulador)
 ├── assets/images/        # Favicon
 ├── firestore.rules       # Regras de segurança do Firestore
+├── firebase.json         # Configuração do emulador (testes das regras) e do deploy das regras
 ├── vercel.json           # URLs limpas, cache de assets e região da função
+├── LICENSE               # Licença ISC
 └── package.json
 ```
 
@@ -174,10 +180,12 @@ O Node.js é necessário apenas para o servidor estático de desenvolvimento e p
 
 ### 2. Chaves de API (opcionais)
 
+As chaves ficam **fora do código**: variáveis de ambiente da Vercel (Settings → Environment Variables), lidas só pelas funções em `api/`.
+
 | Serviço | Onde configurar | Efeito sem a chave |
 | --- | --- | --- |
 | Brapi | `BRAPI_TOKEN` em [`js/api.js`](js/api.js) | Cotações de Ações e FIIs funcionam no plano gratuito, sem token. Os proventos vêm da B3; a Brapi só serve de reserva (sem token, o plano gratuito cobre poucos tickers) |
-| Alpha Vantage | `ALPHA_VANTAGE_KEY` em [`js/news.js`](js/news.js) | A aba "Minha Carteira" de Notícias fica vazia e exibe um aviso |
+| Alpha Vantage | Variável de ambiente `ALPHA_VANTAGE_KEY` na Vercel (usada só por [`api/noticias.js`](api/noticias.js)) | A aba "Minha Carteira" de Notícias fica vazia e exibe um aviso |
 
 > A Alpha Vantage tem limite de 25 requisições por dia no plano gratuito, por isso as respostas ficam em cache local por 3 horas.
 
@@ -201,18 +209,29 @@ Datas são strings `YYYY-MM-DD`, o que simplifica filtros e agrupamentos por mê
 
 - As regras em [`firestore.rules`](firestore.rules) restringem as coleções pessoais ao próprio dono (`auth.uid == userId`) e as do casal aos membros do espaço.
 - As credenciais do Firebase em `firebase-config.js` identificam o projeto e não são secretas; quem protege os dados são as regras do Firestore. Publique-as antes de usar dados reais.
+- **Modo Casal com convite:** quem tem o código só cria um *pedido de entrada*; apenas o dono do espaço aprova (o doc do espaço só aceita membros novos vindos do dono e com pedido aberto). Isso é verificado por testes automatizados das regras.
+- **Mudou as regras? Publique-as.** O deploy do app não publica o `firestore.rules`: cole o arquivo em **Firestore Database → Regras → Publicar** (ou `firebase deploy --only firestore:rules`).
 - Faça backups periódicos em **Configurações → Backup e Restauração**. A restauração **adiciona** os dados do arquivo e nunca apaga o que já existe.
 
 ## Testes
-
-Os cálculos financeiros ficam isolados em [`js/calc.js`](js/calc.js), sem dependência de DOM ou Firebase, e são cobertos por testes unitários:
 
 ```bash
 npm install
 npm test
 ```
 
-Cobertura atual: métricas e preço médio de investimentos, vendas e histórico de movimentações, saúde da carteira (nota, alertas, sugestão de aporte e projeção), aportes mensais, série mensal de fluxo de caixa, orçamento por categoria, recorrências e deduplicação de proventos.
+`npm test` roda duas camadas, sem Firebase nem rede:
+
+- **Cálculos** ([`tests/calc.test.js`](tests/calc.test.js)): os cálculos financeiros ficam isolados em [`js/calc.js`](js/calc.js), sem DOM ou Firebase — métricas e preço médio, vendas e histórico, saúde da carteira, aportes, proventos, orçamento e recorrências.
+- **Telas** ([`tests/ui.test.js`](tests/ui.test.js)): carrega o `index.html` real num DOM simulado (jsdom) e exercita filtros, modais, abas e totais, além de conferir que todo id usado pelo `ui.js` existe no HTML. Pensado para pegar regressões como filtros que não reagem ou proventos duplicados.
+
+**Regras do Firestore** (precisam do emulador e de um JDK 21+ instalado):
+
+```bash
+npm run test:rules
+```
+
+Cobrem quem lê o quê, o fluxo de convite do Modo Casal (pedido, aprovação, recusa) e que ninguém entra num espaço sem a aprovação do dono.
 
 ## Deploy
 
@@ -237,9 +256,14 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 
 ## Limitações conhecidas
 
-- **Modo Casal sem convite bilateral:** quem descobrir o código de um espaço consegue entrar nele. O código só aparece na tela de Configurações do dono e deve ser compartilhado apenas com quem você confia.
+- **Modo Casal:** só o dono aprova novos membros, e membros não podem ser removidos pela interface (a lista só cresce). O código sozinho não dá acesso, mas ainda vale compartilhá-lo só com quem você confia.
+- **Nome do projeto Firebase:** o ID do projeto (`ecofy-c332d`) é de antes do rebrand e não pode ser renomeado; só o nome de exibição muda (Console do Firebase → Configurações do projeto). Usuários e dados ficam nele.
 - **Histórico de aportes:** posições criadas antes do campo `purchases` aparecem como uma única compra, na data da última compra. Editar quantidade, preço ou data de um ativo também resume o histórico em uma compra única.
 - **Cotações e notícias** dependem de APIs gratuitas de terceiros, sujeitas a limites de uso e indisponibilidade.
 - **Proventos** vêm da API pública (não documentada) da B3 por meio de uma função serverless; o formato pode mudar sem aviso. O cálculo usa o histórico de aportes (`purchases`) para saber as cotas na data-com — para posições antigas sem histórico, vale a data da última compra.
 - **Excluir um ativo** apaga também as compras e vendas dele do histórico (os proventos lançados continuam). Para encerrar uma posição mantendo o histórico, registre a venda.
 - **Valores estimados:** o JCP é calculado com 15% de IR (alguns investidores são isentos) e a corretora pode creditar o provento em data ligeiramente diferente da divulgada.
+
+## Licença
+
+Distribuído sob a licença ISC. Veja [`LICENSE`](LICENSE).

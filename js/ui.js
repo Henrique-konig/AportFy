@@ -148,6 +148,9 @@ const el = {
   settingsCopyCoupleBtn: document.getElementById("settings-copy-couple-btn"),
   settingsJoinForm: document.getElementById("settings-join-form"),
   settingsJoinInput: document.getElementById("settings-join-input"),
+  settingsJoinStatus: document.getElementById("settings-join-status"),
+  settingsJoinRequests: document.getElementById("settings-join-requests"),
+  settingsJoinRequestsList: document.getElementById("settings-join-requests-list"),
   settingsResetPasswordBtn: document.getElementById("settings-reset-password-btn"),
   settingsExportBackupBtn: document.getElementById("settings-export-backup-btn"),
   settingsImportBackupBtn: document.getElementById("settings-import-backup-btn"),
@@ -656,6 +659,7 @@ export function bindDashboardFilters() {
 }
 
 export function updateKPIs(transactions, goals = []) {
+  lastTransactions = transactions;
   lastGoals = goals;
   populateDashboardPeriodFilter(transactions);
 
@@ -3037,6 +3041,8 @@ export function renderCoupleSettings(coupleId) {
 
 let profileUpdateHandler = null;
 let joinCoupleHandler = null;
+let cancelJoinHandler = null;
+let joinDecisionHandler = null;
 let passwordResetHandler = null;
 let exportBackupHandler = null;
 let importBackupHandler = null;
@@ -3047,6 +3053,44 @@ export function onProfileUpdate(handler) {
 
 export function onJoinCouple(handler) {
   joinCoupleHandler = handler;
+}
+
+export function onCancelJoinRequest(handler) {
+  cancelJoinHandler = handler;
+}
+
+export function onJoinRequestDecision(handler) {
+  joinDecisionHandler = handler;
+}
+
+/** Mostra (ou esconde, com null) o aviso de pedido de entrada pendente de quem pediu para entrar. */
+export function renderJoinStatus(info) {
+  if (!el.settingsJoinStatus) return;
+  el.settingsJoinStatus.classList.toggle("hidden", !info);
+  el.settingsJoinStatus.classList.toggle("flex", !!info);
+  if (!info) return;
+  el.settingsJoinStatus.querySelector("[data-join-status-text]").textContent = `Pedido enviado ao espaço ${info.coupleId.slice(0, 6)}… — aguardando a aprovação do dono.`;
+}
+
+/** Dono: lista os pedidos de entrada pendentes no próprio espaço, com aprovar/recusar. */
+export function renderJoinRequests(requests) {
+  if (!el.settingsJoinRequests) return;
+  el.settingsJoinRequests.classList.toggle("hidden", requests.length === 0);
+  el.settingsJoinRequestsList.innerHTML = requests
+    .map(
+      (r) => `
+      <div class="flex items-center justify-between gap-3 bg-slate-900/50 border border-slate-800/80 rounded-xl px-4 py-3">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold truncate">${escapeHtml(r.displayName || "Sem nome")}</p>
+          <p class="text-xs text-slate-500 truncate">${escapeHtml(r.email || "")}</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" data-join-decision="reject" data-uid="${escapeHtml(r.id)}" class="text-xs font-semibold text-slate-400 hover:text-red-400 px-3 py-2 rounded-lg transition-colors">Recusar</button>
+          <button type="button" data-join-decision="approve" data-uid="${escapeHtml(r.id)}" class="text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white px-3.5 py-2 rounded-lg transition-colors">Aprovar</button>
+        </div>
+      </div>`
+    )
+    .join("");
 }
 
 export function onPasswordReset(handler) {
@@ -3083,6 +3127,12 @@ export function bindSettingsForms() {
     if (!value) return;
     joinCoupleHandler?.(value);
     el.settingsJoinInput.value = "";
+  });
+
+  el.settingsJoinStatus?.querySelector("[data-join-cancel]")?.addEventListener("click", () => cancelJoinHandler?.());
+  el.settingsJoinRequestsList?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-join-decision]");
+    if (btn) joinDecisionHandler?.(btn.dataset.uid, btn.dataset.joinDecision);
   });
 
   el.settingsResetPasswordBtn?.addEventListener("click", () => passwordResetHandler?.());
