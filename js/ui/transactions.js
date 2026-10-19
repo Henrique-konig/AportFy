@@ -5,7 +5,7 @@
 
 import { setDatePickerValue, closeDatePicker } from "../datepicker.js";
 import { refreshDropdown } from "../dropdown.js";
-import { CATEGORY_COLORS, TXN_PAGE_SIZE, el, escapeHtml, formatCurrency, formatDate, showToast, state, todayISO } from "./core.js";
+import { delegateClick, CATEGORY_COLORS, TXN_PAGE_SIZE, el, escapeHtml, formatCurrency, formatDate, showToast, state, todayISO, fadeInClass } from "./core.js";
 import { formatMonthLabel } from "./dividends.js";
 import { openDeleteModal } from "./forms.js";
 
@@ -23,12 +23,12 @@ export function onDeleteTransaction(handler) {
   deleteHandler = handler;
 }
 
-export function buildRowHtml(t) {
+export function buildRowHtml(t, fade = "animate-fade-in") {
   const color = CATEGORY_COLORS[t.category] || CATEGORY_COLORS["Outros"];
   const isIncome = t.type === "income";
   const amountLabel = `${isIncome ? "+" : "-"} ${formatCurrency(Math.abs(Number(t.amount) || 0))}`;
   return `
-    <tr class="animate-fade-in" data-id="${t.id}">
+    <tr class="${fade}" data-id="${t.id}">
       <td class="px-5 sm:px-6 py-4 font-medium">
         <div class="flex items-center gap-3">
           <span class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:${color}22;">
@@ -59,15 +59,11 @@ export function buildRowHtml(t) {
 }
 
 export function wireRowActions(tbody, transactions) {
-  tbody.querySelectorAll(".edit-row-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const t = transactions.find((tr) => tr.id === btn.dataset.id);
-      if (t && editHandler) editHandler(t);
-    });
+  delegateClick(tbody, ".edit-row-btn", (btn) => {
+    const t = transactions.find((tr) => tr.id === btn.dataset.id);
+    if (t && editHandler) editHandler(t);
   });
-  tbody.querySelectorAll(".delete-row-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "transaction"));
-  });
+  delegateClick(tbody, ".delete-row-btn", (btn) => openDeleteModal(btn.dataset.id, "transaction"));
 }
 
 export function getSearchTerm() {
@@ -94,7 +90,8 @@ export function renderTransactionsTable(transactions) {
   el.transactionsEmpty.classList.remove("flex");
 
   const rows = filtered.slice(0, 5);
-  el.transactionsTbody.innerHTML = rows.map(buildRowHtml).join("");
+  const fade = fadeInClass(el.transactionsTbody);
+  el.transactionsTbody.innerHTML = rows.map((t) => buildRowHtml(t, fade)).join("");
   wireRowActions(el.transactionsTbody, transactions);
 }
 
@@ -145,7 +142,8 @@ export function renderFullTransactionsTable(transactions) {
   el.transactionsFullEmpty.classList.add("hidden");
   el.transactionsFullEmpty.classList.remove("flex");
 
-  el.transactionsFullTbody.innerHTML = filtered.slice(0, state.txnVisibleCount).map(buildRowHtml).join("");
+  const fade = fadeInClass(el.transactionsFullTbody);
+  el.transactionsFullTbody.innerHTML = filtered.slice(0, state.txnVisibleCount).map((t) => buildRowHtml(t, fade)).join("");
   wireRowActions(el.transactionsFullTbody, transactions);
 
   const remaining = filtered.length - state.txnVisibleCount;
@@ -346,15 +344,11 @@ export function renderRecurrences(recurrences) {
     })
     .join("");
 
-  el.recurrencesList.querySelectorAll(".edit-recurrence-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const r = recurrences.find((x) => x.id === btn.dataset.id);
-      if (r && editRecurrenceHandler) editRecurrenceHandler(r);
-    });
+  delegateClick(el.recurrencesList, ".edit-recurrence-btn", (btn) => {
+    const r = recurrences.find((x) => x.id === btn.dataset.id);
+    if (r && editRecurrenceHandler) editRecurrenceHandler(r);
   });
-  el.recurrencesList.querySelectorAll(".delete-recurrence-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "recurrence"));
-  });
+  delegateClick(el.recurrencesList, ".delete-recurrence-btn", (btn) => openDeleteModal(btn.dataset.id, "recurrence"));
 }
 
 export let recurrenceSubmitHandler = null;

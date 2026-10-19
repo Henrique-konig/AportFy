@@ -4,7 +4,7 @@
 // =========================================================
 
 import { setDatePickerValue, closeDatePicker } from "../datepicker.js";
-import { el, escapeHtml, formatCurrency, getModeColor, state } from "./core.js";
+import { delegateClick, el, escapeHtml, formatCurrency, getModeColor, state } from "./core.js";
 import { openDeleteModal } from "./forms.js";
 import { scheduleAlertsRender } from "./alerts.js";
 
@@ -85,15 +85,11 @@ export function renderGoals(goals) {
     })
     .join("");
 
-  el.goalsGrid.querySelectorAll(".edit-goal-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const g = goals.find((goal) => goal.id === btn.dataset.id);
-      if (g && editGoalHandler) editGoalHandler(g);
-    });
+  delegateClick(el.goalsGrid, ".edit-goal-btn", (btn) => {
+    const g = goals.find((goal) => goal.id === btn.dataset.id);
+    if (g && editGoalHandler) editGoalHandler(g);
   });
-  el.goalsGrid.querySelectorAll(".delete-goal-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "goal"));
-  });
+  delegateClick(el.goalsGrid, ".delete-goal-btn", (btn) => openDeleteModal(btn.dataset.id, "goal"));
 }
 
 export let goalSubmitHandler = null;

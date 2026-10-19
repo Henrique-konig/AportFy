@@ -7,6 +7,7 @@ import { averageMonthlyExpenses, emergencyReserve, projectMonthBalance, reserveA
 import { refreshDropdown, enhanceSelect } from "../dropdown.js";
 import { escapeHtml, formatCurrency, formatDate, state, todayISO } from "./core.js";
 import { billsState, currentUnpaidInvoices } from "./bills.js";
+import { fmtNum } from "../format.js";
 
 const plEl = {
   projValue: document.getElementById("proj-value"),
@@ -36,7 +37,7 @@ export function setPlanningData(partial) {
   renderPlanning();
 }
 
-const fmtMonths = (m) => `${m.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${m >= 0.95 && m < 1.05 ? "mês" : "meses"}`;
+const fmtMonths = (m) => `${fmtNum(m, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${m >= 0.95 && m < 1.05 ? "mês" : "meses"}`;
 
 export function renderPlanning() {
   if (!plEl.projValue) return;

@@ -7,10 +7,11 @@ import { setDatePickerValue, closeDatePicker } from "../datepicker.js";
 import { refreshDropdown } from "../dropdown.js";
 import { calcInvestmentMetrics, buildMonthlyContributions, buildMarketComparison } from "../calc.js";
 import { baseLineOptions, hexToRgba } from "./charts.js";
-import { AUTO_QUOTE_CATEGORIES, B3_CATEGORIES, INVESTMENT_CATEGORY_COLORS, el, escapeHtml, formatCurrency, formatDate, getModeColor, showToast, state, todayISO } from "./core.js";
+import { delegateClick, AUTO_QUOTE_CATEGORIES, B3_CATEGORIES, INVESTMENT_CATEGORY_COLORS, el, escapeHtml, formatCurrency, formatDate, getModeColor, showToast, state, todayISO, fadeInClass } from "./core.js";
 import { renderChangeBadge } from "./dashboard.js";
 import { formatMonthLabel } from "./dividends.js";
 import { openDeleteModal } from "./forms.js";
+import { fmtDate, fmtNum, monthShort } from "../format.js";
 
 /* ---------------------------------------------------------------
    Investimentos (view: Investimentos)
@@ -26,7 +27,7 @@ import { openDeleteModal } from "./forms.js";
 
 export function formatQuantity(n) {
   if (document.documentElement.classList.contains("privacy-on")) return "•••";
-  return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 8 });
+  return fmtNum(Number(n), { maximumFractionDigits: 8 });
 }
 
 export let editInvestmentPriceHandler = null;
@@ -85,6 +86,7 @@ export function renderInvestmentsTable(investments) {
   el.investmentsEmpty.classList.add("hidden");
   el.investmentsEmpty.classList.remove("flex");
 
+  const fade = fadeInClass(el.investmentsTbody);
   el.investmentsTbody.innerHTML = withMetrics
     .map(({ inv, m }) => {
       const color = INVESTMENT_CATEGORY_COLORS[inv.category] || INVESTMENT_CATEGORY_COLORS["Outros"];
@@ -99,7 +101,7 @@ export function renderInvestmentsTable(investments) {
           ? `<i class="ph-fill ph-globe text-slate-600 ml-1.5" title="Cotação automática (Binance / CoinGecko)"></i>`
           : "";
       return `
-        <tr class="animate-fade-in" data-id="${inv.id}">
+        <tr class="${fade}" data-id="${inv.id}">
           <td class="px-5 sm:px-6 py-4 font-medium">
             <div class="flex items-center gap-3">
               <span class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold" style="background:${color}22; color:${color};">
@@ -148,27 +150,20 @@ export function renderInvestmentsTable(investments) {
     })
     .join("");
 
-  el.investmentsTbody.querySelectorAll(".edit-price-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const inv = investments.find((i) => i.id === btn.dataset.id);
-      if (inv) openPriceEditModal(inv);
-    });
+  const findInvestment = (btn) => investments.find((i) => i.id === btn.dataset.id);
+  delegateClick(el.investmentsTbody, ".edit-price-btn", (btn) => {
+    const inv = findInvestment(btn);
+    if (inv) openPriceEditModal(inv);
   });
-  el.investmentsTbody.querySelectorAll(".sell-investment-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const inv = investments.find((i) => i.id === btn.dataset.id);
-      if (inv) openSellModal(inv);
-    });
+  delegateClick(el.investmentsTbody, ".sell-investment-btn", (btn) => {
+    const inv = findInvestment(btn);
+    if (inv) openSellModal(inv);
   });
-  el.investmentsTbody.querySelectorAll(".edit-investment-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const inv = investments.find((i) => i.id === btn.dataset.id);
-      if (inv) editInvestmentHandler?.(inv);
-    });
+  delegateClick(el.investmentsTbody, ".edit-investment-btn", (btn) => {
+    const inv = findInvestment(btn);
+    if (inv) editInvestmentHandler?.(inv);
   });
-  el.investmentsTbody.querySelectorAll(".delete-investment-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "investment"));
-  });
+  delegateClick(el.investmentsTbody, ".delete-investment-btn", (btn) => openDeleteModal(btn.dataset.id, "investment"));
 }
 
 export function updateInvestmentKPIs(investments) {
@@ -309,7 +304,7 @@ export function updateInvestmentCharts(investments) {
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: monthShort(d) });
   }
 
   const categoriesPresent = [...new Set(investments.map((inv) => inv.category))];
@@ -809,7 +804,7 @@ function initMarketChart() {
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: "#64748b", font: { size: 11 }, maxTicksLimit: 12 } },
-        y: { grid: { color: "rgba(51,65,85,0.35)" }, ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => "R$ " + Number(v).toLocaleString("pt-BR") } },
+        y: { grid: { color: "rgba(51,65,85,0.35)" }, ticks: { color: "#64748b", font: { size: 11 }, callback: (v) => "R$ " + fmtNum(Number(v)) } },
       },
     },
   });
@@ -823,11 +818,11 @@ export function setMarketIndices(indices, status) {
 }
 
 function marketCardHtml(label, value, pct, color, highlight, diffVsPortfolio) {
-  const pctLabel = pct == null ? "—" : `${pct >= 0 ? "+" : ""}${pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  const pctLabel = pct == null ? "—" : `${pct >= 0 ? "+" : ""}${fmtNum(pct, { maximumFractionDigits: 1 })}%`;
   const diff =
     diffVsPortfolio == null
       ? ""
-      : `<p class="text-[11px] mt-1 ${diffVsPortfolio >= 0 ? "text-emerald-400" : "text-red-400"}">Carteira ${diffVsPortfolio >= 0 ? "à frente" : "atrás"} em ${Math.abs(diffVsPortfolio).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} p.p.</p>`;
+      : `<p class="text-[11px] mt-1 ${diffVsPortfolio >= 0 ? "text-emerald-400" : "text-red-400"}">Carteira ${diffVsPortfolio >= 0 ? "à frente" : "atrás"} em ${fmtNum(Math.abs(diffVsPortfolio), { maximumFractionDigits: 1 })} p.p.</p>`;
   return `
     <div class="rounded-xl p-4 border ${highlight ? "bg-slate-900/70 border-slate-700" : "bg-slate-900/40 border-slate-800/80"}">
       <p class="flex items-center gap-2 text-[11px] text-slate-400"><span class="w-2 h-2 rounded-full" style="background:${color};"></span>${label}</p>
@@ -876,7 +871,7 @@ export function renderMarketComparison(investments) {
 
   if (!marketChart) return;
   const labels = comparison.dates.map((d, i) =>
-    i === comparison.dates.length - 1 ? "Hoje" : new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "")
+    i === comparison.dates.length - 1 ? "Hoje" : fmtDate(new Date(`${d}T00:00:00`), { month: "short", year: "2-digit" }).replace(".", "")
   );
   const lastIndex = comparison.dates.length - 1;
   marketChart.data.labels = labels;

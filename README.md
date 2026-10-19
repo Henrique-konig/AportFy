@@ -118,7 +118,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 | Camada | Tecnologia |
 | --- | --- |
-| Interface | HTML5, [Tailwind CSS](https://tailwindcss.com) (CDN), [Phosphor Icons](https://phosphoricons.com) |
+| Interface | HTML5, [Tailwind CSS](https://tailwindcss.com) (compilado antes do deploy, sem rodar no navegador), [Phosphor Icons](https://phosphoricons.com) |
 | Lógica | JavaScript puro (ES Modules), sem framework e sem bundler |
 | Gráficos | [Chart.js](https://www.chartjs.org) |
 | Autenticação e banco | Firebase Authentication e Cloud Firestore (tempo real via `onSnapshot`) |
@@ -136,7 +136,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 .
 ├── index.html            # Página única: login, sidebar e todas as views
 ├── css/
-│   └── custom.css        # Animações, scrollbars, glassmorphism e temas
+│   ├── custom.css        # Animações, scrollbars, glassmorphism e temas
+│   └── tailwind.css      # GERADO por `npm run build:css` (não edite à mão)
 ├── js/
 │   ├── app.js            # Ponto de entrada: orquestra listeners e eventos
 │   ├── ui.js             # Fachada que reexporta os módulos de js/ui/
@@ -146,6 +147,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── db.js             # CRUD e listeners em tempo real no Firestore
 │   ├── calc.js           # Cálculos puros (sem DOM/Firebase), cobertos por testes
 │   ├── api.js            # Cotações (Brapi e cripto), proventos (/api/proventos) e índices (/api/indices)
+│   ├── gate.js           # Filtro dos avisos do Firestore: ignora dados repetidos e junta rajadas num redesenho
+│   ├── format.js         # Formatação de números e datas com formatadores reaproveitados
 │   ├── news.js           # Notícias da carteira e do mercado
 │   ├── push.js           # Notificações: permissão e token do aparelho (Firebase Cloud Messaging)
 │   ├── datepicker.js     # Seletor de data customizado
@@ -162,8 +165,12 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── ui.test.js        # Testes de tela (jsdom): filtros, modais, abas e totais
 │   ├── sw.test.js        # Testes do service worker (cache offline e notificações)
 │   ├── api.test.js       # Testes das funções serverless (proteção do cron)
+│   ├── gate.test.js      # Testes do filtro dos avisos do Firestore
+│   ├── perf.test.js      # Trava as otimizações de carregamento (CSS compilado em dia, módulos pré-carregados...)
 │   └── rules/            # Testes das regras do Firestore (emulador)
 ├── assets/images/        # Favicon e ícones do app
+├── tailwind.config.js    # Configuração do Tailwind (tema, cores, animações)
+├── tools/tailwind.css    # Entrada do Tailwind (as 3 diretivas); a saída é o css/tailwind.css
 ├── manifest.webmanifest  # Manifesto do PWA (nome, ícones, cores)
 ├── sw.js                 # Service worker: interface offline
 ├── .github/workflows/    # GitHub Actions: roda os testes a cada push
@@ -185,6 +192,8 @@ npx serve .
 ```
 
 O Node.js é necessário apenas para o servidor estático de desenvolvimento e para os testes; o app em si não tem build.
+
+> **Mexeu em classes do Tailwind (no `index.html` ou em `js/`)?** Rode `npm run build:css` para regenerar o `css/tailwind.css` e **commite o arquivo junto** (o deploy serve o arquivo pronto). Se esquecer, o teste `tests/perf.test.js` falha e avisa. Para regenerar sozinho enquanto edita: `npx tailwindcss -c tailwind.config.js -i tools/tailwind.css -o css/tailwind.css --watch`.
 
 > Os proventos vêm da função serverless `api/proventos.js`, que só existe na Vercel. Com `npx serve` o restante do app funciona normalmente; os proventos de FIIs ficam indisponíveis (e os de Ações usam a Brapi como reserva). Para testar a função localmente use `npx vercel dev`.
 
@@ -293,12 +302,13 @@ npm install
 npm test
 ```
 
-`npm test` roda quatro camadas, sem Firebase nem rede:
+`npm test` roda cinco camadas, sem Firebase nem rede:
 
 - **Cálculos** ([`tests/calc.test.js`](tests/calc.test.js)): os cálculos financeiros ficam isolados em [`js/calc.js`](js/calc.js), sem DOM ou Firebase — métricas e preço médio, vendas e histórico, saúde da carteira, aportes, proventos e calendário, comparação com CDI/Ibovespa/IFIX, independência financeira, alertas, orçamento, recorrências, faturas e parcelas de cartão, contas a pagar, saldo projetado, reserva de emergência, CSV e lembretes.
 - **Telas** ([`tests/ui.test.js`](tests/ui.test.js)): carrega o `index.html` real num DOM simulado (jsdom) e exercita filtros, modais, abas e totais, além de conferir que todo id usado pelo `ui.js` existe no HTML. Pensado para pegar regressões como filtros que não reagem ou proventos duplicados. Também cobre tema, primeiros passos, acessibilidade (modais, teclado nos selects), contas e cartões, modo privacidade e exportação.
 - **Service worker** ([`tests/sw.test.js`](tests/sw.test.js)): o que vai para o cache offline, o que sempre vem da rede (Firebase, APIs) e as notificações (exibir e abrir a aba certa).
 - **Funções serverless** ([`tests/api.test.js`](tests/api.test.js)): o cron de notificações recusa chamadas sem o segredo.
+- **Desempenho** ([`tests/gate.test.js`](tests/gate.test.js), [`tests/perf.test.js`](tests/perf.test.js)): o filtro dos avisos do Firestore e as otimizações de carregamento (CSS do Tailwind em dia, módulos pré-carregados, só os pesos de ícone usados, sem desfoque nos cartões).
 
 **GitHub Actions** ([`.github/workflows/testes.yml`](.github/workflows/testes.yml)) roda `npm test` e os testes das regras (com o emulador) a cada push e pull request. Um X vermelho no commit indica que algo quebrou; em *Settings → Branches* dá para exigir os testes verdes antes de aceitar um pull request.
 
@@ -325,7 +335,8 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 
 ## Decisões de projeto
 
-- **Zero build.** ES Modules nativos e CDNs mantêm o projeto simples de rodar, depurar e hospedar.
+- **Quase sem build.** O JavaScript são ES Modules nativos, sem bundler. A única etapa de build é o CSS do Tailwind (`npm run build:css`): compilar antes, em vez de pelo CDN no navegador, tirou ~370 KB de script e a compilação a cada abertura. O resultado fica versionado, então o deploy continua sendo só arquivos estáticos.
+- **Desempenho cuidado.** Os avisos do Firestore passam por um filtro (`js/gate.js`) que ignora dados repetidos e junta rajadas; formatadores de número/data são reaproveitados; as listas usam um único ouvinte de clique; os módulos são pré-carregados em paralelo; e o service worker usa a cópia guardada se a rede demorar mais de 3,5 s.
 - **Lógica pura separada.** Tudo que é cálculo vive em `calc.js` e é testável em Node, sem simular um navegador.
 - **Tempo real por padrão.** Listeners `onSnapshot` mantêm todas as telas sincronizadas, inclusive entre duas pessoas no Modo Casal.
 - **Falha de rede nunca quebra o app.** Cotações, proventos e notícias sempre devolvem um resultado parcial utilizável.

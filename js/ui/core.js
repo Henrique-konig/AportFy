@@ -3,6 +3,8 @@
 // Referências do DOM, estado compartilhado entre telas, constantes, helpers, toasts, login e navegação.
 // =========================================================
 
+import { formatBRL } from "../format.js";
+
 /* ---------------------------------------------------------------
    Estado compartilhado entre telas (lido e alterado pelos módulos)
 --------------------------------------------------------------- */
@@ -411,10 +413,46 @@ export const DIVIDEND_TYPE_COLORS = {
 /* ---------------------------------------------------------------
    Helpers
 --------------------------------------------------------------- */
+const delegatedClicks = new WeakMap();
+
+/**
+ * Um único ouvinte de clique por lista, em vez de um por botão a cada vez que a lista é redesenhada
+ * (uma lista de 600 proventos criava 1.200 ouvintes por redesenho). O `handler` mais recente vale,
+ * então ele pode usar os dados atuais da lista. Chame a cada redesenho: só o primeiro liga o ouvinte.
+ * @param {Element} container lista que contém os botões
+ * @param {string} selector seletor do botão (ex: ".edit-row-btn")
+ * @param {(button: Element) => void} handler
+ */
+export function delegateClick(container, selector, handler) {
+  if (!container) return;
+  let handlers = delegatedClicks.get(container);
+  if (!handlers) {
+    handlers = new Map();
+    delegatedClicks.set(container, handlers);
+    container.addEventListener("click", (e) => {
+      for (const [sel, fn] of handlers) {
+        const button = e.target.closest?.(sel);
+        if (button && container.contains(button)) {
+          fn(button);
+          return;
+        }
+      }
+    });
+  }
+  handlers.set(selector, handler);
+}
+
+/**
+ * Classe de entrada (fade) das linhas de uma lista: só na primeira vez que ela aparece. Nos redesenhos
+ * seguintes (dados em tempo real, filtros, "carregar mais") as linhas já estão na tela, e refazer o fade
+ * de todas a cada atualização fazia a lista inteira piscar.
+ */
+export const fadeInClass = (container) => (container && container.childElementCount > 0 ? "" : "animate-fade-in");
+
 export function formatCurrency(value) {
   // Modo privacidade (botão do olho no cabeçalho): nenhum valor em reais aparece.
   if (document.documentElement.classList.contains("privacy-on")) return "R$ •••••";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+  return formatBRL(value);
 }
 
 export function formatDate(isoDate) {

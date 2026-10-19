@@ -5,7 +5,7 @@
 
 import { refreshDropdown } from "../dropdown.js";
 import { calcBudgetSpent } from "../calc.js";
-import { CATEGORY_COLORS, EXPENSE_CATEGORIES, el, escapeHtml, formatCurrency, getModeColor, showToast, state } from "./core.js";
+import { delegateClick, CATEGORY_COLORS, EXPENSE_CATEGORIES, el, escapeHtml, formatCurrency, getModeColor, showToast, state } from "./core.js";
 import { openDeleteModal } from "./forms.js";
 import { scheduleAlertsRender } from "./alerts.js";
 
@@ -82,15 +82,11 @@ export function renderBudgets(budgets, transactions) {
     })
     .join("");
 
-  el.budgetGrid.querySelectorAll(".edit-budget-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const b = budgets.find((x) => x.category === btn.dataset.category);
-      if (b && editBudgetHandler) editBudgetHandler(b);
-    });
+  delegateClick(el.budgetGrid, ".edit-budget-btn", (btn) => {
+    const b = budgets.find((x) => x.category === btn.dataset.category);
+    if (b && editBudgetHandler) editBudgetHandler(b);
   });
-  el.budgetGrid.querySelectorAll(".delete-budget-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openDeleteModal(btn.dataset.category, "budget"));
-  });
+  delegateClick(el.budgetGrid, ".delete-budget-btn", (btn) => openDeleteModal(btn.dataset.category, "budget"));
 }
 
 export let budgetSubmitHandler = null;

@@ -1,7 +1,7 @@
 // Testa as estratégias de cache do service worker (sw.js) num ambiente simulado:
 // cache inicial, "rede primeiro" para o app, offline, /api fora do cache e CDN.
 import { readFileSync } from "node:fs";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const source = readFileSync("sw.js", "utf8");
 const ORIGIN = "https://aportfy.vercel.app";
@@ -12,7 +12,7 @@ function makeEnv({ online = true } = {}) {
   const shown = []; // notificações exibidas
   const opened = []; // janelas abertas ao tocar
   const windows = []; // janelas do app já abertas
-  const network = { online, calls: [] };
+  const network = { online, calls: [], delay: 0 };
 
   const keyOf = (req) => (typeof req === "string" ? new URL(req, ORIGIN).href : req.url);
   const openStore = (name) => {
@@ -42,6 +42,7 @@ function makeEnv({ online = true } = {}) {
   const fetchMock = async (req) => {
     network.calls.push(keyOf(req));
     if (!network.online) throw new TypeError("offline");
+    if (network.delay) await new Promise((resolve) => setTimeout(resolve, network.delay));
     return new Response(`net:${keyOf(req)}`, { status: 200 });
   };
   const self = {
@@ -148,5 +149,48 @@ describe("notificações no service worker", () => {
     await env.dispatch("notificationclick", { notification });
     expect(navigated).toEqual([`${ORIGIN}/?view=bills`]);
     expect(env.opened).toHaveLength(1);
+  });
+});
+
+describe("service worker com rede lenta", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("com cópia guardada, não deixa o app esperando a rede lenta (usa a cópia depois do limite)", async () => {
+    const env = makeEnv();
+    await env.dispatch("install");
+    await env.dispatch("fetch", { request: env.request("/js/app.js") }); // 1ª visita: guarda a cópia
+    env.network.delay = 60000; // agora a rede está lentíssima
+
+    const pending = env.dispatch("fetch", { request: env.request("/js/app.js") });
+    await vi.advanceTimersByTimeAsync(3600);
+    const res = await pending;
+    expect(await res.text()).toBe(`net:${ORIGIN}/js/app.js`); // a cópia guardada, não a resposta (que nem chegou)
+  });
+
+  it("rede rápida continua tendo prioridade (sempre a versão mais nova)", async () => {
+    const env = makeEnv();
+    await env.dispatch("install");
+    await env.dispatch("fetch", { request: env.request("/js/app.js") });
+    env.network.delay = 100;
+    const pending = env.dispatch("fetch", { request: env.request("/js/app.js") });
+    await vi.advanceTimersByTimeAsync(150);
+    expect((await pending).status).toBe(200);
+    expect(env.network.calls.filter((u) => u.endsWith("/js/app.js")).length).toBe(2);
+  });
+
+  it("sem cópia guardada, espera a rede mesmo que demore", async () => {
+    const env = makeEnv();
+    env.network.delay = 8000;
+    const pending = env.dispatch("fetch", { request: env.request("/js/novo.js") });
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(await (await pending).text()).toBe(`net:${ORIGIN}/js/novo.js`);
+  });
+
+  it("guarda o CSS compilado do Tailwind para abrir offline", async () => {
+    const env = makeEnv();
+    await env.dispatch("install");
+    const [name] = [...env.stores.keys()];
+    expect([...env.stores.get(name).keys()].map((u) => new URL(u).pathname)).toContain("/css/tailwind.css");
   });
 });

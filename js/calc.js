@@ -7,6 +7,8 @@
 // sem simular um browser inteiro.
 // =========================================================
 
+import { fmtDate, formatBRL, monthShort } from "./format.js";
+
 /**
  * Métricas de uma posição de investimento.
  * @param {{quantity:number, avgPrice:number, currentPrice:number}} inv
@@ -59,7 +61,7 @@ export function buildMonthlyContributions(investments, monthsCount = 12, referen
   for (let i = monthsCount - 1; i >= 0; i--) {
     const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    months.push({ key, label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", ""), total: 0, count: 0 });
+    months.push({ key, label: monthShort(d), total: 0, count: 0 });
   }
 
   investments.forEach((inv) => {
@@ -201,7 +203,7 @@ export function buildMonthlySeries(transactions, monthsCount = 6, referenceDate 
   const months = [];
   for (let i = monthsCount - 1; i >= 0; i--) {
     const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
-    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString("pt-BR", { month: "short" }) });
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: fmtDate(d, { month: "short" }) });
   }
 
   const income = months.map(() => 0);
@@ -744,7 +746,7 @@ export function financialIndependencePlan({ initial, monthlyContribution, annual
    Central de alertas
    ========================================================= */
 
-const brl = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+const brl = formatBRL;
 const shortDate = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const addDays = (iso, days) => {
   const d = new Date(`${iso}T00:00:00`);

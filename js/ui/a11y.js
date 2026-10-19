@@ -12,21 +12,23 @@ const POPUP_IDS = ["dropdown-popup", "datepicker-popup"];
 
 const isVisible =(el) => !el.classList.contains("hidden") && el.getClientRects().length > 0;
 
+// Só o que ainda falta marcar: o seletor já descarta quem está pronto, então redesenhos grandes custam pouco.
+const UNMARKED_ICONS = 'i[class*="ph-"]:not([aria-hidden])';
+const UNNAMED_BUTTONS = "button[title]:not([aria-label])";
+
 function labelDecorativeIcons(root) {
   if (root.nodeType !== 1) return;
-  const icons = root.matches?.('i[class*="ph-"]') ? [root] : root.querySelectorAll('i[class*="ph-"]');
-  icons.forEach((icon) => {
-    if (!icon.hasAttribute("aria-hidden")) icon.setAttribute("aria-hidden", "true");
-  });
+  if (root.matches?.(UNMARKED_ICONS)) root.setAttribute("aria-hidden", "true");
+  root.querySelectorAll(UNMARKED_ICONS).forEach((icon) => icon.setAttribute("aria-hidden", "true"));
 }
 
 function nameIconButtons(root) {
   if (root.nodeType !== 1) return;
-  const buttons = root.matches?.("button") ? [root] : root.querySelectorAll("button");
-  buttons.forEach((btn) => {
-    if (btn.hasAttribute("aria-label") || !btn.title) return;
+  const name = (btn) => {
     if (btn.textContent.trim() === "") btn.setAttribute("aria-label", btn.title);
-  });
+  };
+  if (root.matches?.(UNNAMED_BUTTONS)) name(root);
+  root.querySelectorAll(UNNAMED_BUTTONS).forEach(name);
 }
 
 /* -------- Modais -------- */
@@ -97,13 +99,31 @@ function onKeydown(e) {
 export function bindAccessibility() {
   labelDecorativeIcons(document.body);
   nameIconButtons(document.body);
+  // Redesenhos criam centenas de nós de uma vez: junta tudo e marca num só momento (próximo quadro),
+  // olhando cada região uma vez, em vez de varrer nó por nó dentro do próprio redesenho.
+  const pending = new Set();
+  let scheduled = false;
+  const flush = () => {
+    scheduled = false;
+    const roots = new Set([...pending].filter((node) => node.isConnected));
+    pending.clear();
+    roots.forEach((root) => {
+      // Se um ancestral também está na lista, a varredura dele já cobre este.
+      for (let p = root.parentElement; p; p = p.parentElement) if (roots.has(p)) return;
+      labelDecorativeIcons(root);
+      nameIconButtons(root);
+    });
+  };
   new MutationObserver((mutations) => {
-    mutations.forEach((m) =>
+    for (const m of mutations) {
       m.addedNodes.forEach((node) => {
-        labelDecorativeIcons(node);
-        nameIconButtons(node);
-      })
-    );
+        if (node.nodeType === 1) pending.add(m.target.nodeType === 1 && m.addedNodes.length > 20 ? m.target : node);
+      });
+    }
+    if (pending.size > 0 && !scheduled) {
+      scheduled = true;
+      requestAnimationFrame(flush);
+    }
   }).observe(document.body, { childList: true, subtree: true });
 
   getModals().forEach(setupModal);

@@ -7,12 +7,13 @@ import { setDatePickerValue, closeDatePicker } from "../datepicker.js";
 import { refreshDropdown } from "../dropdown.js";
 import { calcInvestmentMetrics, dividendDedupeKey, buildDividendCalendar, shiftMonth } from "../calc.js";
 import { hexToRgba } from "./charts.js";
-import { DIVIDEND_TYPE_COLORS, el, escapeHtml, formatCurrency, formatDate, getModeColor, showToast, state, todayISO } from "./core.js";
+import { delegateClick, DIVIDEND_TYPE_COLORS, el, escapeHtml, formatCurrency, formatDate, getModeColor, showToast, state, todayISO, fadeInClass } from "./core.js";
 import { openDeleteModal } from "./forms.js";
 import { renderPortfolioHealth } from "./health.js";
 import { renderHistory } from "./history.js";
 import { formatQuantity, populateAssetFilter, populateDividendTickerSelect, refreshInvestmentViews, renderAssetDetail, renderInvestmentsTable } from "./investments.js";
 import { scheduleAlertsRender } from "./alerts.js";
+import { fmtNum, formatPerShare, monthShort } from "../format.js";
 
 /* ---------------------------------------------------------------
    Proventos (dividendos, JCP, rendimentos)
@@ -63,7 +64,7 @@ export function renderDividendsChart(received) {
   const months = [];
   for (let i = 5; i >= -futureMonths; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ key: toKey(d.getFullYear(), d.getMonth()), label: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") });
+    months.push({ key: toKey(d.getFullYear(), d.getMonth()), label: monthShort(d) });
   }
 
   const receivedTotals = months.map(() => 0);
@@ -130,11 +131,12 @@ export function renderDividends(dividends, investments) {
     el.dividendsEmpty.classList.add("hidden");
     el.dividendsEmpty.classList.remove("flex");
 
+    const fade = fadeInClass(el.dividendsTbody);
     el.dividendsTbody.innerHTML = tableRows
       .map((d) => {
         const color = DIVIDEND_TYPE_COLORS[d.type] || DIVIDEND_TYPE_COLORS["Outro"];
         return `
-          <tr class="animate-fade-in" data-id="${d.id}">
+          <tr class="${fade}" data-id="${d.id}">
             <td class="px-5 sm:px-6 py-4 font-medium">${escapeHtml(d.ticker)}</td>
             <td class="px-5 sm:px-6 py-4">
               <span class="category-badge">
@@ -158,15 +160,11 @@ export function renderDividends(dividends, investments) {
       })
       .join("");
 
-    el.dividendsTbody.querySelectorAll(".edit-dividend-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const d = tableRows.find((row) => row.id === btn.dataset.id);
-        if (d && dividendEditHandler) dividendEditHandler(d);
-      });
+    delegateClick(el.dividendsTbody, ".edit-dividend-btn", (btn) => {
+      const d = tableRows.find((row) => row.id === btn.dataset.id);
+      if (d && dividendEditHandler) dividendEditHandler(d);
     });
-    el.dividendsTbody.querySelectorAll(".delete-dividend-btn").forEach((btn) => {
-      btn.addEventListener("click", () => openDeleteModal(btn.dataset.id, "dividend"));
-    });
+    delegateClick(el.dividendsTbody, ".delete-dividend-btn", (btn) => openDeleteModal(btn.dataset.id, "dividend"));
   }
 
   // KPIs (sempre calculados sobre o conjunto filtrado só pelo ativo — o
@@ -413,7 +411,8 @@ export function renderUpcomingDividendsView() {
   else rows = [...upcomingInMonth, ...receivedInMonth];
   if (divPanelTab !== "upcoming") rows.sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || a.ticker.localeCompare(b.ticker));
 
-  const perShare = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  const perShare = formatPerShare;
+  const fade = fadeInClass(el.divUpcomingTbody);
   el.divUpcomingTbody.innerHTML = rows
     .slice(0, divPanelLimit)
     .map((r) => {
@@ -421,7 +420,7 @@ export function renderUpcomingDividendsView() {
       const isUpcoming = r.status === "upcoming";
       const jcpHint = r.type === "JCP" ? ` title="Líquido de 15% de IR"` : "";
       return `
-        <tr class="animate-fade-in">
+        <tr class="${fade}">
           <td class="px-5 sm:px-6 py-4 font-medium">${escapeHtml(r.ticker)}</td>
           <td class="px-5 sm:px-6 py-4">
             <span class="category-badge"${jcpHint}><span class="w-1.5 h-1.5 rounded-full" style="background:${color};"></span>${escapeHtml(r.type)}</span>
@@ -502,7 +501,7 @@ let calMonth = localToday().slice(0, 7);
 let calSelected = null;
 
 const compactCurrency = (v) =>
-  v >= 1000 ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : formatCurrency(v).replace(",00", "");
+  v >= 1000 ? `R$ ${fmtNum(v / 1000, { maximumFractionDigits: 1 })} mil` : formatCurrency(v).replace(",00", "");
 
 export function renderDividendCalendar() {
   if (!calEl.grid) return;

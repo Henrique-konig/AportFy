@@ -8,6 +8,7 @@ import { buildMonthlyContributions, analyzePortfolioHealth, suggestContribution,
 import { hexToRgba } from "./charts.js";
 import { INVESTMENT_CATEGORY_COLORS, escapeHtml, formatCurrency, getModeColor, showToast, state } from "./core.js";
 import { scheduleAlertsRender } from "./alerts.js";
+import { fmtDate, fmtNum } from "../format.js";
 
 /* ---------------------------------------------------------------
    Saúde da Carteira (view: Saúde da Carteira)
@@ -74,7 +75,7 @@ export const ALERT_STYLE = {
 };
 
 export const currentHealthSettings = () => portfolioSettings || DEFAULT_PORTFOLIO_SETTINGS;
-export const formatPct = (v, digits = 1) => `${v.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+export const formatPct = (v, digits = 1) => `${fmtNum(v, { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
 export const scoreColor = (s) => (s >= 75 ? "#34d399" : s >= 50 ? "#f59e0b" : "#f87171");
 
 export function initHealthCharts() {
@@ -142,7 +143,7 @@ export function renderHealthOverview(a, settings) {
     .join("");
 
   healthEl.total.textContent = formatCurrency(a.totalValue);
-  healthEl.assets.textContent = `${a.byAsset.length} (${a.effectiveAssets.toLocaleString("pt-BR", { maximumFractionDigits: 1 })})`;
+  healthEl.assets.textContent = `${a.byAsset.length} (${fmtNum(a.effectiveAssets, { maximumFractionDigits: 1 })})`;
   healthEl.yield.textContent = a.income12m > 0 ? formatPct(a.dividendYield12m, 2) : "—";
 }
 
@@ -178,7 +179,7 @@ export function renderHealthDistribution(a, settings) {
     .map((c) => {
       const color = INVESTMENT_CATEGORY_COLORS[c.category] || INVESTMENT_CATEGORY_COLORS["Outros"];
       const diffColor = Math.abs(c.diff) <= 5 ? "text-emerald-400" : Math.abs(c.diff) <= 10 ? "text-amber-400" : "text-red-400";
-      const diffLabel = `${c.diff >= 0 ? "+" : ""}${c.diff.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.`;
+      const diffLabel = `${c.diff >= 0 ? "+" : ""}${fmtNum(c.diff, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.`;
       return `
       <div>
         <div class="flex items-center justify-between text-xs mb-1.5">
@@ -355,7 +356,7 @@ export function readTargetInputs() {
 export function updateTargetSum() {
   const sum = Object.values(readTargetInputs()).reduce((a, b) => a + b, 0);
   const ok = Math.abs(sum - 100) < 0.01;
-  healthEl.targetSum.textContent = ok ? "Total: 100%" : `Total: ${sum.toLocaleString("pt-BR")}% (precisa somar 100%)`;
+  healthEl.targetSum.textContent = ok ? "Total: 100%" : `Total: ${fmtNum(sum)}% (precisa somar 100%)`;
   healthEl.targetSum.className = `text-xs font-semibold ${ok ? "text-emerald-400" : "text-red-400"}`;
   return ok;
 }
@@ -480,7 +481,7 @@ export function renderFinancialIndependence() {
 
   const progress = target > 0 ? Math.min(100, (currentIncome / target) * 100) : 0;
   fiEl.progressBar.style.width = `${progress}%`;
-  fiEl.progressLabel.textContent = target > 0 ? `${progress.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : "—";
+  fiEl.progressLabel.textContent = target > 0 ? `${fmtNum(progress, { maximumFractionDigits: 1 })}%` : "—";
   fiEl.progress.setAttribute("aria-valuenow", Math.round(progress));
 
   if (target <= 0) {
@@ -510,7 +511,7 @@ export function renderFinancialIndependence() {
   }
 
   fiEl.required.textContent = formatCurrency(plan.requiredWealth);
-  fiEl.requiredNote.textContent = `Com yield de ${annualYield.toLocaleString("pt-BR")}% ao ano`;
+  fiEl.requiredNote.textContent = `Com yield de ${fmtNum(annualYield)}% ao ano`;
   fiEl.missing.textContent = formatCurrency(Math.max(0, plan.requiredWealth - a.totalValue));
 
   if (plan.reachedAlready) {
@@ -522,7 +523,7 @@ export function renderFinancialIndependence() {
   } else {
     const when = new Date();
     when.setMonth(when.getMonth() + plan.months);
-    fiEl.eta.textContent = when.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(".", "");
+    fiEl.eta.textContent = fmtDate(when, { month: "short", year: "numeric" }).replace(".", "");
     fiEl.etaNote.textContent = `Em ${describeMonths(plan.months)}`;
   }
 }

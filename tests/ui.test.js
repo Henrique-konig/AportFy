@@ -308,7 +308,7 @@ describe("aba Histórico", () => {
     ]);
   });
 
-  const items = () => [...document.querySelectorAll("#hist-list .animate-fade-in")].map((r) => r.textContent.replace(/\s+/g, " ").trim());
+  const items = () => [...document.querySelectorAll("#hist-list [data-hist-row]")].map((r) => r.textContent.replace(/\s+/g, " ").trim());
 
   it("junta compras, vendas e proventos do mais recente para o mais antigo, agrupados por mês", () => {
     const list = items();
@@ -675,8 +675,10 @@ describe("acessibilidade", () => {
     expect(modal.classList.contains("hidden")).toBe(true);
   });
 
-  it("navegação marca a página atual e ícones são decorativos", () => {
+  it("navegação marca a página atual e ícones são decorativos", async () => {
     goTo("investments");
+    // a marcação dos ícones é feita em lote, no quadro seguinte ao redesenho
+    await new Promise((r) => requestAnimationFrame(() => r()));
     expect(document.querySelector('.nav-item[data-view="investments"]').getAttribute("aria-current")).toBe("page");
     expect(document.querySelector('.nav-item[data-view="dashboard"]').hasAttribute("aria-current")).toBe(false);
     const icons = [...document.querySelectorAll('i[class*="ph-"]')];
@@ -993,5 +995,63 @@ describe("notificações e conta Google", () => {
 
   it("a tela de login tem o botão do Google", () => {
     expect($("google-login-btn").textContent).toContain("Continuar com Google");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Um único ouvinte de clique por lista (delegação)
+--------------------------------------------------------------- */
+describe("cliques nas listas", () => {
+  it("excluir um ativo confirma e chama a exclusão uma vez só, mesmo depois de vários redesenhos", () => {
+    const onDelete = vi.fn();
+    ui.onDeleteConfirm(onDelete);
+    ui.bindDeleteModal(); // o modal de exclusão não é ligado no beforeAll dos outros testes
+    goTo("investments");
+    for (let i = 0; i < 5; i++) ui.renderInvestments(portfolio());
+    document.querySelector(".delete-investment-btn").click();
+    expect($("delete-modal").classList.contains("hidden")).toBe(false);
+    $("delete-confirm-btn").click();
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledWith(expect.any(String), "investment");
+    goTo("dashboard");
+  });
+
+  it("o botão certo é o que age (o dado vem da lista mais recente)", () => {
+    const handler = vi.fn();
+    ui.onEditInvestment?.(handler);
+    goTo("investments");
+    ui.renderInvestments([inv("1", "TVRI11", "FIIs", 85, 95, 98, "2026-03-10")]);
+    ui.renderInvestments([inv("2", "PETR4", "Ações", 20, 30, 36, "2026-05-02")]);
+    const buttons = document.querySelectorAll(".edit-investment-btn");
+    expect(buttons).toHaveLength(1);
+    buttons[0].click();
+    if (ui.onEditInvestment) expect(handler).toHaveBeenCalledWith(expect.objectContaining({ ticker: "PETR4" }));
+    goTo("dashboard");
+  });
+
+  it("transações: editar e excluir funcionam depois de redesenhar a tabela", () => {
+    const handler = vi.fn();
+    ui.onEditTransaction(handler);
+    const txs = [{ id: "x1", type: "expense", description: "Pizza", amount: 40, category: "Lazer", date: "2026-10-02" }];
+    ui.renderTransactionsTable(txs);
+    ui.renderTransactionsTable(txs);
+    const edit = $("transactions-tbody").querySelector(".edit-row-btn");
+    edit.click();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: "x1" }));
+  });
+});
+
+describe("listas não piscam a cada atualização", () => {
+  it("o fade de entrada só acontece na primeira vez que a lista aparece", () => {
+    const txs = [{ id: "f1", type: "expense", description: "Pizza", amount: 40, category: "Lazer", date: "2026-10-02" }];
+    $("transactions-tbody").innerHTML = "";
+    ui.renderTransactionsTable(txs);
+    expect($("transactions-tbody").querySelector("tr").classList.contains("animate-fade-in")).toBe(true);
+    // chegou um dado novo em tempo real: a lista é redesenhada, mas as linhas já estão na tela
+    ui.renderTransactionsTable([...txs, { id: "f2", type: "income", description: "Extra", amount: 90, category: "Outros", date: "2026-10-03" }]);
+    const rows = [...$("transactions-tbody").querySelectorAll("tr")];
+    expect(rows).toHaveLength(2);
+    expect(rows.some((r) => r.classList.contains("animate-fade-in"))).toBe(false);
   });
 });

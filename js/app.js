@@ -93,6 +93,7 @@ import {
   splitInstallments,
   invoicePaymentTransactions,
 } from "./calc.js";
+import { createGate } from "./gate.js";
 import * as ui from "./ui.js";
 
 /* ---------------------------------------------------------------
@@ -125,6 +126,12 @@ let latestCards = [];
 let latestPurchases = [];
 let latestCardInvoices = [];
 let extraUnsubscribes = []; // contas, cartões, compras, faturas e reserva
+
+// Cada troca de assinatura (login, logout, modo Pessoal/Casal) muda este número; avisos que estavam
+// à espera de uma assinatura antiga são descartados em vez de desenhar dados do modo errado.
+let subscriptionGeneration = 0;
+/** Filtra os avisos do Firestore: ignora dados repetidos e junta rajadas num redesenho só (ver js/gate.js). */
+const gate = (apply) => createGate(apply, () => subscriptionGeneration);
 let recurrencesProcessing = false;
 let quotesInFlight = false;
 
@@ -1155,7 +1162,7 @@ function subscribeToActiveCollection() {
   };
   ui.updateOnboarding({ uid: onboardingUid, ready: false });
 
-  unsubscribeTransactions = listenToTransactions(activeMode, id, (transactions, error) => {
+  unsubscribeTransactions = listenToTransactions(activeMode, id, gate((transactions, error) => {
     if (error) {
       ui.showToast("Erro ao carregar transações em tempo real.", "error");
       return;
@@ -1163,9 +1170,9 @@ function subscribeToActiveCollection() {
     latestTransactions = transactions;
     refreshDashboard();
     syncOnboarding("transactions");
-  });
+  }));
 
-  unsubscribeGoals = listenToGoals(activeMode, id, (goals, error) => {
+  unsubscribeGoals = listenToGoals(activeMode, id, gate((goals, error) => {
     if (error) {
       ui.showToast("Erro ao carregar metas em tempo real.", "error");
       return;
@@ -1173,9 +1180,9 @@ function subscribeToActiveCollection() {
     latestGoals = goals;
     ui.renderGoals(goals);
     ui.updateKPIs(latestTransactions, latestGoals);
-  });
+  }));
 
-  unsubscribeInvestments = listenToInvestments(activeMode, id, (investments, error) => {
+  unsubscribeInvestments = listenToInvestments(activeMode, id, gate((investments, error) => {
     if (error) {
       ui.showToast("Erro ao carregar investimentos em tempo real.", "error");
       return;
@@ -1185,9 +1192,9 @@ function subscribeToActiveCollection() {
     refreshUpcomingDividends();
     refreshMarketIndices();
     syncOnboarding("investments");
-  });
+  }));
 
-  unsubscribeDividends = listenToDividends(activeMode, id, (dividends, error, meta) => {
+  unsubscribeDividends = listenToDividends(activeMode, id, gate((dividends, error, meta) => {
     if (error) {
       ui.showToast("Erro ao carregar proventos em tempo real.", "error");
       return;
@@ -1199,7 +1206,7 @@ function subscribeToActiveCollection() {
     if (!meta?.fromCache) dividendsLoaded = true;
     ui.renderDividendsData(dividends);
     if (firstLoad) refreshUpcomingDividends();
-  });
+  }));
 
   unsubscribePortfolioSettings = listenToPortfolioSettings(activeMode, id, (settings, error) => {
     if (error) {
@@ -1209,16 +1216,16 @@ function subscribeToActiveCollection() {
     ui.setPortfolioSettings(settings);
   });
 
-  unsubscribeBudgets = listenToBudgets(activeMode, id, (budgets, error) => {
+  unsubscribeBudgets = listenToBudgets(activeMode, id, gate((budgets, error) => {
     if (error) {
       ui.showToast("Erro ao carregar orçamentos em tempo real.", "error");
       return;
     }
     latestBudgets = budgets;
     ui.renderBudgets(latestBudgets, latestTransactions);
-  });
+  }));
 
-  unsubscribeRecurrences = listenToRecurrences(activeMode, id, (recurrences, error, meta) => {
+  unsubscribeRecurrences = listenToRecurrences(activeMode, id, gate((recurrences, error, meta) => {
     if (error) {
       ui.showToast("Erro ao carregar recorrências em tempo real.", "error");
       return;
@@ -1228,7 +1235,7 @@ function subscribeToActiveCollection() {
     ui.setPlanningData({ recurrences });
     // Lançar recorrências com dado do cache local poderia duplicar o que outro aparelho já lançou.
     if (!meta?.fromCache) processRecurrences(recurrences);
-  });
+  }));
 }
 
 /**
@@ -1394,6 +1401,7 @@ async function switchMode(mode) {
 const activeSpaceId = () => (activeMode === "couple" ? activeCoupleId : activeUser?.uid);
 
 function stopExtras() {
+  subscriptionGeneration++;
   extraUnsubscribes.forEach((stop) => stop?.());
   extraUnsubscribes = [];
 }
@@ -1401,10 +1409,15 @@ function stopExtras() {
 function subscribeExtras(id) {
   const mode = activeMode;
   const watch = (name, onData) =>
-    listenToCollection(mode, id, name, (docs, error) => {
-      if (error) return ui.showToast("Erro ao carregar contas e cartões.", "error");
-      onData(docs);
-    });
+    listenToCollection(
+      mode,
+      id,
+      name,
+      gate((docs, error) => {
+        if (error) return ui.showToast("Erro ao carregar contas e cartões.", "error");
+        onData(docs);
+      })
+    );
   latestBills = latestCards = latestPurchases = latestCardInvoices = [];
   ui.renderBillsData({ bills: [], cards: [], purchases: [], invoices: [] });
   extraUnsubscribes = [

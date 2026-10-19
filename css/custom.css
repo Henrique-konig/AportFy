@@ -17,12 +17,32 @@ body {
 }
 
 /* ---------- Glassmorphism ---------- */
+/* Os cartões ficam sobre um fundo liso (só degradês), então o desfoque de fundo não mudava nada
+   visualmente, mas custava uma camada de GPU por cartão (dezenas por tela: pesado em celular).
+   O desfoque continua onde há conteúdo passando por trás: popups, avisos e o menu lateral aberto no celular. */
 .glass-card {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(51, 65, 85, 0.6);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+#dropdown-popup,
+#datepicker-popup,
+.animate-toast-in {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+/* Cabeçalho (e menu lateral no computador) não têm nada rolando por baixo: sem desfoque. */
+header.backdrop-blur-xl {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+@media (min-width: 1024px) {
+  #sidebar.backdrop-blur-xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }
 
 .glass-card:hover {
@@ -32,24 +52,24 @@ body {
 /* ---------- Ambient glow orbs ---------- */
 .glow-orb {
   position: absolute;
-  width: 480px;
-  height: 480px;
+  width: 960px;
+  height: 960px;
   border-radius: 9999px;
-  filter: blur(120px);
   opacity: 0.22;
-  transition: opacity 0.6s ease, background 0.6s ease;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
 }
 
 .glow-orb-blue {
-  top: -120px;
-  left: -80px;
-  background: #3b82f6;
+  top: -360px;
+  left: -320px;
+  background: radial-gradient(closest-side, rgba(59, 130, 246, 0.87) 0%, rgba(59, 130, 246, 0.79) 25%, rgba(59, 130, 246, 0.42) 50%, rgba(59, 130, 246, 0.24) 62.5%, rgba(59, 130, 246, 0.12) 75%, rgba(59, 130, 246, 0.05) 87.5%, rgba(59, 130, 246, 0) 100%);
 }
 
 .glow-orb-purple {
-  bottom: -140px;
-  right: -100px;
-  background: #a855f7;
+  bottom: -380px;
+  right: -340px;
+  background: radial-gradient(closest-side, rgba(168, 85, 247, 0.87) 0%, rgba(168, 85, 247, 0.79) 25%, rgba(168, 85, 247, 0.42) 50%, rgba(168, 85, 247, 0.24) 62.5%, rgba(168, 85, 247, 0.12) 75%, rgba(168, 85, 247, 0.05) 87.5%, rgba(168, 85, 247, 0) 100%);
 }
 
 /* ---------- Custom Scrollbar ---------- */

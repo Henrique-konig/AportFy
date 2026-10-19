@@ -4,6 +4,7 @@
 // =========================================================
 
 import { el, escapeHtml, getModeColor, state } from "./core.js";
+import { fmtDate } from "../format.js";
 
 /* ---------------------------------------------------------------
    Notícias (view: Notícias)
@@ -34,7 +35,7 @@ export function newsSkeletonCardHtml() {
 export function newsCardHtml(item) {
   const modeColor = getModeColor();
   const dateLabel = item.publishedAt
-    ? new Date(item.publishedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+    ? fmtDate(new Date(item.publishedAt), { day: "2-digit", month: "short", year: "numeric" })
     : "";
   const badges = (item.tickers || [])
     .slice(0, 3)

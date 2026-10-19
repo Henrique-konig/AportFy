@@ -10,7 +10,7 @@
 // =========================================================
 
 const CACHE = "aportfy-v2";
-const SHELL = ["/", "/index.html", "/css/custom.css", "/js/app.js", "/js/ui.js", "/manifest.webmanifest", "/assets/images/favicon.svg", "/assets/images/icon-192.png"];
+const SHELL = ["/", "/index.html", "/css/custom.css", "/css/tailwind.css", "/js/app.js", "/js/ui.js", "/manifest.webmanifest", "/assets/images/favicon.svg", "/assets/images/icon-192.png"];
 const CDN_HOSTS = ["cdn.tailwindcss.com", "cdn.jsdelivr.net", "unpkg.com", "www.gstatic.com", "fonts.googleapis.com", "fonts.gstatic.com"];
 
 self.addEventListener("install", (event) => {
@@ -28,15 +28,24 @@ self.addEventListener("activate", (event) => {
 
 const cacheable = (res) => res && (res.ok || res.type === "opaque");
 
+// Rede lenta (ex: 3G ruim): depois deste tempo, usa a cópia guardada em vez de deixar o app esperando.
+// A busca na rede continua em segundo plano e atualiza o cache para a próxima abertura.
+const NETWORK_TIMEOUT_MS = 3500;
+
 async function networkFirst(request, fallbackUrl) {
   const cache = await caches.open(CACHE);
-  try {
-    const response = await fetch(request);
-    if (cacheable(response)) cache.put(request, response.clone());
-    return response;
-  } catch {
-    return (await cache.match(request)) || (fallbackUrl && (await cache.match(fallbackUrl))) || Response.error();
-  }
+  const network = fetch(request)
+    .then((response) => {
+      if (cacheable(response)) cache.put(request, response.clone());
+      return response;
+    })
+    .catch(() => null); // null = sem rede
+
+  const cached = await cache.match(request);
+  if (!cached) return (await network) || (fallbackUrl && (await cache.match(fallbackUrl))) || Response.error();
+
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS));
+  return (await Promise.race([network, timeout])) || cached;
 }
 
 async function staleWhileRevalidate(request) {

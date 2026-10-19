@@ -12,7 +12,6 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { getAnalytics, isSupported as isAnalyticsSupported } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAye-3l_M5xHO8nwzchQh6dxraDr2CRMuc",
@@ -53,11 +52,16 @@ function createFirestore() {
 }
 export const db = createFirestore();
 
-// Analytics só funciona em navegadores compatíveis (não em SSR/alguns navegadores privados)
-isAnalyticsSupported()
-  .then((supported) => {
-    if (supported) getAnalytics(app);
-  })
-  .catch(() => {});
+// Analytics: carregado só depois que o app abriu e o navegador está ocioso (não compete com a
+// primeira tela) e só em navegadores compatíveis (não em alguns navegadores privados).
+const loadAnalytics = () =>
+  import("https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js")
+    .then(async ({ getAnalytics, isSupported }) => {
+      if (await isSupported()) getAnalytics(app);
+    })
+    .catch(() => {});
+const whenIdle = (fn) => ("requestIdleCallback" in window ? requestIdleCallback(fn, { timeout: 8000 }) : setTimeout(fn, 4000));
+if (document.readyState === "complete") whenIdle(loadAnalytics);
+else window.addEventListener("load", () => whenIdle(loadAnalytics), { once: true });
 
 export default app;

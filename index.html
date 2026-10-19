@@ -32,43 +32,72 @@
   <meta name="apple-mobile-web-app-title" content="AportFy" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-          },
-          colors: {
-            couple: {
-              50: '#faf5ff', 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce',
-            }
-          },
-          animation: {
-            'fade-in': 'fadeIn 0.6s ease-out forwards',
-            'slide-up': 'slideUp 0.6s ease-out forwards',
-            'scale-in': 'scaleIn 0.3s ease-out forwards',
-          },
-        },
-      },
-    };
-  </script>
+  <!-- Conexões antecipadas (DNS + TLS já prontos quando o arquivo for pedido) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 
   <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- Phosphor Icons -->
-  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <!-- Phosphor Icons (só os pesos usados: bold, fill e thin) -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/thin/style.css" />
 
   <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <!-- Módulos do app: o navegador baixa todos em paralelo já no começo, em vez de descobrir as importações
+       um nível por vez (cada nível era uma ida e volta de rede). Mantido em dia por tests/perf.test.js. -->
+  <link rel="modulepreload" href="js/api.js" />
+  <link rel="modulepreload" href="js/app.js" />
+  <link rel="modulepreload" href="js/auth.js" />
+  <link rel="modulepreload" href="js/calc.js" />
+  <link rel="modulepreload" href="js/datepicker.js" />
+  <link rel="modulepreload" href="js/db.js" />
+  <link rel="modulepreload" href="js/dropdown.js" />
+  <link rel="modulepreload" href="js/firebase-config.js" />
+  <link rel="modulepreload" href="js/format.js" />
+  <link rel="modulepreload" href="js/gate.js" />
+  <link rel="modulepreload" href="js/news.js" />
+  <link rel="modulepreload" href="js/push.js" />
+  <link rel="modulepreload" href="js/ui.js" />
+  <link rel="modulepreload" href="js/ui/a11y.js" />
+  <link rel="modulepreload" href="js/ui/account.js" />
+  <link rel="modulepreload" href="js/ui/alerts.js" />
+  <link rel="modulepreload" href="js/ui/bills.js" />
+  <link rel="modulepreload" href="js/ui/budget.js" />
+  <link rel="modulepreload" href="js/ui/charts.js" />
+  <link rel="modulepreload" href="js/ui/core.js" />
+  <link rel="modulepreload" href="js/ui/dashboard.js" />
+  <link rel="modulepreload" href="js/ui/dividends.js" />
+  <link rel="modulepreload" href="js/ui/forms.js" />
+  <link rel="modulepreload" href="js/ui/goals.js" />
+  <link rel="modulepreload" href="js/ui/health.js" />
+  <link rel="modulepreload" href="js/ui/history.js" />
+  <link rel="modulepreload" href="js/ui/investments.js" />
+  <link rel="modulepreload" href="js/ui/mode.js" />
+  <link rel="modulepreload" href="js/ui/news-view.js" />
+  <link rel="modulepreload" href="js/ui/notifications.js" />
+  <link rel="modulepreload" href="js/ui/onboarding.js" />
+  <link rel="modulepreload" href="js/ui/planning.js" />
+  <link rel="modulepreload" href="js/ui/privacy.js" />
+  <link rel="modulepreload" href="js/ui/pwa.js" />
+  <link rel="modulepreload" href="js/ui/reports.js" />
+  <link rel="modulepreload" href="js/ui/settings.js" />
+  <link rel="modulepreload" href="js/ui/theme.js" />
+  <link rel="modulepreload" href="js/ui/transactions.js" />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js" crossorigin />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js" crossorigin />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js" crossorigin />
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="css/custom.css" />
+  <!-- Tailwind pré-compilado (npm run build:css). Vem DEPOIS do custom.css, como antes, para manter a cascata. -->
+  <link rel="stylesheet" href="css/tailwind.css" />
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased overflow-x-hidden">
   <a href="#main-content" id="skip-link" class="skip-link">Pular para o conteúdo</a>

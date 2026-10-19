@@ -5,9 +5,10 @@
 
 import { refreshDropdown } from "../dropdown.js";
 import { buildInvestmentHistory, summarizeHistory } from "../calc.js";
-import { escapeHtml, formatCurrency, state } from "./core.js";
+import { escapeHtml, fadeInClass, formatCurrency, state } from "./core.js";
 import { formatMonthLabel } from "./dividends.js";
 import { formatQuantity } from "./investments.js";
+import { formatPerShare } from "../format.js";
 
 /* ---------------------------------------------------------------
    Histórico de movimentações (view: Histórico)
@@ -52,11 +53,11 @@ export function populateHistorySelect(select, values, labelFn, allLabel) {
   refreshDropdown(select.id);
 }
 
-export function historyEventHtml(e) {
+export function historyEventHtml(e, fade = "animate-fade-in") {
   const meta = HIST_KIND_META[e.kind];
   const [y, m, d] = e.date.split("-").map(Number);
   const weekday = WEEKDAYS_PT[new Date(y, m - 1, d).getDay()];
-  const perShare = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  const perShare = formatPerShare;
 
   let detail;
   if (e.kind === "dividend") {
@@ -82,7 +83,7 @@ export function historyEventHtml(e) {
     : "";
 
   return `
-    <div class="flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3.5 hover:bg-slate-800/20 transition-colors animate-fade-in">
+    <div data-hist-row class="flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-3.5 hover:bg-slate-800/20 transition-colors ${fade}">
       <div class="w-10 text-center shrink-0">
         <p class="text-sm font-bold leading-none">${String(d).padStart(2, "0")}</p>
         <p class="text-[10px] text-slate-500 uppercase mt-1">${weekday}</p>
@@ -144,6 +145,7 @@ export function renderHistory() {
     if (groups.length === 0 || groups[groups.length - 1].key !== key) groups.push({ key, events: [] });
     groups[groups.length - 1].events.push(e);
   });
+  const fade = fadeInClass(histEl.list);
   histEl.list.innerHTML = groups
     .map((g) => {
       const monthEvents = events.filter((e) => e.date.startsWith(g.key));
@@ -159,7 +161,7 @@ export function renderHistory() {
             <p class="text-xs font-bold uppercase tracking-wider text-slate-300">${formatMonthLabel(g.key)}</p>
             <p class="text-[11px] text-slate-500">${parts.join(" · ")}</p>
           </div>
-          <div class="divide-y divide-slate-800/50">${g.events.map(historyEventHtml).join("")}</div>
+          <div class="divide-y divide-slate-800/50">${g.events.map((e) => historyEventHtml(e, fade)).join("")}</div>
         </div>`;
     })
     .join("");
