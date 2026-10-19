@@ -5,9 +5,11 @@
 // - Bibliotecas de CDN (Tailwind, Chart.js, ícones, Firebase SDK): cache
 //   primeiro, atualizado em segundo plano.
 // - /api, Firestore e cotações: sempre pela rede (dados vivos).
+// - Notificações (Firebase Cloud Messaging): mostra o lembrete e, ao tocar,
+//   abre o app na aba certa.
 // =========================================================
 
-const CACHE = "aportfy-v1";
+const CACHE = "aportfy-v2";
 const SHELL = ["/", "/index.html", "/css/custom.css", "/js/app.js", "/js/ui.js", "/manifest.webmanifest", "/assets/images/favicon.svg", "/assets/images/icon-192.png"];
 const CDN_HOSTS = ["cdn.tailwindcss.com", "cdn.jsdelivr.net", "unpkg.com", "www.gstatic.com", "fonts.googleapis.com", "fonts.gstatic.com"];
 
@@ -60,4 +62,52 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (CDN_HOSTS.includes(url.hostname)) event.respondWith(staleWhileRevalidate(request));
+});
+
+/* -------------------- Notificações -------------------- */
+
+/** Lê a mensagem do FCM (só "data") ou uma notificação comum. */
+function readPush(event) {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { data: { body: event.data ? event.data.text() : "" } };
+  }
+  const data = payload.data || {};
+  const notification = payload.notification || {};
+  return {
+    title: data.title || notification.title || "AportFy",
+    body: data.body || notification.body || "",
+    tag: data.tag || undefined,
+    url: data.url || "/",
+  };
+}
+
+self.addEventListener("push", (event) => {
+  const msg = readPush(event);
+  event.waitUntil(
+    self.registration.showNotification(msg.title, {
+      body: msg.body,
+      tag: msg.tag,
+      icon: "/assets/images/icon-192.png",
+      badge: "/assets/images/icon-192.png",
+      data: { url: msg.url },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (open) {
+        open.navigate(target).catch(() => {});
+        return open.focus();
+      }
+      return self.clients.openWindow(target);
+    })
+  );
 });

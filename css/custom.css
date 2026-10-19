@@ -895,3 +895,103 @@ html.theme-light input::placeholder {
 html.theme-light .notif-panel {
   background: #fff;
 }
+
+/* =========================================================
+   Contas e Cartões: filtro das contas
+   ========================================================= */
+.bill-filter-btn {
+  color: #94a3b8;
+}
+.bill-filter-btn[aria-pressed="true"] {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+html.theme-light .bill-filter-btn {
+  color: #64748b;
+}
+html.theme-light .bill-filter-btn[aria-pressed="true"] {
+  color: #1d4ed8;
+}
+
+/* =========================================================
+   Modo privacidade: gráficos borrados (os valores em texto já
+   saem mascarados pelo formatCurrency)
+   ========================================================= */
+html.privacy-on canvas {
+  filter: blur(7px);
+  pointer-events: none;
+}
+html.privacy-on #privacy-toggle {
+  color: #60a5fa;
+}
+
+/* =========================================================
+   Exportar relatório em PDF (impressão da aba Relatórios)
+   ========================================================= */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  body.printing-reports {
+    background: #fff !important;
+    color: #0f172a !important;
+  }
+  body.printing-reports #login-screen,
+  body.printing-reports #sidebar,
+  body.printing-reports header,
+  body.printing-reports #skip-link,
+  body.printing-reports #toast-container,
+  body.printing-reports #verify-banner,
+  body.printing-reports .glow-orb,
+  body.printing-reports .view-section:not(#view-reports),
+  body.printing-reports .no-print,
+  body.printing-reports div[id$="-modal"] {
+    display: none !important;
+  }
+  body.printing-reports .print-only {
+    display: block !important;
+  }
+  body.printing-reports #app-shell,
+  body.printing-reports #app-shell > div,
+  body.printing-reports main {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  body.printing-reports .glass-card {
+    background: #fff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    break-inside: avoid;
+  }
+  body.printing-reports .text-slate-500,
+  body.printing-reports .text-slate-400,
+  body.printing-reports .text-slate-600 {
+    color: #475569 !important;
+  }
+  body.printing-reports .text-white,
+  body.printing-reports h3,
+  body.printing-reports p {
+    color: #0f172a;
+  }
+  body.printing-reports .text-emerald-400 {
+    color: #047857 !important;
+  }
+  body.printing-reports .text-red-400 {
+    color: #b91c1c !important;
+  }
+  body.printing-reports .animate-slide-up,
+  body.printing-reports .animate-fade-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

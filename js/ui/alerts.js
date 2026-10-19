@@ -9,6 +9,9 @@ import { escapeHtml, state } from "./core.js";
 import { upcomingState } from "./dividends.js";
 import { lastHealthAnalysis } from "./health.js";
 import { renderOnboarding } from "./onboarding.js";
+import { billsState, currentUnpaidInvoices } from "./bills.js";
+import { renderPlanning } from "./planning.js";
+import { maskMoneyText } from "./privacy.js";
 
 const alertsEl = {
   btn: document.getElementById("notif-btn"),
@@ -62,6 +65,7 @@ export function scheduleAlertsRender() {
 
 export function renderAlerts() {
   renderOnboarding(); // os primeiros passos dependem dos mesmos dados
+  renderPlanning(); // saldo projetado e reserva também
   if (!alertsEl.btn) return;
   currentAlerts = buildAlerts({
     today: new Date().toLocaleDateString("sv-SE"),
@@ -73,6 +77,8 @@ export function renderAlerts() {
     health: lastHealthAnalysis,
     goals: state.lastGoals,
     joinRequests: state.joinRequestsCount || 0,
+    bills: billsState.bills,
+    invoices: currentUnpaidInvoices(),
   });
 
   const seen = readSeen();
@@ -90,8 +96,8 @@ export function renderAlerts() {
         <button type="button" data-alert-view="${escapeHtml(a.view)}" class="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors ${seen.has(a.id) ? "" : "bg-slate-800/20"}">
           <span class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${LEVEL_STYLE[a.level]}"><i class="ph-bold ${escapeHtml(a.icon)}" aria-hidden="true"></i></span>
           <span class="min-w-0">
-            <span class="block text-sm font-semibold">${escapeHtml(a.title)}</span>
-            <span class="block text-xs text-slate-500 mt-0.5">${escapeHtml(a.detail)}</span>
+            <span class="block text-sm font-semibold">${escapeHtml(maskMoneyText(a.title))}</span>
+            <span class="block text-xs text-slate-500 mt-0.5">${escapeHtml(maskMoneyText(a.detail))}</span>
           </span>
           ${seen.has(a.id) ? "" : `<span class="ml-auto mt-1.5 w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-label="Não lido"></span>`}
         </button>`

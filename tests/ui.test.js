@@ -27,6 +27,8 @@ const uiSource = ["js/ui.js", ...readdirSync("js/ui").map((f) => `js/ui/${f}`)].
 
 let ui;
 const accountHandlers = { onResend: vi.fn(async () => {}), onCheck: vi.fn(async () => {}), onDelete: vi.fn() };
+const billActions = { saveBill: vi.fn(), payBill: vi.fn(), unpayBill: vi.fn(), saveCard: vi.fn(), savePurchase: vi.fn(), payInvoice: vi.fn(), unpayInvoice: vi.fn() };
+const privacyChanged = vi.fn();
 const $ = (id) => document.getElementById(id);
 const text = (id) => $(id).textContent.replace(/\s+/g, " ").trim();
 const fire = (el, type) => el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
@@ -90,6 +92,11 @@ beforeAll(async () => {
   ui.bindTheme();
   ui.bindAccessibility();
   ui.bindOnboarding();
+  ui.bindBills(billActions);
+  ui.bindPlanning({ onSaveReserve: vi.fn() });
+  ui.bindPrivacy(privacyChanged);
+  ui.bindReportsExport();
+  ui.bindPushSettings({ onEnable: vi.fn(), onDisable: vi.fn(), onTest: vi.fn() });
   ui.bindAccountSecurity({ onResend: accountHandlers.onResend, onCheck: accountHandlers.onCheck, onDelete: accountHandlers.onDelete });
   ui.bindHistory();
   ui.bindPortfolioHealth();
@@ -787,5 +794,204 @@ describe("Carteira x Mercado", () => {
     ui.setMarketIndices(data, "ready"); // o app reenvia ao voltar
     expect(cardsText()).toBe(before);
     expect($("market-chart-wrap").classList.contains("hidden")).toBe(false);
+  });
+});
+
+/* ---------------------------------------------------------------
+   Contas e Cartões
+--------------------------------------------------------------- */
+describe("contas e cartões", () => {
+  const today = new Date().toLocaleDateString("sv-SE");
+  const shift = (days) => {
+    const d = new Date(`${today}T00:00:00`);
+    d.setDate(d.getDate() + days);
+    return d.toLocaleDateString("sv-SE");
+  };
+  const bills = () => [
+    { id: "b1", description: "Luz", amount: 200, dueDate: shift(-2), category: "Moradia", paid: false },
+    { id: "b2", description: "Água", amount: 80, dueDate: shift(1), category: "Moradia", paid: false },
+    { id: "b3", description: "Internet", amount: 120, dueDate: shift(-10), category: "Moradia", paid: true, paidAt: today },
+  ];
+  const card = { id: "c1", name: "Nubank", closingDay: 10, dueDay: 17, limit: 5000 };
+
+  beforeEach(() => {
+    billActions.payBill.mockClear();
+    billActions.saveBill.mockClear();
+    billActions.savePurchase.mockClear();
+    ui.renderBillsData({ bills: bills(), cards: [card], purchases: [], invoices: [], filter: "pending" });
+  });
+
+  it("lista as contas a pagar com a vencida primeiro e os totais", () => {
+    const rows = [...$("bills-list").children].map((r) => r.textContent.replace(/\s+/g, " "));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Luz");
+    expect(rows[0]).toContain("Venceu em");
+    expect(rows[1]).toContain("Vence amanhã");
+    expect(text("bills-kpi-overdue").replace(/\s/g, " ")).toBe("R$ 200,00");
+    expect(text("bills-kpi-overdue-count")).toBe("1 conta");
+  });
+
+  it("filtro de pagas e botão de pagar", () => {
+    document.querySelector('[data-bill-filter="paid"]').click();
+    expect([...$("bills-list").children]).toHaveLength(1);
+    expect(text("bills-list")).toContain("Internet");
+    document.querySelector('[data-bill-filter="pending"]').click();
+    document.querySelector('[data-bill-pay="b1"]').click();
+    expect(billActions.payBill).toHaveBeenCalledWith(expect.objectContaining({ id: "b1" }));
+  });
+
+  it("nova conta parcelada envia o número de parcelas", () => {
+    $("new-bill-btn").click();
+    setValue("bill-description", "Notebook");
+    setValue("bill-amount", "3000");
+    $("bill-repeat").value = "installments";
+    fire($("bill-repeat"), "change");
+    expect($("bill-installments-wrap").classList.contains("hidden")).toBe(false);
+    setValue("bill-installments", "10");
+    $("bill-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(billActions.saveBill).toHaveBeenCalledWith(expect.objectContaining({ description: "Notebook", amount: 3000, repeat: "installments", installments: 10, dueDate: today }), null);
+  });
+
+  it("cartão mostra a fatura atual, o limite e abre a fatura com as parcelas", () => {
+    const purchaseDate = shift(-1);
+    ui.renderBillsData({ purchases: [{ id: "p1", cardId: "c1", description: "TV", category: "Outros", amount: 1200, installments: 3, purchaseDate }] });
+    expect(text("cards-list")).toContain("Nubank");
+    expect(text("cards-list").replace(/\s/g, " ")).toContain("Limite usado R$ 1.200,00 de R$ 5.000,00");
+
+    document.querySelector('[data-card-open="c1"]').click();
+    expect($("invoice-modal").classList.contains("hidden")).toBe(false);
+    expect(text("invoice-items")).toContain("TV (1/3)");
+    expect(text("invoice-total").replace(/\s/g, " ")).toBe("R$ 400,00");
+    $("invoice-next").click();
+    expect(text("invoice-items")).toContain("(2/3)");
+    $("invoice-modal-close-btn").click();
+    expect($("invoice-modal").classList.contains("hidden")).toBe(true);
+  });
+
+  it("compra no cartão: mostra o parcelamento e envia os dados", () => {
+    document.querySelector('[data-card-purchase="c1"]').click();
+    setValue("purchase-description", "Geladeira");
+    setValue("purchase-amount", "1000");
+    setValue("purchase-installments", "4");
+    expect(text("purchase-installment-hint")).toMatch(/^4x de R\$\s250,00/);
+    $("purchase-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(billActions.savePurchase).toHaveBeenCalledWith(expect.objectContaining({ cardId: "c1", description: "Geladeira", amount: 1000, installments: 4 }), null);
+  });
+
+  it("contas vencidas aparecem no sino", async () => {
+    await new Promise((r) => setTimeout(r, 5));
+    const titles = ui.getCurrentAlerts().map((a) => a.title);
+    expect(titles).toContain("Conta vencida: Luz");
+    expect(titles).toContain("Água vence amanhã");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Dashboard: saldo projetado e reserva
+--------------------------------------------------------------- */
+describe("saldo projetado e reserva de emergência", () => {
+  it("o saldo projetado considera as contas a vencer", () => {
+    const today = new Date().toLocaleDateString("sv-SE");
+    ui.updateKPIs([{ id: "t1", date: today, type: "income", amount: 3000, description: "Salário", category: "Salário" }], []);
+    ui.renderBillsData({ bills: [{ id: "x", description: "Aluguel", amount: 1000, dueDate: today, paid: false }], cards: [], purchases: [], invoices: [] });
+    ui.setPlanningData({ recurrences: [] });
+    expect(text("proj-value").replace(/\s/g, " ")).toBe("R$ 2.000,00");
+    expect(text("proj-upcoming")).toContain("Aluguel");
+  });
+
+  it("a reserva mostra quantos meses cobre", () => {
+    const today = new Date().toLocaleDateString("sv-SE");
+    const [y, m] = today.split("-").map(Number);
+    const lastMonth = new Date(y, m - 2, 10).toLocaleDateString("sv-SE");
+    ui.updateKPIs([{ id: "t2", date: lastMonth, type: "expense", amount: 2000, description: "Gastos", category: "Outros" }], [{ id: "g1", name: "Reserva", currentAmount: 8000, targetAmount: 12000 }]);
+    ui.setPlanningData({ reserve: { sources: ["goal:g1"], extra: 0, targetMonths: 6 } });
+    expect(text("reserve-months")).toBe("4,0 meses");
+    expect(text("reserve-note").replace(/\s/g, " ")).toContain("Faltam R$ 4.000,00 para 6 meses");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Modo privacidade
+--------------------------------------------------------------- */
+describe("modo privacidade", () => {
+  it("esconde os valores e o botão avisa o estado", () => {
+    ui.setPrivacy(false);
+    $("privacy-toggle").click();
+    expect(document.documentElement.classList.contains("privacy-on")).toBe(true);
+    expect(privacyChanged).toHaveBeenCalled();
+    expect(ui.formatCurrency(1234.5)).toBe("R$ •••••");
+    expect(ui.maskMoneyText("Caíram R$ 58,00 hoje")).toBe("Caíram R$ ••••• hoje");
+    expect($("privacy-toggle").getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem("aportfy_privacy")).toBe("1");
+
+    $("privacy-toggle").click();
+    expect(ui.formatCurrency(10).replace(/\s/g, " ")).toBe("R$ 10,00");
+    expect($("privacy-toggle").getAttribute("aria-label")).toBe("Esconder valores");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Exportar relatórios
+--------------------------------------------------------------- */
+describe("exportar relatórios", () => {
+  it("CSV baixa as transações do período", async () => {
+    const created = [];
+    URL.createObjectURL = vi.fn((blob) => {
+      created.push(blob);
+      return "blob:x";
+    });
+    URL.revokeObjectURL = vi.fn();
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    ui.renderReports([
+      { id: "r1", date: "2026-10-02", type: "expense", amount: 50, description: "Pizza", category: "Lazer" },
+      { id: "r2", date: "2026-09-02", type: "expense", amount: 70, description: "Antiga", category: "Lazer" },
+    ]);
+    $("reports-period-filter").value = "all";
+    fire($("reports-period-filter"), "change");
+    $("reports-export-csv").click();
+    expect(clicked).toHaveBeenCalled();
+    const content = await created[0].text();
+    expect(content).toContain("Pizza");
+    expect(content).toContain("Antiga");
+    clicked.mockRestore();
+  });
+
+  it("PDF usa a impressão do navegador só com a aba Relatórios", () => {
+    window.print = vi.fn(() => expect(document.body.classList.contains("printing-reports")).toBe(true));
+    $("reports-export-pdf").click();
+    expect(window.print).toHaveBeenCalled();
+    expect(text("reports-print-period")).toContain("Período:");
+  });
+});
+
+/* ---------------------------------------------------------------
+   Notificações e login com Google
+--------------------------------------------------------------- */
+describe("notificações e conta Google", () => {
+  it("status das notificações controla os botões", () => {
+    ui.renderPushStatus({ supported: true, enabled: false, permission: "default" });
+    expect($("push-enable-btn").classList.contains("hidden")).toBe(false);
+    expect($("push-disable-btn").classList.contains("hidden")).toBe(true);
+    ui.renderPushStatus({ supported: true, enabled: true, permission: "granted" });
+    expect(text("push-status")).toBe("Ativadas neste aparelho.");
+    expect($("push-test-btn").classList.contains("hidden")).toBe(false);
+    ui.renderPushStatus({ supported: false, enabled: false, permission: "unsupported" });
+    expect($("push-enable-btn").classList.contains("hidden")).toBe(true);
+  });
+
+  it("quem entrou com Google confirma a exclusão sem senha", () => {
+    accountHandlers.onDelete.mockClear();
+    ui.renderAccountSecurity({ email: "a@gmail.com", emailVerified: true, providerData: [{ providerId: "google.com" }] });
+    ui.openDeleteAccountModal();
+    expect($("delete-account-password-wrap").classList.contains("hidden")).toBe(true);
+    $("delete-account-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(accountHandlers.onDelete).toHaveBeenCalledWith(null);
+    ui.closeDeleteAccountModal();
+    ui.renderAccountSecurity({ email: "a@b.com", emailVerified: true, providerData: [{ providerId: "password" }] });
+    expect($("delete-account-password-wrap").classList.contains("hidden")).toBe(false);
+  });
+
+  it("a tela de login tem o botão do Google", () => {
+    expect($("google-login-btn").textContent).toContain("Continuar com Google");
   });
 });

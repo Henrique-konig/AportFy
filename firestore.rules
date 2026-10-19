@@ -93,6 +93,43 @@ service cloud.firestore {
     function validSettings(d) {
       return d.keys().size() <= 30;
     }
+    function isDay(v) {
+      return v is int && v >= 1 && v <= 31;
+    }
+    function validBill(d) {
+      return isText(d.description, 200) && d.description.size() > 0
+          && isMoney(d.amount) && d.amount > 0
+          && isDateText(d.dueDate)
+          && isText(d.category, 80)
+          && d.paid is bool
+          && isOptionalDate(d.get('paidAt', null))
+          && d.get('recurring', false) is bool;
+    }
+    function validCard(d) {
+      return isText(d.name, 60) && d.name.size() > 0
+          && isMoney(d.limit)
+          && isDay(d.closingDay)
+          && isDay(d.dueDay);
+    }
+    function validCardPurchase(d) {
+      return isText(d.cardId, 60) && d.cardId.size() > 0
+          && isText(d.description, 200) && d.description.size() > 0
+          && isMoney(d.amount) && d.amount > 0
+          && d.installments is int && d.installments >= 1 && d.installments <= 72
+          && isDateText(d.purchaseDate)
+          && isText(d.category, 80);
+    }
+    function validCardInvoice(d) {
+      return isText(d.cardId, 60)
+          && d.month is string && d.month.size() == 7
+          && d.paid is bool
+          && isMoney(d.total)
+          && d.get('transactionIds', []).size() <= 500;
+    }
+    function validPushToken(d) {
+      return isText(d.token, 4096) && d.token.size() > 0
+          && isText(d.get('userAgent', ''), 300);
+    }
     function validDoc(collection, d) {
       return (collection == 'transactions' && validTransaction(d))
           || (collection == 'goals' && validGoal(d))
@@ -100,7 +137,11 @@ service cloud.firestore {
           || (collection == 'dividends' && validDividend(d))
           || (collection == 'budgets' && validBudget(d))
           || (collection == 'recurrences' && validRecurrence(d))
-          || (collection == 'settings' && validSettings(d));
+          || (collection == 'settings' && validSettings(d))
+          || (collection == 'bills' && validBill(d))
+          || (collection == 'cards' && validCard(d))
+          || (collection == 'cardPurchases' && validCardPurchase(d))
+          || (collection == 'cardInvoices' && validCardInvoice(d));
     }
 
     // Perfil do usuário (coupleId, displayName, email) e suas coleções
@@ -117,7 +158,8 @@ service cloud.firestore {
       match /{collection}/{docId} {
         allow read, delete: if request.auth != null && request.auth.uid == userId;
         allow create, update: if request.auth != null && request.auth.uid == userId
-                               && validDoc(collection, request.resource.data);
+                               && (validDoc(collection, request.resource.data)
+                                   || (collection == 'pushTokens' && validPushToken(request.resource.data)));
       }
     }
 

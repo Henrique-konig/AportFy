@@ -26,3 +26,7 @@ export * from "./ui/theme.js";
 export * from "./ui/a11y.js";
 export * from "./ui/onboarding.js";
 export * from "./ui/account.js";
+export * from "./ui/bills.js";
+export * from "./ui/planning.js";
+export * from "./ui/privacy.js";
+export * from "./ui/notifications.js";

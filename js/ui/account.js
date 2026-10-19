@@ -17,11 +17,20 @@ const acEl = {
   error: document.getElementById("delete-account-error"),
   cancelBtn: document.getElementById("delete-account-cancel-btn"),
   confirmBtn: document.getElementById("delete-account-confirm-btn"),
+  passwordWrap: document.getElementById("delete-account-password-wrap"),
+  googleNote: document.getElementById("delete-account-google-note"),
 };
+
+// Conta sem senha (entrou com Google): a exclusão é confirmada entrando de novo com o Google.
+let usesPassword = true;
 
 /** Mostra ou esconde o aviso de e-mail e o status em Configurações. */
 export function renderAccountSecurity(user) {
   const verified = !!user?.emailVerified;
+  usesPassword = !user?.providerData || user.providerData.length === 0 || user.providerData.some((p) => p.providerId === "password");
+  acEl.passwordWrap?.classList.toggle("hidden", !usesPassword);
+  acEl.googleNote?.classList.toggle("hidden", usesPassword);
+  if (acEl.password) acEl.password.required = usesPassword;
   acEl.banner?.classList.toggle("hidden", !user || verified);
   if (acEl.bannerEmail) acEl.bannerEmail.textContent = user?.email || "";
   if (acEl.emailStatus) {
@@ -88,6 +97,11 @@ export function bindAccountSecurity({ onResend, onCheck, onDelete }) {
   acEl.modalBackdrop?.addEventListener("click", closeDeleteAccountModal);
   acEl.form?.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!usesPassword) {
+      showDeleteAccountError("");
+      onDelete(null);
+      return;
+    }
     const password = acEl.password.value;
     if (!password) {
       showDeleteAccountError("Digite sua senha para confirmar.");

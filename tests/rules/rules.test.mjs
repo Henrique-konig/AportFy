@@ -216,3 +216,44 @@ describe("exclusão da conta", () => {
     await assertSucceeds(deleteDoc(doc(as(STRANGER), "couples", STRANGER)));
   });
 });
+
+describe("contas, cartões e notificações", () => {
+  const col = (uid, name, id) => doc(as(uid), "users", uid, name, id);
+
+  it("contas a pagar", async () => {
+    const bill = { description: "Luz", amount: 180.5, dueDate: "2026-10-28", category: "Moradia", paid: false, paidAt: null, recurring: true };
+    await assertSucceeds(setDoc(col(STRANGER, "bills", "b1"), bill));
+    await assertSucceeds(updateDoc(col(STRANGER, "bills", "b1"), { paid: true, paidAt: "2026-10-27", transactionId: "t1" }));
+    await assertFails(setDoc(col(STRANGER, "bills", "b2"), { ...bill, amount: 0 }));
+    await assertFails(setDoc(col(STRANGER, "bills", "b3"), { ...bill, paid: "não" }));
+    await assertFails(setDoc(col(STRANGER, "bills", "b4"), { ...bill, dueDate: "28/10" }));
+  });
+
+  it("cartões, compras e faturas", async () => {
+    await assertSucceeds(setDoc(col(STRANGER, "cards", "c1"), { name: "Nubank", limit: 5000, closingDay: 10, dueDay: 17 }));
+    await assertFails(setDoc(col(STRANGER, "cards", "c2"), { name: "X", limit: 5000, closingDay: 0, dueDay: 17 }));
+    await assertFails(setDoc(col(STRANGER, "cards", "c3"), { name: "X", limit: 5000, closingDay: 10, dueDay: 32 }));
+
+    const purchase = { cardId: "c1", description: "TV", amount: 1200, installments: 10, purchaseDate: "2026-10-12", category: "Outros" };
+    await assertSucceeds(setDoc(col(STRANGER, "cardPurchases", "p1"), purchase));
+    await assertFails(setDoc(col(STRANGER, "cardPurchases", "p2"), { ...purchase, installments: 0 }));
+    await assertFails(setDoc(col(STRANGER, "cardPurchases", "p3"), { ...purchase, installments: 100 }));
+    await assertFails(setDoc(col(STRANGER, "cardPurchases", "p4"), { ...purchase, amount: -1 }));
+
+    await assertSucceeds(setDoc(col(STRANGER, "cardInvoices", "c1_2026-11"), { cardId: "c1", month: "2026-11", paid: true, paidAt: "2026-11-17", total: 120, transactionIds: ["a", "b"] }));
+    await assertFails(setDoc(col(STRANGER, "cardInvoices", "c1_2026-12"), { cardId: "c1", month: "2026-1", paid: true, total: 120 }));
+  });
+
+  it("tokens de notificação só no espaço pessoal do dono", async () => {
+    await assertSucceeds(setDoc(col(STRANGER, "pushTokens", "tk1"), { token: "abc", userAgent: "Chrome" }));
+    await assertFails(setDoc(doc(as(OTHER), "users", STRANGER, "pushTokens", "tk2"), { token: "abc" }));
+    await assertFails(setDoc(col(STRANGER, "pushTokens", "tk3"), { token: "" }));
+    await assertFails(setDoc(doc(as(OWNER), "couples", OWNER, "pushTokens", "tk4"), { token: "abc" }));
+  });
+
+  it("o casal usa as mesmas validações nas contas", async () => {
+    const bill = { description: "Aluguel", amount: 1900, dueDate: "2026-11-05", category: "Moradia", paid: false };
+    await assertSucceeds(setDoc(doc(as(PARTNER), "couples", OWNER, "bills", "b1"), bill));
+    await assertFails(setDoc(doc(as(PARTNER), "couples", OWNER, "bills", "b2"), { ...bill, amount: -5 }));
+  });
+});

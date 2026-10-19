@@ -44,6 +44,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - KPIs de saldo, receitas, despesas e progresso de metas, com comparação em relação ao mês anterior.
 - Filtro por mês/ano ou **Todos os meses** (acumulado). Ao escolher um mês, o saldo mostra o resultado daquele mês.
 - Fluxo de caixa dos últimos 6 meses e despesas por categoria do período selecionado.
+- **Saldo projetado do mês:** quanto deve sobrar no fim do mês, somando o que já entrou e saiu com o que ainda vai entrar e sair (transações com data futura, recorrências, contas e faturas a vencer), com a lista dos próximos lançamentos.
+- **Reserva de emergência:** quantos meses de despesas a sua reserva cobre (média dos últimos 3 meses) e quanto falta para a meta (3, 6, 9 ou 12 meses). Você escolhe onde está a reserva: metas, investimentos e/ou um valor digitado.
 - **Primeiros passos:** para quem está começando, um roteiro curto (primeira transação, primeiro investimento, metas de alocação, instalar o app) que some quando tudo é feito ou ao dispensar.
 - **Central de alertas** (sino no cabeçalho): proventos a receber e recebidos, orçamentos estourando, metas perto do prazo, cotações desatualizadas, problemas de saúde da carteira e pedidos de entrada no Modo Casal.
 
@@ -52,6 +54,13 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Filtros por tipo, categoria e mês, busca por texto e paginação ("Carregar mais").
 - Total gasto do período filtrado.
 - **Transações recorrentes** lançadas automaticamente todo mês, na data configurada.
+
+**Contas e Cartões**
+- **Contas a pagar** com vencimento, categoria e situação (vencida, vence em breve, a pagar, paga). Podem ser únicas, **mensais** (ao pagar, a do mês seguinte já é criada) ou **parceladas** (uma conta por mês).
+- Ao marcar como paga, a despesa entra sozinha nas transações; dá para desfazer.
+- **Cartões de crédito** com dia de fechamento, vencimento e limite. Compras **parceladas** em até 72x: cada parcela cai na fatura certa (compras a partir do fechamento vão para a fatura seguinte).
+- **Faturas** mês a mês (aberta, fechada, vencida, paga), limite usado e disponível. Pagar a fatura lança uma despesa por parcela, com a categoria de cada compra, então orçamentos e relatórios continuam certos.
+- Contas e faturas vencendo ou vencidas aparecem no sino e nas notificações.
 
 **Metas e Orçamento**
 - Metas com valor-alvo, progresso e prazo.
@@ -82,6 +91,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Relatórios**
 - Receitas, despesas e economia líquida por mês/ano ou acumulado, maiores categorias e maiores despesas, e fluxo de caixa de 12 meses.
+- **Exportar:** CSV das transações do período (abre direto no Excel, com vírgula decimal) e PDF do relatório (pela impressão do navegador, só com a aba Relatórios, em fundo branco).
 
 **Saúde da Carteira**
 - Nota de 0 a 100 com quatro componentes: alinhamento às metas por categoria, concentração por ativo, diversificação (número efetivo de ativos) e dependência de poucos pagadores de proventos.
@@ -92,7 +102,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Metas de alocação configuráveis (perfis Conservador, Moderado e Arrojado como ponto de partida, ou personalizadas). A análise é educativa e não indica ativos específicos.
 
 **Conta e dados**
-- Login com e-mail e senha, perfil e redefinição de senha por e-mail (em Configurações). Contas novas exigem senha de 8+ caracteres com letras e números e **confirmação do e-mail** (um aviso no topo permite reenviar o link).
+- Login com e-mail e senha ou **com Google** (o e-mail já vem verificado, sem depender do e-mail de confirmação), perfil e redefinição de senha por e-mail (em Configurações). Contas novas exigem senha de 8+ caracteres com letras e números e **confirmação do e-mail** (um aviso no topo permite reenviar o link).
 - **Excluir conta** (em Configurações): apaga todos os seus dados e a conta, pedindo a senha para confirmar.
 - **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal. Para pedir entrada é preciso ter o e-mail confirmado.
 - **Backup e restauração** de transações, metas, investimentos e proventos em arquivo `.json`.
@@ -100,6 +110,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 **App e acessibilidade**
 - **Instalável (PWA):** pode ser instalado no celular ou no computador e abre como aplicativo; a interface carrega mesmo sem internet e os dados já vistos ficam disponíveis offline (cache do Firestore).
 - **Tema claro, escuro ou do sistema**, pelo botão no cabeçalho ou em Configurações.
+- **Modo privacidade** (ícone de olho no cabeçalho): esconde todos os valores em reais e borra os gráficos, para usar o app em público. A escolha fica salva no aparelho.
+- **Notificações** com o app fechado (Configurações → Notificações): uma vez por dia, de manhã, lembra das contas e faturas que vencem hoje ou amanhã (ou venceram ontem) e dos proventos que caem no dia seguinte. Tocar na notificação abre a aba certa.
 - Navegação por teclado (selects customizados, modais com Esc e foco preso), link "Pular para o conteúdo", rótulos para leitores de tela e respeito a "reduzir movimento".
 
 ## Stack
@@ -114,7 +126,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 | Índices | CDI do [Banco Central](https://www.bcb.gov.br) (SGS) e Ibovespa/IFIX da B3 |
 | Proventos | API pública da [B3](https://www.b3.com.br) (Ações e FIIs), com a Brapi como reserva para Ações |
 | Notícias | [Alpha Vantage](https://www.alphavantage.co) e Google News RSS |
-| Testes | [Vitest](https://vitest.dev) |
+| Notificações | [Firebase Cloud Messaging](https://firebase.google.com/docs/cloud-messaging) + Cron da Vercel |
+| Testes | [Vitest](https://vitest.dev) e GitHub Actions |
 | Hospedagem | [Vercel](https://vercel.com) |
 
 ## Estrutura do projeto
@@ -134,21 +147,26 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── calc.js           # Cálculos puros (sem DOM/Firebase), cobertos por testes
 │   ├── api.js            # Cotações (Brapi e cripto), proventos (/api/proventos) e índices (/api/indices)
 │   ├── news.js           # Notícias da carteira e do mercado
+│   ├── push.js           # Notificações: permissão e token do aparelho (Firebase Cloud Messaging)
 │   ├── datepicker.js     # Seletor de data customizado
 │   ├── dropdown.js       # Dropdown customizado para os selects
 │   └── firebase-config.js# Inicialização do Firebase SDK
 ├── api/
 │   ├── proventos.js      # Função serverless (Vercel): proventos de Ações e FIIs na API da B3
 │   ├── noticias.js       # Função serverless (Vercel): notícias por ticker (chave da Alpha Vantage no servidor)
-│   └── indices.js        # Função serverless (Vercel): CDI (Banco Central), Ibovespa e IFIX (B3)
+│   ├── indices.js        # Função serverless (Vercel): CDI (Banco Central), Ibovespa e IFIX (B3)
+│   ├── notificacoes.js   # Cron diário (Vercel): lembretes de contas, faturas e proventos por push
+│   └── _lib/b3.js        # Busca de proventos na B3, usada por proventos.js e notificacoes.js
 ├── tests/
 │   ├── calc.test.js      # Testes unitários de calc.js
 │   ├── ui.test.js        # Testes de tela (jsdom): filtros, modais, abas e totais
-│   ├── sw.test.js        # Testes do service worker (cache offline)
+│   ├── sw.test.js        # Testes do service worker (cache offline e notificações)
+│   ├── api.test.js       # Testes das funções serverless (proteção do cron)
 │   └── rules/            # Testes das regras do Firestore (emulador)
 ├── assets/images/        # Favicon e ícones do app
 ├── manifest.webmanifest  # Manifesto do PWA (nome, ícones, cores)
 ├── sw.js                 # Service worker: interface offline
+├── .github/workflows/    # GitHub Actions: roda os testes a cada push
 ├── firestore.rules       # Regras de segurança do Firestore
 ├── firebase.json         # Configuração do emulador (testes das regras) e do deploy das regras
 ├── vercel.json           # URLs limpas, cache de assets e região da função
@@ -175,7 +193,7 @@ O Node.js é necessário apenas para o servidor estático de desenvolvimento e p
 ### 1. Firebase (obrigatório)
 
 1. Crie um projeto no [Firebase Console](https://console.firebase.google.com).
-2. Em **Authentication**, habilite o método **E-mail/senha**.
+2. Em **Authentication**, habilite os métodos **E-mail/senha** e **Google** (Sign-in method → Google → Ativar, escolhendo o e-mail de suporte).
 3. Em **Firestore Database**, crie o banco.
 4. Em **Configurações do projeto**, copie as credenciais do app web para [`js/firebase-config.js`](js/firebase-config.js):
 
@@ -207,6 +225,23 @@ As chaves ficam **fora do código**: variáveis de ambiente da Vercel (Settings 
 
 > A Alpha Vantage tem limite de 25 requisições por dia no plano gratuito, por isso as respostas ficam em cache local por 3 horas.
 
+### 3. Notificações (opcional)
+
+O botão de ativar já funciona; para os lembretes diários serem **enviados**, a função agendada [`api/notificacoes.js`](api/notificacoes.js) precisa de duas variáveis de ambiente na Vercel:
+
+| Variável | Como obter |
+| --- | --- |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Console → Configurações do projeto → **Contas de serviço** → *Gerar nova chave privada*. Cole o **conteúdo inteiro** do JSON baixado como valor da variável. Esse arquivo dá acesso total ao projeto: não o coloque no repositório. |
+| `CRON_SECRET` | Qualquer texto longo e aleatório (ex: gere com `openssl rand -hex 32`). A Vercel o envia no cron; chamadas sem ele são recusadas. |
+
+O agendamento está no [`vercel.json`](vercel.json) (`0 11 * * *` = 8h de Brasília, uma vez por dia — o máximo do plano gratuito). Depois de configurar, faça um novo deploy. Para testar na hora, chame a função com o segredo:
+
+```bash
+curl -H "Authorization: Bearer SEU_CRON_SECRET" https://aportfy.vercel.app/api/notificacoes
+```
+
+A resposta mostra quantos usuários e envios houve. No iPhone, as notificações só funcionam com o app **instalado na tela de início** (iOS 16.4 ou mais novo).
+
 ## Modelo de dados
 
 Cada coleção existe nos dois modos: `users/{userId}/…` (Pessoal) e `couples/{coupleId}/…` (Casal).
@@ -220,6 +255,12 @@ Cada coleção existe nos dois modos: `users/{userId}/…` (Pessoal) e `couples/
 | `investments` | Posições da carteira, com `purchases` (compras), `sales` (vendas, com o preço médio da época) e `priceHistory` |
 | `dividends` | Proventos recebidos (`ticker`, `type`, `amount`, `date`; os importados também guardam `rate`, `shares` e `exDate`) |
 | `settings/portfolio` | Metas de alocação da Saúde da Carteira (`targets` por categoria, `maxAssetPct`, `minAssets`) |
+| `settings/reserve` | Reserva de emergência (`sources`: metas/investimentos escolhidos, `extra`, `targetMonths`) |
+| `bills` | Contas a pagar (`description`, `amount`, `dueDate`, `category`, `paid`, `paidAt`, `recurring`, `transactionId` da despesa gerada) |
+| `cards` | Cartões (`name`, `limit`, `closingDay`, `dueDay`) |
+| `cardPurchases` | Compras no cartão (`cardId`, `description`, `amount` total, `installments`, `purchaseDate`, `category`). As faturas são calculadas a partir delas |
+| `cardInvoices` | Faturas pagas (id `cardId_YYYY-MM`, `paidAt`, `total`, `transactionIds` das despesas lançadas) |
+| `pushTokens` | Só em `users/{uid}`: aparelhos com notificações ativadas |
 
 Datas são strings `YYYY-MM-DD`, o que simplifica filtros e agrupamentos por mês.
 
@@ -252,11 +293,14 @@ npm install
 npm test
 ```
 
-`npm test` roda três camadas, sem Firebase nem rede:
+`npm test` roda quatro camadas, sem Firebase nem rede:
 
-- **Cálculos** ([`tests/calc.test.js`](tests/calc.test.js)): os cálculos financeiros ficam isolados em [`js/calc.js`](js/calc.js), sem DOM ou Firebase — métricas e preço médio, vendas e histórico, saúde da carteira, aportes, proventos e calendário, comparação com CDI/Ibovespa/IFIX, independência financeira, alertas, orçamento e recorrências.
-- **Telas** ([`tests/ui.test.js`](tests/ui.test.js)): carrega o `index.html` real num DOM simulado (jsdom) e exercita filtros, modais, abas e totais, além de conferir que todo id usado pelo `ui.js` existe no HTML. Pensado para pegar regressões como filtros que não reagem ou proventos duplicados. Também cobre tema, primeiros passos e acessibilidade (modais, teclado nos selects).
-- **Service worker** ([`tests/sw.test.js`](tests/sw.test.js)): o que vai para o cache offline e o que sempre vem da rede (Firebase, APIs).
+- **Cálculos** ([`tests/calc.test.js`](tests/calc.test.js)): os cálculos financeiros ficam isolados em [`js/calc.js`](js/calc.js), sem DOM ou Firebase — métricas e preço médio, vendas e histórico, saúde da carteira, aportes, proventos e calendário, comparação com CDI/Ibovespa/IFIX, independência financeira, alertas, orçamento, recorrências, faturas e parcelas de cartão, contas a pagar, saldo projetado, reserva de emergência, CSV e lembretes.
+- **Telas** ([`tests/ui.test.js`](tests/ui.test.js)): carrega o `index.html` real num DOM simulado (jsdom) e exercita filtros, modais, abas e totais, além de conferir que todo id usado pelo `ui.js` existe no HTML. Pensado para pegar regressões como filtros que não reagem ou proventos duplicados. Também cobre tema, primeiros passos, acessibilidade (modais, teclado nos selects), contas e cartões, modo privacidade e exportação.
+- **Service worker** ([`tests/sw.test.js`](tests/sw.test.js)): o que vai para o cache offline, o que sempre vem da rede (Firebase, APIs) e as notificações (exibir e abrir a aba certa).
+- **Funções serverless** ([`tests/api.test.js`](tests/api.test.js)): o cron de notificações recusa chamadas sem o segredo.
+
+**GitHub Actions** ([`.github/workflows/testes.yml`](.github/workflows/testes.yml)) roda `npm test` e os testes das regras (com o emulador) a cada push e pull request. Um X vermelho no commit indica que algo quebrou; em *Settings → Branches* dá para exigir os testes verdes antes de aceitar um pull request.
 
 **Regras do Firestore** (precisam do emulador e de um JDK 21+ instalado):
 
@@ -289,6 +333,9 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 
 ## Limitações conhecidas
 
+- **Contas e cartões não entram no backup** em `.json` (só transações, metas, investimentos e proventos). As despesas geradas ao pagar contas e faturas entram, porque são transações.
+- **Fatura só pode ser paga depois de fechar.** Uma compra registrada depois do pagamento num mês já pago não altera a fatura paga — desfaça e pague de novo.
+- **Notificações** saem uma vez por dia (limite do cron no plano gratuito da Vercel) e dependem das variáveis de ambiente acima. O navegador embutido de alguns apps (Instagram, WhatsApp) não recebe notificações.
 - **Excluir conta no Modo Casal:** se o espaço tem mais de uma pessoa, ele continua com a outra (os dados compartilhados não são apagados); só os seus dados pessoais e a sua conta saem.
 - **Modo Casal:** só o dono aprova novos membros, e membros não podem ser removidos pela interface (a lista só cresce). O código sozinho não dá acesso, mas ainda vale compartilhá-lo só com quem você confia.
 - **Nome do projeto Firebase:** o ID do projeto (`ecofy-c332d`) é de antes do rebrand e não pode ser renomeado; só o nome de exibição muda (Console do Firebase → Configurações do projeto). Usuários e dados ficam nele.

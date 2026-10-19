@@ -25,6 +25,7 @@ import { openDeleteModal } from "./forms.js";
 --------------------------------------------------------------- */
 
 export function formatQuantity(n) {
+  if (document.documentElement.classList.contains("privacy-on")) return "•••";
   return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 8 });
 }
 

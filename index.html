@@ -19,6 +19,9 @@
         document.documentElement.classList.remove("dark");
       }
     } catch (e) {}
+    try {
+      if (localStorage.getItem("aportfy_privacy") === "1") document.documentElement.classList.add("privacy-on");
+    } catch (e) {}
   </script>
 
   <!-- PWA -->
@@ -114,6 +117,12 @@
         <div class="h-px flex-1 bg-slate-800"></div>
       </div>
 
+      <button id="google-login-btn" type="button"
+        class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-800 font-semibold text-sm py-3 rounded-xl border border-slate-200 transition-all active:scale-[0.98] mb-4">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+        <span>Continuar com Google</span>
+      </button>
+
       <button id="toggle-auth-mode" type="button" class="w-full text-center text-sm text-slate-400 hover:text-blue-400 transition-colors">
         Não tem uma conta? <span class="text-blue-400 font-semibold">Criar conta</span>
       </button>
@@ -165,6 +174,10 @@
           <button data-view="budget" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-wallet text-lg shrink-0"></i>
             <span class="sidebar-label">Orçamento</span>
+          </button>
+          <button data-view="bills" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-credit-card text-lg shrink-0"></i>
+            <span class="sidebar-label">Contas e Cartões</span>
           </button>
           <button data-view="investments" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-chart-line-up text-lg shrink-0"></i>
@@ -244,6 +257,10 @@
                   <i class="ph-fill ph-heart text-sm"></i> <span class="hidden sm:inline">Casal</span>
                 </button>
               </div>
+
+              <button type="button" id="privacy-toggle" class="text-slate-400 hover:text-white transition-colors shrink-0" aria-label="Esconder valores" title="Esconder valores" aria-pressed="false">
+                <i class="ph-bold ph-eye text-xl" aria-hidden="true"></i>
+              </button>
 
               <button type="button" id="theme-toggle" class="text-slate-400 hover:text-white transition-colors shrink-0" aria-label="Ativar tema claro" title="Ativar tema claro">
                 <i class="ph-bold ph-sun text-xl" aria-hidden="true"></i>
@@ -396,6 +413,53 @@
                 <div class="w-full h-1.5 bg-slate-800 rounded-full mt-3.5 overflow-hidden">
                   <div id="kpi-goals-bar" class="h-full rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700" style="width: 0%"></div>
                 </div>
+              </div>
+            </section>
+
+            <!-- SALDO PROJETADO + RESERVA DE EMERGÊNCIA -->
+            <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 animate-slide-up">
+              <div class="glass-card rounded-2xl p-5 sm:p-6">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-base">Saldo projetado do mês</h3>
+                    <p class="text-xs text-slate-500">O que deve sobrar no fim do mês com o que ainda vai entrar e sair.</p>
+                  </div>
+                  <i class="ph-bold ph-calendar-check text-xl text-blue-400 shrink-0" aria-hidden="true"></i>
+                </div>
+                <p class="text-2xl font-extrabold tracking-tight" id="proj-value">R$ 0,00</p>
+                <div class="grid grid-cols-3 gap-2 mt-4 text-xs">
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl px-3 py-2.5 min-w-0">
+                    <p class="text-slate-500">Até hoje</p>
+                    <p class="font-semibold mt-0.5 truncate" id="proj-realized">R$ 0,00</p>
+                  </div>
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl px-3 py-2.5 min-w-0">
+                    <p class="text-slate-500">A entrar</p>
+                    <p class="font-semibold mt-0.5 text-emerald-400 truncate" id="proj-incoming">R$ 0,00</p>
+                  </div>
+                  <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl px-3 py-2.5 min-w-0">
+                    <p class="text-slate-500">A sair</p>
+                    <p class="font-semibold mt-0.5 text-red-400 truncate" id="proj-outgoing">R$ 0,00</p>
+                  </div>
+                </div>
+                <ul id="proj-upcoming" class="mt-4 space-y-1.5 text-xs"></ul>
+              </div>
+
+              <div class="glass-card rounded-2xl p-5 sm:p-6">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-base">Reserva de emergência</h3>
+                    <p class="text-xs text-slate-500" id="reserve-subtitle">Quantos meses de despesas a sua reserva cobre.</p>
+                  </div>
+                  <button type="button" id="reserve-config-btn" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors shrink-0 flex items-center gap-1">
+                    <i class="ph-bold ph-sliders-horizontal" aria-hidden="true"></i> Configurar
+                  </button>
+                </div>
+                <p class="text-2xl font-extrabold tracking-tight" id="reserve-months">—</p>
+                <p class="text-xs text-slate-500 mt-0.5" id="reserve-amount">Escolha onde está a sua reserva.</p>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden" aria-hidden="true">
+                  <div id="reserve-bar" class="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700" style="width: 0%"></div>
+                </div>
+                <p class="text-xs text-slate-400 mt-3" id="reserve-note"></p>
               </div>
             </section>
 
@@ -580,6 +644,74 @@
               <p class="text-slate-500 text-sm">Nenhum orçamento definido ainda.</p>
               <p class="text-slate-600 text-xs mt-1">Defina um limite mensal pra categoria de despesa que quiser acompanhar.</p>
             </div>
+          </div>
+
+          <!-- ======================= VIEW: CONTAS E CARTÕES ======================= -->
+          <div id="view-bills" class="view-section hidden space-y-6">
+            <section class="grid grid-cols-2 xl:grid-cols-4 gap-4 animate-slide-up">
+              <div class="glass-card rounded-2xl p-4 sm:p-5 min-w-0">
+                <p class="text-xs font-medium text-slate-400 mb-1">A pagar no mês</p>
+                <h3 class="text-lg sm:text-xl font-extrabold truncate" id="bills-kpi-topay">R$ 0,00</h3>
+              </div>
+              <div class="glass-card rounded-2xl p-4 sm:p-5 min-w-0">
+                <p class="text-xs font-medium text-slate-400 mb-1">Vencidas</p>
+                <h3 class="text-lg sm:text-xl font-extrabold text-red-400 truncate" id="bills-kpi-overdue">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5" id="bills-kpi-overdue-count">Nenhuma</p>
+              </div>
+              <div class="glass-card rounded-2xl p-4 sm:p-5 min-w-0">
+                <p class="text-xs font-medium text-slate-400 mb-1">Pagas no mês</p>
+                <h3 class="text-lg sm:text-xl font-extrabold text-emerald-400 truncate" id="bills-kpi-paid">R$ 0,00</h3>
+              </div>
+              <div class="glass-card rounded-2xl p-4 sm:p-5 min-w-0">
+                <p class="text-xs font-medium text-slate-400 mb-1">Faturas a pagar</p>
+                <h3 class="text-lg sm:text-xl font-extrabold truncate" id="bills-kpi-invoices">R$ 0,00</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5" id="bills-kpi-invoices-note">Faturas já fechadas</p>
+              </div>
+            </section>
+
+            <section class="grid grid-cols-1 xl:grid-cols-5 gap-4 animate-slide-up">
+              <div class="xl:col-span-3 glass-card rounded-2xl p-5 sm:p-6 min-w-0">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-base">Contas a pagar</h3>
+                    <p class="text-xs text-slate-500">Boletos, aluguel, luz... Ao pagar, a despesa entra nas transações.</p>
+                  </div>
+                  <button id="new-bill-btn" type="button"
+                    class="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                    <i class="ph-bold ph-plus text-base"></i>
+                    <span>Nova conta</span>
+                  </button>
+                </div>
+                <div class="inline-flex items-center gap-1 bg-slate-900/70 border border-slate-800 rounded-xl p-1 mb-4" role="group" aria-label="Filtrar contas">
+                  <button type="button" data-bill-filter="pending" class="bill-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all" aria-pressed="true">A pagar</button>
+                  <button type="button" data-bill-filter="paid" class="bill-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all" aria-pressed="false">Pagas</button>
+                  <button type="button" data-bill-filter="all" class="bill-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all" aria-pressed="false">Todas</button>
+                </div>
+                <div id="bills-list" class="space-y-2"></div>
+                <div id="bills-empty" class="hidden flex-col items-center justify-center py-12 text-center">
+                  <i class="ph-thin ph-receipt text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm" id="bills-empty-text">Nenhuma conta a pagar.</p>
+                </div>
+              </div>
+
+              <div class="xl:col-span-2 glass-card rounded-2xl p-5 sm:p-6 min-w-0">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                  <div class="min-w-0">
+                    <h3 class="font-bold text-base">Cartões de crédito</h3>
+                    <p class="text-xs text-slate-500">Compras parceladas e faturas.</p>
+                  </div>
+                  <button id="new-card-btn" type="button" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-plus" aria-hidden="true"></i> Novo cartão
+                  </button>
+                </div>
+                <div id="cards-list" class="space-y-3"></div>
+                <div id="cards-empty" class="hidden flex-col items-center justify-center py-10 text-center">
+                  <i class="ph-thin ph-credit-card text-5xl text-slate-700 mb-3"></i>
+                  <p class="text-slate-500 text-sm">Nenhum cartão cadastrado.</p>
+                  <p class="text-slate-600 text-xs mt-1">Cadastre com o dia de fechamento e de vencimento da fatura.</p>
+                </div>
+              </div>
+            </section>
           </div>
 
           <!-- ======================= VIEW: INVESTIMENTOS ======================= -->
@@ -1031,9 +1163,18 @@
               <div>
                 <h3 class="font-bold text-base">Relatórios</h3>
                 <p class="text-xs text-slate-500">Gastos e lucros do período selecionado.</p>
+                <p class="print-only text-xs mt-1" id="reports-print-period"></p>
               </div>
-              <select id="reports-period-filter"
-                class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all sm:w-44"></select>
+              <div class="flex flex-wrap items-center gap-2 no-print">
+                <button type="button" id="reports-export-csv" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all">
+                  <i class="ph-bold ph-file-csv" aria-hidden="true"></i> CSV
+                </button>
+                <button type="button" id="reports-export-pdf" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all">
+                  <i class="ph-bold ph-file-pdf" aria-hidden="true"></i> PDF
+                </button>
+                <select id="reports-period-filter"
+                  class="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all sm:w-44"></select>
+              </div>
             </section>
 
             <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-slide-up">
@@ -1429,6 +1570,17 @@
               <button id="settings-reset-password-btn" type="button" class="bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">
                 Enviar e-mail de redefinição
               </button>
+            </section>
+
+            <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 class="font-bold text-base mb-1 flex items-center gap-2"><i class="ph-bold ph-bell-ringing text-lg" aria-hidden="true"></i> Notificações</h3>
+              <p class="text-xs text-slate-500 mb-4">Receba neste aparelho, mesmo com o app fechado, os lembretes de contas e faturas que vencem e de proventos que caem no dia seguinte (uma vez por dia, de manhã).</p>
+              <p id="push-status" class="text-xs mb-4 flex items-center gap-1.5 text-slate-400">Verificando…</p>
+              <div class="flex flex-wrap gap-2">
+                <button id="push-enable-btn" type="button" class="hidden bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">Ativar neste aparelho</button>
+                <button id="push-test-btn" type="button" class="hidden bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">Testar</button>
+                <button id="push-disable-btn" type="button" class="hidden bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all">Desativar</button>
+              </div>
             </section>
 
             <section class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up !border-red-500/25">
@@ -1987,6 +2139,239 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: CONTA A PAGAR ============ -->
+  <div id="bill-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="bill-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="bill-modal-title">Nova conta</h3>
+        <button type="button" id="bill-modal-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <form id="bill-form" class="space-y-4">
+        <input type="hidden" id="bill-id" />
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="bill-description">Descrição</label>
+          <input required type="text" id="bill-description" maxlength="200" placeholder="Ex: Conta de luz" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="bill-amount">Valor (R$)</label>
+            <input required type="number" step="0.01" min="0.01" id="bill-amount" placeholder="0,00" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="bill-due-trigger">Vencimento</label>
+          <button type="button" id="bill-due-trigger"
+            class="date-trigger w-full flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <span id="bill-due-label" class="text-slate-600">Selecionar data</span>
+            <i class="ph-bold ph-calendar-blank text-slate-500 shrink-0"></i>
+          </button>
+          <input type="hidden" id="bill-due" />
+        </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="bill-category">Categoria</label>
+          <select id="bill-category" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="Moradia">Moradia</option>
+            <option value="Alimentação">Alimentação</option>
+            <option value="Transporte">Transporte</option>
+            <option value="Saúde">Saúde</option>
+            <option value="Educação">Educação</option>
+            <option value="Lazer">Lazer</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <div id="bill-repeat-wrap">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="bill-repeat">Repetição</label>
+          <select id="bill-repeat" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="none">Só uma vez</option>
+            <option value="monthly">Todo mês (cria a próxima ao pagar)</option>
+            <option value="installments">Parcelado (várias contas)</option>
+          </select>
+        </div>
+        <div id="bill-installments-wrap" class="hidden">
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="bill-installments">Número de parcelas (uma conta por mês)</label>
+          <input type="number" min="2" max="72" step="1" id="bill-installments" value="2" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar conta</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CARTÃO ============ -->
+  <div id="card-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="card-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="card-modal-title">Novo cartão</h3>
+        <button type="button" id="card-modal-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <form id="card-form" class="space-y-4">
+        <input type="hidden" id="card-id" />
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="card-name">Nome do cartão</label>
+          <input required type="text" id="card-name" maxlength="60" placeholder="Ex: Nubank" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="card-limit">Limite (R$, opcional)</label>
+          <input type="number" step="0.01" min="0" id="card-limit" placeholder="0,00" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="card-closing-day">Dia do fechamento</label>
+            <input required type="number" min="1" max="31" step="1" id="card-closing-day" placeholder="Ex: 3" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="card-due-day">Dia do vencimento</label>
+            <input required type="number" min="1" max="31" step="1" id="card-due-day" placeholder="Ex: 10" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500">Compras feitas a partir do dia do fechamento entram na fatura do mês seguinte.</p>
+        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar cartão</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: COMPRA NO CARTÃO ============ -->
+  <div id="purchase-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="purchase-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="purchase-modal-title">Nova compra no cartão</h3>
+        <button type="button" id="purchase-modal-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <form id="purchase-form" class="space-y-4">
+        <input type="hidden" id="purchase-id" />
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="purchase-card">Cartão</label>
+          <select id="purchase-card" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="purchase-description">Descrição</label>
+          <input required type="text" id="purchase-description" maxlength="200" placeholder="Ex: Geladeira" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="purchase-amount">Valor total (R$)</label>
+            <input required type="number" step="0.01" min="0.01" id="purchase-amount" placeholder="0,00" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5" for="purchase-installments">Parcelas</label>
+            <input required type="number" min="1" max="72" step="1" id="purchase-installments" value="1" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 -mt-2" id="purchase-installment-hint"></p>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="purchase-date-trigger">Data da compra</label>
+          <button type="button" id="purchase-date-trigger"
+            class="date-trigger w-full flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <span id="purchase-date-label" class="text-slate-600">Selecionar data</span>
+            <i class="ph-bold ph-calendar-blank text-slate-500 shrink-0"></i>
+          </button>
+          <input type="hidden" id="purchase-date" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="purchase-category">Categoria</label>
+          <select id="purchase-category" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="Moradia">Moradia</option>
+            <option value="Alimentação">Alimentação</option>
+            <option value="Transporte">Transporte</option>
+            <option value="Saúde">Saúde</option>
+            <option value="Educação">Educação</option>
+            <option value="Lazer">Lazer</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar compra</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: FATURA ============ -->
+  <div id="invoice-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="invoice-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="invoice-modal-title">Fatura</h3>
+        <button type="button" id="invoice-modal-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <div class="flex items-center justify-between gap-2 mb-4">
+        <button type="button" id="invoice-prev" class="w-9 h-9 rounded-lg bg-slate-800/70 hover:bg-slate-700 flex items-center justify-center transition-colors" aria-label="Fatura anterior"><i class="ph-bold ph-caret-left"></i></button>
+        <p class="font-semibold" id="invoice-month">—</p>
+        <button type="button" id="invoice-next" class="w-9 h-9 rounded-lg bg-slate-800/70 hover:bg-slate-700 flex items-center justify-center transition-colors" aria-label="Próxima fatura"><i class="ph-bold ph-caret-right"></i></button>
+      </div>
+      <div class="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4 mb-4">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-2xl font-extrabold" id="invoice-total">R$ 0,00</p>
+          <span id="invoice-status" class="text-[11px] font-semibold px-2.5 py-1 rounded-full"></span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1" id="invoice-dates"></p>
+      </div>
+      <div id="invoice-items" class="space-y-1.5 max-h-72 overflow-y-auto custom-scroll mb-4"></div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="invoice-pay-btn" class="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold py-2.5 px-4 rounded-xl transition-all">Pagar fatura</button>
+        <button type="button" id="invoice-unpay-btn" class="hidden flex-1 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold py-2.5 px-4 rounded-xl transition-all">Desfazer pagamento</button>
+        <button type="button" id="invoice-add-purchase-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold py-2.5 px-4 rounded-xl transition-all">Nova compra</button>
+      </div>
+      <div class="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-slate-800/80">
+        <button type="button" id="invoice-edit-card-btn" class="text-xs font-semibold text-slate-400 hover:text-white transition-colors flex items-center gap-1"><i class="ph-bold ph-pencil-simple"></i> Editar cartão</button>
+        <button type="button" id="invoice-delete-card-btn" class="text-xs font-semibold text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1"><i class="ph-bold ph-trash"></i> Excluir cartão</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: RESERVA DE EMERGÊNCIA ============ -->
+  <div id="reserve-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="reserve-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-md glass-card rounded-3xl p-6 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" id="reserve-modal-title">Reserva de emergência</h3>
+        <button type="button" id="reserve-modal-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <form id="reserve-form" class="space-y-4">
+        <div>
+          <p class="block text-xs font-medium text-slate-400 mb-1.5">Onde está a sua reserva?</p>
+          <div id="reserve-sources" class="space-y-1.5 max-h-56 overflow-y-auto custom-scroll"></div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="reserve-extra">Outro valor guardado (R$, opcional)</label>
+          <input type="number" step="0.01" min="0" id="reserve-extra" placeholder="Ex: saldo na poupança" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5" for="reserve-target">Meta (meses de despesas)</label>
+          <select id="reserve-target" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all">
+            <option value="3">3 meses</option>
+            <option value="6" selected>6 meses</option>
+            <option value="9">9 meses</option>
+            <option value="12">12 meses</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:shadow-lg hover:shadow-blue-500/40 text-white font-semibold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
+          <i class="ph-bold ph-check-circle"></i>
+          <span>Salvar</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- ============ MODAL: EXCLUIR CONTA ============ -->
   <div id="delete-account-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
     <div id="delete-account-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
@@ -1997,7 +2382,8 @@
       <h3 class="text-lg font-bold mb-1.5 text-center" id="delete-account-title">Excluir sua conta?</h3>
       <p class="text-sm text-slate-400 mb-4 text-center">Todos os seus dados serão apagados para sempre. Se você divide um espaço de casal com outra pessoa, o espaço continua com ela.</p>
       <form id="delete-account-form" class="space-y-3">
-        <div>
+        <p id="delete-account-google-note" class="hidden text-xs text-slate-400 text-center">Para confirmar, você vai entrar de novo com a sua conta Google.</p>
+        <div id="delete-account-password-wrap">
           <label class="block text-xs font-medium text-slate-400 mb-1.5" for="delete-account-password">Digite sua senha para confirmar</label>
           <input required type="password" id="delete-account-password" autocomplete="current-password" maxlength="128"
             class="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/60 focus:border-red-500 transition-all" />

@@ -682,7 +682,10 @@ export async function savePortfolioSettings(mode, id, settings) {
    Exclusão da conta
 --------------------------------------------------------------- */
 
-const ACCOUNT_COLLECTIONS = ["transactions", "goals", "investments", "dividends", "budgets", "recurrences", "settings"];
+const ACCOUNT_COLLECTIONS = [
+  "transactions", "goals", "investments", "dividends", "budgets", "recurrences", "settings",
+  "bills", "cards", "cardPurchases", "cardInvoices", "pushTokens",
+];
 
 /** Apaga todos os documentos de uma coleção, em lotes (o Firestore limita 500 por lote). */
 async function deleteCollection(path) {
@@ -732,4 +735,161 @@ export async function clearLocalCache() {
   } catch (err) {
     console.warn("Não foi possível limpar o cache local:", err);
   }
+}
+
+/* ---------------------------------------------------------------
+   Contas a pagar, cartões de crédito e faturas
+     {users|couples}/{id}/bills          -> contas (luz, aluguel, boleto...)
+     {users|couples}/{id}/cards          -> cartões (fechamento, vencimento, limite)
+     {users|couples}/{id}/cardPurchases  -> compras no cartão (parceladas ou não)
+     {users|couples}/{id}/cardInvoices   -> faturas pagas (id = cardId_YYYY-MM)
+   Pagar uma conta ou fatura grava, num lote atômico, as despesas em
+   "transactions" e a marcação de paga — nunca fica uma sem a outra.
+--------------------------------------------------------------- */
+
+const spacePath = (mode, id, name) => (mode === "couple" ? `couples/${id}/${name}` : `users/${id}/${name}`);
+
+/** Escuta uma coleção do espaço ativo (com o id de cada documento). */
+export function listenToCollection(mode, id, name, callback) {
+  return onSnapshot(
+    collection(db, spacePath(mode, id, name)),
+    (snapshot) => callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (error) => {
+      console.error(`Erro ao escutar ${name}:`, error);
+      callback([], error);
+    }
+  );
+}
+
+export function addToCollection(mode, id, name, data) {
+  return addDoc(collection(db, spacePath(mode, id, name)), { ...data, createdAt: serverTimestamp() });
+}
+
+export function updateInCollection(mode, id, name, docId, data) {
+  return updateDoc(doc(db, spacePath(mode, id, name), docId), data);
+}
+
+export function deleteFromCollection(mode, id, name, docId) {
+  return deleteDoc(doc(db, spacePath(mode, id, name), docId));
+}
+
+/** Cria várias contas de uma vez (ex: boleto parcelado em N meses). */
+export async function addBills(mode, id, bills) {
+  const batch = writeBatch(db);
+  const col = collection(db, spacePath(mode, id, "bills"));
+  bills.forEach((b) => batch.set(doc(col), { ...b, createdAt: serverTimestamp() }));
+  return batch.commit();
+}
+
+/**
+ * Paga uma conta: cria a despesa, marca a conta como paga e, se for mensal, já cria a do mês seguinte.
+ * @param {Object} bill conta (com id)
+ * @param {string} payDate data do pagamento (YYYY-MM-DD)
+ * @param {Object|null} nextBill próxima conta (contas que se repetem todo mês)
+ */
+export async function payBill(mode, id, bill, payDate, nextBill = null) {
+  const batch = writeBatch(db);
+  const txRef = doc(collection(db, spacePath(mode, id, "transactions")));
+  batch.set(txRef, {
+    description: bill.description,
+    amount: Number(bill.amount),
+    type: "expense",
+    category: bill.category || "Outros",
+    date: payDate,
+    billId: bill.id,
+    createdAt: serverTimestamp(),
+  });
+  batch.update(doc(db, spacePath(mode, id, "bills"), bill.id), { paid: true, paidAt: payDate, transactionId: txRef.id });
+  if (nextBill) batch.set(doc(collection(db, spacePath(mode, id, "bills"))), { ...nextBill, createdAt: serverTimestamp() });
+  return batch.commit();
+}
+
+/** Desfaz o pagamento de uma conta (apaga a despesa criada no pagamento). */
+export async function unpayBill(mode, id, bill) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, spacePath(mode, id, "bills"), bill.id), { paid: false, paidAt: null, transactionId: deleteField() });
+  if (bill.transactionId) batch.delete(doc(db, spacePath(mode, id, "transactions"), bill.transactionId));
+  return batch.commit();
+}
+
+const invoiceDocId = (cardId, month) => `${cardId}_${month}`;
+
+/**
+ * Paga a fatura de um mês: uma despesa por parcela (com a categoria de cada compra) e o
+ * registro da fatura paga.
+ */
+export async function payInvoice(mode, id, cardId, month, total, transactions, payDate) {
+  const batch = writeBatch(db);
+  const txCol = collection(db, spacePath(mode, id, "transactions"));
+  const transactionIds = transactions.map((t) => {
+    const ref = doc(txCol);
+    batch.set(ref, { ...t, invoiceId: invoiceDocId(cardId, month), createdAt: serverTimestamp() });
+    return ref.id;
+  });
+  batch.set(doc(db, spacePath(mode, id, "cardInvoices"), invoiceDocId(cardId, month)), {
+    cardId,
+    month,
+    paid: true,
+    paidAt: payDate,
+    total: Number(total) || 0,
+    transactionIds,
+    createdAt: serverTimestamp(),
+  });
+  return batch.commit();
+}
+
+/** Desfaz o pagamento de uma fatura (apaga as despesas que o pagamento criou). */
+export async function unpayInvoice(mode, id, cardId, month, transactionIds = []) {
+  const batch = writeBatch(db);
+  transactionIds.forEach((txId) => batch.delete(doc(db, spacePath(mode, id, "transactions"), txId)));
+  batch.delete(doc(db, spacePath(mode, id, "cardInvoices"), invoiceDocId(cardId, month)));
+  return batch.commit();
+}
+
+/** Exclui um cartão junto com as compras e os registros de fatura dele (as despesas já lançadas ficam). */
+export async function deleteCard(mode, id, cardId, purchaseIds = [], invoiceMonths = []) {
+  const batch = writeBatch(db);
+  purchaseIds.forEach((pid) => batch.delete(doc(db, spacePath(mode, id, "cardPurchases"), pid)));
+  invoiceMonths.forEach((m) => batch.delete(doc(db, spacePath(mode, id, "cardInvoices"), invoiceDocId(cardId, m))));
+  batch.delete(doc(db, spacePath(mode, id, "cards"), cardId));
+  return batch.commit();
+}
+
+/* ---------------------------------------------------------------
+   Notificações: tokens dos aparelhos (users/{uid}/pushTokens/{id})
+--------------------------------------------------------------- */
+
+/** Id estável e curto para o token (o token do FCM é longo demais para ser id de documento com folga). */
+async function tokenDocId(token) {
+  const bytes = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+}
+
+export async function savePushToken(userId, token) {
+  const ref = doc(db, "users", userId, "pushTokens", await tokenDocId(token));
+  return setDoc(ref, { token, userAgent: navigator.userAgent.slice(0, 300), createdAt: serverTimestamp() });
+}
+
+export async function removePushToken(userId, token) {
+  return deleteDoc(doc(db, "users", userId, "pushTokens", await tokenDocId(token)));
+}
+
+/* ---------------------------------------------------------------
+   Documentos de configuração do espaço ({users|couples}/{id}/settings/{docId}),
+   ex: "reserve" (fontes e meta da reserva de emergência).
+--------------------------------------------------------------- */
+export function listenToSettingsDoc(mode, id, docId, callback) {
+  return onSnapshot(
+    doc(db, spacePath(mode, id, "settings"), docId),
+    (snap) => callback(snap.exists() ? snap.data() : null),
+    (error) => {
+      console.error(`Erro ao escutar configurações (${docId}):`, error);
+      callback(null, error);
+    }
+  );
+}
+
+export function saveSettingsDoc(mode, id, docId, data) {
+  return setDoc(doc(db, spacePath(mode, id, "settings"), docId), { ...data, updatedAt: serverTimestamp() }, { merge: true });
 }

@@ -4,9 +4,9 @@
 // =========================================================
 
 import { refreshDropdown } from "../dropdown.js";
-import { buildMonthlySeries } from "../calc.js";
+import { buildMonthlySeries, transactionsToCsv } from "../calc.js";
 import { buildCashflowDatasets } from "./charts.js";
-import { CATEGORY_COLORS, el, escapeHtml, formatCurrency, formatDate, state, todayISO } from "./core.js";
+import { CATEGORY_COLORS, el, escapeHtml, formatCurrency, formatDate, showToast, state, todayISO } from "./core.js";
 import { formatMonthLabel } from "./dividends.js";
 
 /* ---------------------------------------------------------------
@@ -120,3 +120,53 @@ export function renderReports(transactions) {
     : `<p class="text-slate-600 text-sm text-center py-6">Sem despesas registradas.</p>`;
 }
 
+
+/* ---------------------------------------------------------------
+   Exportação: CSV (transações do período) e PDF (impressão da aba)
+--------------------------------------------------------------- */
+function reportsPeriodTransactions() {
+  const isAll = state.reportsPeriodFilterValue === "all";
+  return state.lastTransactions.filter((t) => isAll || t.date.slice(0, 7) === state.reportsPeriodFilterValue);
+}
+
+function reportsPeriodLabel() {
+  return state.reportsPeriodFilterValue === "all" ? "Todos os meses" : formatMonthLabel(state.reportsPeriodFilterValue);
+}
+
+export function exportReportsCsv() {
+  const rows = reportsPeriodTransactions();
+  if (rows.length === 0) {
+    showToast("Nenhuma transação no período para exportar.", "info");
+    return;
+  }
+  const blob = new Blob([transactionsToCsv(rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const period = state.reportsPeriodFilterValue === "all" ? "todos-os-meses" : state.reportsPeriodFilterValue;
+  a.href = url;
+  a.download = `aportfy-transacoes-${period}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`${rows.length} transações exportadas.`, "success");
+}
+
+export function exportReportsPdf() {
+  const label = document.getElementById("reports-print-period");
+  if (label) label.textContent = `Período: ${reportsPeriodLabel()} · gerado em ${new Date().toLocaleDateString("pt-BR")}`;
+  document.body.classList.add("printing-reports");
+  // O navegador abre a janela de impressão; "Salvar como PDF" gera o arquivo.
+  const done = () => {
+    document.body.classList.remove("printing-reports");
+    window.removeEventListener("afterprint", done);
+  };
+  window.addEventListener("afterprint", done);
+  window.print();
+  setTimeout(done, 1000);
+}
+
+export function bindReportsExport() {
+  document.getElementById("reports-export-csv")?.addEventListener("click", exportReportsCsv);
+  document.getElementById("reports-export-pdf")?.addEventListener("click", exportReportsPdf);
+}

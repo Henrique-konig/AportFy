@@ -15,6 +15,11 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
   deleteUser,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  reauthenticateWithPopup,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 /** Usuário autenticado atual (null se deslogado). */
@@ -54,6 +59,46 @@ export async function register(email, password, displayName) {
   // Pede a confirmação do e-mail logo no cadastro (falha de envio não impede a conta).
   await sendEmailVerification(credential.user).catch((err) => console.warn("Não foi possível enviar o e-mail de verificação:", err));
   return credential.user;
+}
+
+/* ---------------- Login com Google ---------------- */
+const googleProvider = () => {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  return provider;
+};
+
+/**
+ * Entra com a conta Google. Usa uma janela (popup); se o navegador bloquear,
+ * cai no redirecionamento (a página volta logada).
+ */
+export async function loginWithGoogle() {
+  try {
+    const credential = await signInWithPopup(auth, googleProvider());
+    return credential.user;
+  } catch (err) {
+    if (err?.code === "auth/popup-blocked" || err?.code === "auth/operation-not-supported-in-this-environment") {
+      await signInWithRedirect(auth, googleProvider());
+      return null;
+    }
+    throw err;
+  }
+}
+
+/** Conclui um login por redirecionamento (se houver) e devolve o erro, se deu errado. */
+export async function finishRedirectLogin() {
+  try {
+    await getRedirectResult(auth);
+    return null;
+  } catch (err) {
+    return err;
+  }
+}
+
+/** Confirma a identidade de quem entrou com Google (para excluir a conta). */
+export async function reauthenticateWithGoogle() {
+  if (!auth.currentUser) throw new Error("Nenhum usuário autenticado.");
+  return reauthenticateWithPopup(auth.currentUser, googleProvider());
 }
 
 /**
@@ -125,6 +170,12 @@ export function translateAuthError(error) {
     "auth/weak-password": "A senha deve ter no mínimo 6 caracteres.",
     "auth/too-many-requests": "Muitas tentativas. Tente novamente mais tarde.",
     "auth/network-request-failed": "Falha de conexão. Verifique sua internet.",
+    "auth/popup-closed-by-user": "A janela do Google foi fechada antes de concluir.",
+    "auth/cancelled-popup-request": "A janela do Google foi fechada antes de concluir.",
+    "auth/account-exists-with-different-credential": "Já existe uma conta com esse e-mail. Entre com e-mail e senha.",
+    "auth/operation-not-allowed": "Esse tipo de login ainda não foi ativado no Firebase.",
+    "auth/unauthorized-domain": "Este domínio não está autorizado para login no Firebase.",
+    "auth/user-mismatch": "Use a mesma conta Google com que você entrou.",
     "auth/requires-recent-login": "Por segurança, entre novamente na conta e tente de novo.",
     "auth/missing-password": "Informe a senha.",
     "auth/password-does-not-meet-requirements": "A senha não atende aos requisitos de segurança (mínimo de 8 caracteres, com letras e números).",

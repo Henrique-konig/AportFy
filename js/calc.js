@@ -762,7 +762,7 @@ const listTickers = (items) => {
  * quais o usuário já viu (o id muda quando a situação muda — ex: mês, valor, quantidade).
  * @returns {Array<{id:string, level:"critical"|"warning"|"success"|"info", icon:string, title:string, detail:string, view:string}>}
  */
-export function buildAlerts({ today, dividends = [], upcoming = [], budgets = [], transactions = [], investments = [], health = null, goals = [], joinRequests = 0 }) {
+export function buildAlerts({ today, dividends = [], upcoming = [], budgets = [], transactions = [], investments = [], health = null, goals = [], joinRequests = 0, bills = [], invoices = [] }) {
   const alerts = [];
   const month = today.slice(0, 7);
 
@@ -831,6 +831,32 @@ export function buildAlerts({ today, dividends = [], upcoming = [], budgets = []
     }
   });
 
+  // Contas a pagar: vencidas e vencendo em até 3 dias
+  const dueLabel = (date) => {
+    const days = daysBetween(today, date);
+    return days === 0 ? "hoje" : days === 1 ? "amanhã" : `em ${days} dias`;
+  };
+  bills
+    .filter((b) => !b.paid && b.dueDate)
+    .forEach((b) => {
+      const days = daysBetween(today, b.dueDate);
+      if (days < 0) {
+        alerts.push({ id: `bill-${b.id}-${b.dueDate}-overdue`, level: "critical", icon: "ph-receipt", title: `Conta vencida: ${b.description}`, detail: `${brl(b.amount)} venceu em ${shortDate(b.dueDate)}.`, view: "bills" });
+      } else if (days <= 3) {
+        alerts.push({ id: `bill-${b.id}-${b.dueDate}-soon`, level: "warning", icon: "ph-receipt", title: `${b.description} vence ${dueLabel(b.dueDate)}`, detail: `${brl(b.amount)} · vencimento ${shortDate(b.dueDate)}.`, view: "bills" });
+      }
+    });
+
+  // Faturas de cartão: vencidas e vencendo em até 5 dias (só as já fechadas ou com valor)
+  invoices.forEach((i) => {
+    const days = daysBetween(today, i.dueDate);
+    if (days < 0) {
+      alerts.push({ id: `invoice-${i.cardId}-${i.month}-overdue`, level: "critical", icon: "ph-credit-card", title: `Fatura ${i.cardName} vencida`, detail: `${brl(i.total)} venceu em ${shortDate(i.dueDate)}.`, view: "bills" });
+    } else if (days <= 5) {
+      alerts.push({ id: `invoice-${i.cardId}-${i.month}-soon`, level: "warning", icon: "ph-credit-card", title: `Fatura ${i.cardName} vence ${dueLabel(i.dueDate)}`, detail: `${brl(i.total)} · vencimento ${shortDate(i.dueDate)}.`, view: "bills" });
+    }
+  });
+
   // Pedidos de entrada no espaço de casal
   if (joinRequests > 0) {
     alerts.push({
@@ -845,4 +871,366 @@ export function buildAlerts({ today, dividends = [], upcoming = [], budgets = []
 
   const order = { critical: 0, warning: 1, success: 2, info: 3 };
   return alerts.sort((a, b) => order[a.level] - order[b.level]);
+}
+
+/* =========================================================
+   Contas a pagar e cartão de crédito
+   ========================================================= */
+
+const toCents = (v) => Math.round((Number(v) || 0) * 100);
+
+/** Dia `day` do mês "YYYY-MM", limitado ao último dia do mês (31 em fevereiro vira 28/29). */
+export function dateInMonth(yyyyMm, day) {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${yyyyMm}-${pad2(Math.min(Math.max(1, Number(day) || 1), last))}`;
+}
+
+/** Mesma data `delta` meses depois, preservando o dia original quando o mês permite. */
+export function addMonthsToDate(iso, delta, preferredDay = Number(iso.slice(8, 10))) {
+  return dateInMonth(shiftMonth(iso.slice(0, 7), delta), preferredDay);
+}
+
+/**
+ * Divide um valor em N parcelas em centavos exatos; a diferença de arredondamento fica na 1ª.
+ * Ex: 100 em 3 -> [33.34, 33.33, 33.33]
+ */
+export function splitInstallments(total, count) {
+  const n = Math.max(1, Math.floor(Number(count) || 1));
+  const cents = toCents(total);
+  const base = Math.floor(cents / n);
+  return Array.from({ length: n }, (_, i) => (i === 0 ? cents - base * (n - 1) : base) / 100);
+}
+
+/**
+ * Fatura (mês de referência "YYYY-MM") em que cai uma compra: compras a partir do dia do
+ * fechamento entram na fatura do mês seguinte.
+ */
+export function invoiceMonthOf(purchaseDate, closingDay) {
+  const month = purchaseDate.slice(0, 7);
+  const closing = dateInMonth(month, closingDay);
+  return purchaseDate >= closing ? shiftMonth(month, 1) : month;
+}
+
+/** Datas de fechamento e vencimento da fatura do mês (vencimento antes do fechamento = mês seguinte). */
+export function invoiceDates(month, closingDay, dueDay) {
+  const closingDate = dateInMonth(month, closingDay);
+  const dueMonth = Number(dueDay) > Number(closingDay) ? month : shiftMonth(month, 1);
+  return { closingDate, dueDate: dateInMonth(dueMonth, dueDay) };
+}
+
+/**
+ * Todas as faturas de um cartão, a partir das compras (cada parcela cai numa fatura).
+ * @param {{id:string, closingDay:number, dueDay:number}} card
+ * @param {Array<{id:string, cardId:string, description:string, category:string, amount:number, installments:number, purchaseDate:string}>} purchases
+ * @param {Array<{cardId:string, month:string, paid:boolean, paidAt?:string}>} paidInvoices
+ * @returns {Object<string, {month:string, items:Array, total:number, closingDate:string, dueDate:string, paid:boolean, paidAt:string|null}>}
+ */
+export function buildCardInvoices(card, purchases, paidInvoices = []) {
+  const invoices = {};
+  const ensure = (month) => {
+    if (!invoices[month]) {
+      const paidDoc = paidInvoices.find((p) => p.cardId === card.id && p.month === month && p.paid);
+      invoices[month] = {
+        month,
+        items: [],
+        total: 0,
+        ...invoiceDates(month, card.closingDay, card.dueDay),
+        paid: !!paidDoc,
+        paidAt: paidDoc?.paidAt || null,
+        transactionIds: paidDoc?.transactionIds || [],
+      };
+    }
+    return invoices[month];
+  };
+
+  purchases
+    .filter((p) => p.cardId === card.id && p.purchaseDate)
+    .forEach((p) => {
+      const n = Math.max(1, Math.floor(Number(p.installments) || 1));
+      const parts = splitInstallments(p.amount, n);
+      const firstMonth = invoiceMonthOf(p.purchaseDate, card.closingDay);
+      parts.forEach((value, i) => {
+        const inv = ensure(shiftMonth(firstMonth, i));
+        inv.items.push({ purchaseId: p.id, description: p.description, category: p.category, amount: value, installment: i + 1, installments: n, purchaseDate: p.purchaseDate });
+      });
+    });
+
+  Object.values(invoices).forEach((inv) => {
+    inv.total = toCents(inv.items.reduce((s, it) => s + it.amount, 0)) / 100;
+    inv.items.sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate) || String(a.description).localeCompare(String(b.description)));
+  });
+  return invoices;
+}
+
+/** Fatura de um mês (vazia se não houver compras nela). */
+export function invoiceForMonth(card, purchases, paidInvoices, month) {
+  const invoices = buildCardInvoices(card, purchases, paidInvoices);
+  if (invoices[month]) return invoices[month];
+  const paidDoc = paidInvoices.find((p) => p.cardId === card.id && p.month === month && p.paid);
+  return { month, items: [], total: 0, ...invoiceDates(month, card.closingDay, card.dueDay), paid: !!paidDoc, paidAt: paidDoc?.paidAt || null, transactionIds: paidDoc?.transactionIds || [] };
+}
+
+/** Situação de uma fatura: paga, aberta (ainda recebe compras), fechada (aguardando pagamento) ou vencida. */
+export function invoiceStatus(invoice, today) {
+  if (invoice.paid) return "paid";
+  if (today < invoice.closingDate) return "open";
+  if (today > invoice.dueDate) return "overdue";
+  return "closed";
+}
+
+/**
+ * Resumo do cartão para a tela: fatura atual (a que recebe compras hoje), a próxima a pagar,
+ * limite usado (parcelas em faturas não pagas) e disponível.
+ */
+export function cardSummary(card, purchases, paidInvoices, today) {
+  const invoices = buildCardInvoices(card, purchases, paidInvoices);
+  const month = invoiceMonthOf(today, card.closingDay);
+  const current = invoiceForMonth(card, purchases, paidInvoices, month);
+  const unpaid = Object.values(invoices).filter((i) => !i.paid);
+  const used = toCents(unpaid.reduce((s, i) => s + i.total, 0)) / 100;
+  const limit = Number(card.limit) || 0;
+  // Fatura já fechada e ainda não paga (a que precisa ser paga agora).
+  const toPay = unpaid.filter((i) => i.total > 0 && today >= i.closingDate).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] || null;
+  return { invoices, current, toPay, used, limit, available: limit > 0 ? Math.max(0, toCents(limit - used) / 100) : null };
+}
+
+/** Faturas não pagas de todos os cartões, com vencimento (para alertas, saldo projetado e lembretes). */
+export function unpaidInvoices(cards, purchases, paidInvoices) {
+  return cards
+    .flatMap((card) =>
+      Object.values(buildCardInvoices(card, purchases, paidInvoices))
+        .filter((i) => !i.paid && i.total > 0)
+        .map((i) => ({ cardId: card.id, cardName: card.name, month: i.month, closingDate: i.closingDate, dueDate: i.dueDate, total: i.total }))
+    )
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+/** Situação de uma conta a pagar. */
+export function billStatus(bill, today) {
+  if (bill.paid) return "paid";
+  if (bill.dueDate < today) return "overdue";
+  if (daysBetween(today, bill.dueDate) <= 3) return "soon";
+  return "pending";
+}
+
+/** Totais de contas do mês: a pagar no mês, vencidas (qualquer mês) e pagas no mês. */
+export function billsSummary(bills, today) {
+  const month = today.slice(0, 7);
+  let toPay = 0, overdue = 0, paid = 0, overdueCount = 0;
+  bills.forEach((b) => {
+    const amount = Number(b.amount) || 0;
+    if (b.paid) {
+      if (String(b.paidAt || b.dueDate).slice(0, 7) === month) paid += amount;
+    } else if (b.dueDate < today) {
+      overdue += amount;
+      overdueCount++;
+    } else if (b.dueDate.slice(0, 7) === month) {
+      toPay += amount;
+    }
+  });
+  const round = (v) => toCents(v) / 100;
+  return { toPay: round(toPay), overdue: round(overdue), overdueCount, paid: round(paid) };
+}
+
+/** Transações de despesa geradas ao pagar uma fatura (uma por parcela, com a categoria da compra). */
+export function invoicePaymentTransactions(card, invoice, payDate) {
+  return invoice.items.map((it) => ({
+    description: `${it.description}${it.installments > 1 ? ` (${it.installment}/${it.installments})` : ""} · ${card.name}`.slice(0, 200),
+    amount: it.amount,
+    type: "expense",
+    category: it.category || "Outros",
+    date: payDate,
+  }));
+}
+
+/* =========================================================
+   Saldo projetado do mês e reserva de emergência
+   ========================================================= */
+
+/**
+ * Quanto deve sobrar no fim do mês: o que já entrou/saiu até hoje + o que ainda vai entrar/sair
+ * (transações com data futura, recorrências ainda não lançadas, contas e faturas a vencer no mês —
+ * as vencidas e não pagas também entram, porque ainda vão sair).
+ */
+export function projectMonthBalance({ today, transactions = [], recurrences = [], bills = [], invoices = [] }) {
+  const month = today.slice(0, 7);
+  let realized = 0, incoming = 0, outgoing = 0;
+  const upcoming = [];
+
+  transactions
+    .filter((t) => String(t.date).slice(0, 7) === month)
+    .forEach((t) => {
+      const amount = Number(t.amount) || 0;
+      const signed = t.type === "income" ? amount : -amount;
+      if (t.date <= today) {
+        realized += signed;
+        return;
+      }
+      if (signed > 0) incoming += amount;
+      else outgoing += amount;
+      upcoming.push({ date: t.date, description: t.description, amount: signed, kind: "transaction" });
+    });
+
+  recurrences
+    .filter((r) => r.lastGeneratedMonth !== month)
+    .forEach((r) => {
+      const amount = Number(r.amount) || 0;
+      if (r.type === "income") incoming += amount;
+      else outgoing += amount;
+      upcoming.push({ date: dateInMonth(month, r.dayOfMonth), description: r.description, amount: r.type === "income" ? amount : -amount, kind: "recurrence" });
+    });
+
+  bills
+    .filter((b) => !b.paid && b.dueDate.slice(0, 7) <= month)
+    .forEach((b) => {
+      const amount = Number(b.amount) || 0;
+      outgoing += amount;
+      upcoming.push({ date: b.dueDate, description: b.description, amount: -amount, kind: "bill" });
+    });
+
+  invoices
+    .filter((i) => i.dueDate.slice(0, 7) <= month)
+    .forEach((i) => {
+      outgoing += i.total;
+      upcoming.push({ date: i.dueDate, description: `Fatura ${i.cardName}`, amount: -i.total, kind: "invoice" });
+    });
+
+  const round = (v) => toCents(v) / 100;
+  return {
+    realized: round(realized),
+    incoming: round(incoming),
+    outgoing: round(outgoing),
+    projected: round(realized + incoming - outgoing),
+    upcoming: upcoming.sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}
+
+/** Média de despesas dos últimos `months` meses completos que tiveram movimento (null sem histórico). */
+export function averageMonthlyExpenses(transactions, today, months = 3) {
+  const current = today.slice(0, 7);
+  const byMonth = {};
+  for (let i = 1; i <= months; i++) byMonth[shiftMonth(current, -i)] = { expense: 0, any: false };
+  transactions.forEach((t) => {
+    const m = byMonth[String(t.date).slice(0, 7)];
+    if (!m) return;
+    m.any = true;
+    if (t.type === "expense") m.expense += Number(t.amount) || 0;
+  });
+  const active = Object.values(byMonth).filter((m) => m.any);
+  if (active.length === 0) return null;
+  return toCents(active.reduce((s, m) => s + m.expense, 0) / active.length) / 100;
+}
+
+/**
+ * Reserva de emergência: quantos meses de despesas o valor guardado cobre e quanto falta para a meta.
+ * @param {{ amount:number, monthlyExpenses:number|null, targetMonths?:number }} params
+ */
+export function emergencyReserve({ amount, monthlyExpenses, targetMonths = 6 }) {
+  const value = Number(amount) || 0;
+  const target = Math.max(1, Number(targetMonths) || 6);
+  if (!monthlyExpenses || monthlyExpenses <= 0) {
+    return { amount: value, months: null, targetMonths: target, targetAmount: null, missing: null, progress: null };
+  }
+  const targetAmount = monthlyExpenses * target;
+  return {
+    amount: value,
+    months: value / monthlyExpenses,
+    targetMonths: target,
+    targetAmount,
+    missing: Math.max(0, targetAmount - value),
+    progress: Math.min(100, (value / targetAmount) * 100),
+  };
+}
+
+/**
+ * Valor da reserva a partir das fontes escolhidas: metas ("goal:ID"), investimentos ("inv:ID")
+ * e um valor extra digitado.
+ */
+export function reserveAmount(sources = [], goals = [], investments = [], extra = 0) {
+  let total = Number(extra) || 0;
+  sources.forEach((src) => {
+    const [kind, id] = String(src).split(":");
+    if (kind === "goal") total += Number(goals.find((g) => g.id === id)?.currentAmount) || 0;
+    if (kind === "inv") {
+      const inv = investments.find((i) => i.id === id);
+      if (inv) total += calcInvestmentMetrics(inv).totalValue;
+    }
+  });
+  return toCents(total) / 100;
+}
+
+/* =========================================================
+   Exportação CSV
+   ========================================================= */
+
+const csvCell = (v) => {
+  const s = String(v ?? "");
+  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const csvNumber = (v) => (Number(v) || 0).toFixed(2).replace(".", ",");
+
+/**
+ * CSV no padrão do Excel em português (separador ";", vírgula decimal, BOM para os acentos).
+ * Despesas saem com valor negativo.
+ */
+export function transactionsToCsv(transactions) {
+  const header = ["Data", "Descrição", "Categoria", "Tipo", "Valor"];
+  const rows = transactions
+    .slice()
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .map((t) => [
+      t.date ? `${t.date.slice(8, 10)}/${t.date.slice(5, 7)}/${t.date.slice(0, 4)}` : "",
+      t.description,
+      t.category,
+      t.type === "income" ? "Receita" : "Despesa",
+      csvNumber(t.type === "income" ? t.amount : -(Number(t.amount) || 0)),
+    ]);
+  return "﻿" + [header, ...rows].map((r) => r.map(csvCell).join(";")).join("\r\n");
+}
+
+/* =========================================================
+   Lembretes por notificação (servidor, uma vez por dia)
+   ========================================================= */
+
+/**
+ * Lembretes do dia: contas e faturas que vencem hoje ou amanhã (ou venceram ontem) e
+ * proventos que caem amanhã.
+ * @returns {Array<{tag:string, title:string, body:string, view:string}>}
+ */
+export function buildPushReminders({ today, bills = [], invoices = [], upcomingDividends = [] }) {
+  const tomorrow = addDays(today, 1);
+  const yesterday = addDays(today, -1);
+  const window = [yesterday, today, tomorrow];
+  const when = (date) => (date === today ? "hoje" : "amanhã");
+  const reminders = [];
+
+  bills
+    .filter((b) => !b.paid && window.includes(b.dueDate))
+    .forEach((b) =>
+      reminders.push({
+        tag: `bill-${b.id}-${b.dueDate}`,
+        title: b.dueDate === yesterday ? `Conta vencida: ${b.description}` : `${b.description} vence ${when(b.dueDate)}`,
+        body: `${brl(b.amount)} · vencimento ${shortDate(b.dueDate)}`,
+        view: "bills",
+      })
+    );
+
+  invoices
+    .filter((i) => window.includes(i.dueDate))
+    .forEach((i) =>
+      reminders.push({
+        tag: `invoice-${i.cardId}-${i.month}`,
+        title: i.dueDate === yesterday ? `Fatura ${i.cardName} venceu ontem` : `Fatura ${i.cardName} vence ${when(i.dueDate)}`,
+        body: `${brl(i.total)} · vencimento ${shortDate(i.dueDate)}`,
+        view: "bills",
+      })
+    );
+
+  const divTomorrow = upcomingDividends.filter((d) => d.paymentDate === tomorrow);
+  if (divTomorrow.length > 0) {
+    const total = divTomorrow.reduce((s, d) => s + (Number(d.total) || 0), 0);
+    reminders.push({ tag: `div-${tomorrow}`, title: `${brl(total)} em proventos amanhã`, body: listTickers(divTomorrow), view: "investments" });
+  }
+  return reminders;
 }

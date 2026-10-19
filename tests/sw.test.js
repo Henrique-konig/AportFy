@@ -9,6 +9,9 @@ const ORIGIN = "https://aportfy.vercel.app";
 function makeEnv({ online = true } = {}) {
   const stores = new Map(); // nome do cache -> Map(url -> Response)
   const handlers = {};
+  const shown = []; // notificações exibidas
+  const opened = []; // janelas abertas ao tocar
+  const windows = []; // janelas do app já abertas
   const network = { online, calls: [] };
 
   const keyOf = (req) => (typeof req === "string" ? new URL(req, ORIGIN).href : req.url);
@@ -45,7 +48,12 @@ function makeEnv({ online = true } = {}) {
     location: { origin: ORIGIN },
     addEventListener: (type, fn) => (handlers[type] = fn),
     skipWaiting: async () => {},
-    clients: { claim: async () => {} },
+    clients: {
+      claim: async () => {},
+      matchAll: async () => windows,
+      openWindow: async (url) => void opened.push(url),
+    },
+    registration: { showNotification: async (title, options) => void shown.push({ title, options }) },
   };
   new Function("self", "caches", "fetch", "Response", source)(self, caches, fetchMock, Response);
 
@@ -58,7 +66,7 @@ function makeEnv({ online = true } = {}) {
     return responded ? await responded : undefined;
   };
   const request = (path, mode = "cors", method = "GET") => ({ url: new URL(path, ORIGIN).href, method, mode });
-  return { stores, network, dispatch, request };
+  return { stores, network, dispatch, request, shown, opened, windows };
 }
 
 describe("service worker", () => {
@@ -108,6 +116,37 @@ describe("service worker", () => {
   it("ao ativar uma versão nova, apaga caches antigos", async () => {
     env.stores.set("aportfy-v0", new Map());
     await env.dispatch("activate");
-    expect([...env.stores.keys()]).toEqual(["aportfy-v1"]);
+    expect([...env.stores.keys()]).toEqual(["aportfy-v2"]);
+  });
+});
+
+describe("notificações no service worker", () => {
+  const pushEvent = (payload) => ({ data: { json: () => payload, text: () => JSON.stringify(payload) } });
+
+  it("mostra a mensagem do FCM (campo data) com título, texto e link", async () => {
+    const env = makeEnv();
+    await env.dispatch("push", pushEvent({ data: { title: "Luz vence hoje", body: "R$ 200,00", tag: "bill-1", url: "/?view=bills" }, from: "123" }));
+    expect(env.shown).toHaveLength(1);
+    expect(env.shown[0].title).toBe("Luz vence hoje");
+    expect(env.shown[0].options).toMatchObject({ body: "R$ 200,00", tag: "bill-1", data: { url: "/?view=bills" } });
+  });
+
+  it("aceita também o formato de notificação comum", async () => {
+    const env = makeEnv();
+    await env.dispatch("push", pushEvent({ notification: { title: "Oi", body: "Teste" } }));
+    expect(env.shown[0]).toMatchObject({ title: "Oi", options: { body: "Teste" } });
+  });
+
+  it("ao tocar, abre o app na aba certa (ou reaproveita a janela aberta)", async () => {
+    const env = makeEnv();
+    const notification = { close: () => {}, data: { url: "/?view=bills" } };
+    await env.dispatch("notificationclick", { notification });
+    expect(env.opened).toEqual([`${ORIGIN}/?view=bills`]);
+
+    const navigated = [];
+    env.windows.push({ url: `${ORIGIN}/`, navigate: async (u) => void navigated.push(u), focus: async () => {} });
+    await env.dispatch("notificationclick", { notification });
+    expect(navigated).toEqual([`${ORIGIN}/?view=bills`]);
+    expect(env.opened).toHaveLength(1);
   });
 });

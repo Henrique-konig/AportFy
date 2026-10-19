@@ -29,6 +29,25 @@ import {
   financialIndependencePlan,
   buildAlerts,
   passwordProblem,
+  dateInMonth,
+  addMonthsToDate,
+  splitInstallments,
+  invoiceMonthOf,
+  invoiceDates,
+  buildCardInvoices,
+  invoiceForMonth,
+  invoiceStatus,
+  cardSummary,
+  unpaidInvoices,
+  billStatus,
+  billsSummary,
+  invoicePaymentTransactions,
+  projectMonthBalance,
+  averageMonthlyExpenses,
+  emergencyReserve,
+  reserveAmount,
+  transactionsToCsv,
+  buildPushReminders,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -599,5 +618,236 @@ describe("passwordProblem (senha de cadastro)", () => {
 
   it("recusa senha gigante", () => {
     expect(passwordProblem("a1".repeat(70))).toMatch(/no máximo 128/);
+  });
+});
+
+/* =========================================================
+   Contas, cartões, saldo projetado, reserva, CSV e lembretes
+   ========================================================= */
+describe("datas e parcelas", () => {
+  it("dateInMonth limita ao último dia do mês", () => {
+    expect(dateInMonth("2026-02", 31)).toBe("2026-02-28");
+    expect(dateInMonth("2028-02", 30)).toBe("2028-02-29");
+    expect(dateInMonth("2026-10", 5)).toBe("2026-10-05");
+  });
+
+  it("addMonthsToDate preserva o dia preferido quando o mês permite", () => {
+    expect(addMonthsToDate("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonthsToDate("2026-02-28", 1, 31)).toBe("2026-03-31");
+    expect(addMonthsToDate("2026-11-15", 2)).toBe("2027-01-15");
+  });
+
+  it("splitInstallments fecha em centavos exatos (diferença na 1ª)", () => {
+    expect(splitInstallments(100, 3)).toEqual([33.34, 33.33, 33.33]);
+    expect(splitInstallments(10, 1)).toEqual([10]);
+    expect(splitInstallments(0.05, 2)).toEqual([0.03, 0.02]);
+    const parts = splitInstallments(1999.99, 12);
+    expect(Math.round(parts.reduce((a, b) => a + b, 0) * 100)).toBe(199999);
+  });
+});
+
+describe("cartão de crédito", () => {
+  const card = { id: "c1", name: "Nubank", closingDay: 10, dueDay: 17, limit: 5000 };
+  const purchases = [
+    { id: "p1", cardId: "c1", description: "TV", category: "Outros", amount: 1200, installments: 3, purchaseDate: "2026-10-12" },
+    { id: "p2", cardId: "c1", description: "Mercado", category: "Alimentação", amount: 300, installments: 1, purchaseDate: "2026-10-02" },
+    { id: "p3", cardId: "outro", description: "Não é deste", category: "Outros", amount: 50, installments: 1, purchaseDate: "2026-10-02" },
+  ];
+
+  it("compra antes do fechamento entra na fatura do mês; no dia ou depois, na do mês seguinte", () => {
+    expect(invoiceMonthOf("2026-10-09", 10)).toBe("2026-10");
+    expect(invoiceMonthOf("2026-10-10", 10)).toBe("2026-11");
+    expect(invoiceMonthOf("2026-12-20", 10)).toBe("2027-01");
+  });
+
+  it("vencimento antes do fechamento cai no mês seguinte", () => {
+    expect(invoiceDates("2026-10", 10, 17)).toEqual({ closingDate: "2026-10-10", dueDate: "2026-10-17" });
+    expect(invoiceDates("2026-10", 28, 5)).toEqual({ closingDate: "2026-10-28", dueDate: "2026-11-05" });
+  });
+
+  it("monta as faturas com cada parcela no seu mês", () => {
+    const inv = buildCardInvoices(card, purchases);
+    expect(Object.keys(inv).sort()).toEqual(["2026-10", "2026-11", "2026-12", "2027-01"]);
+    expect(inv["2026-10"].total).toBe(300);
+    expect(inv["2026-11"].items[0]).toMatchObject({ description: "TV", installment: 1, installments: 3, amount: 400 });
+    expect(inv["2027-01"].items[0].installment).toBe(3);
+  });
+
+  it("status da fatura", () => {
+    const inv = buildCardInvoices(card, purchases)["2026-10"];
+    expect(invoiceStatus(inv, "2026-10-05")).toBe("open");
+    expect(invoiceStatus(inv, "2026-10-12")).toBe("closed");
+    expect(invoiceStatus(inv, "2026-10-18")).toBe("overdue");
+    expect(invoiceStatus({ ...inv, paid: true }, "2026-10-18")).toBe("paid");
+  });
+
+  it("resumo: fatura atual, a pagar e limite usado (faturas pagas liberam o limite)", () => {
+    const s = cardSummary(card, purchases, [], "2026-10-19");
+    expect(s.current.month).toBe("2026-11");
+    expect(s.toPay.month).toBe("2026-10");
+    expect(s.used).toBe(1500);
+    expect(s.available).toBe(3500);
+
+    const paid = cardSummary(card, purchases, [{ cardId: "c1", month: "2026-10", paid: true, paidAt: "2026-10-15" }], "2026-10-19");
+    expect(paid.toPay).toBeNull();
+    expect(paid.used).toBe(1200);
+  });
+
+  it("faturas não pagas de todos os cartões, ordenadas pelo vencimento", () => {
+    const list = unpaidInvoices([card], purchases, [{ cardId: "c1", month: "2026-10", paid: true }]);
+    expect(list.map((i) => i.month)).toEqual(["2026-11", "2026-12", "2027-01"]);
+    expect(list[0]).toMatchObject({ cardName: "Nubank", total: 400, dueDate: "2026-11-17" });
+  });
+
+  it("pagar a fatura gera uma despesa por parcela, com a categoria da compra", () => {
+    const inv = buildCardInvoices(card, purchases)["2026-11"];
+    expect(invoicePaymentTransactions(card, inv, "2026-11-17")).toEqual([
+      { description: "TV (1/3) · Nubank", amount: 400, type: "expense", category: "Outros", date: "2026-11-17" },
+    ]);
+  });
+
+  it("invoiceForMonth devolve fatura vazia para mês sem compras", () => {
+    const inv = invoiceForMonth(card, purchases, [], "2027-05");
+    expect(inv).toMatchObject({ month: "2027-05", total: 0, items: [], dueDate: "2027-05-17" });
+  });
+});
+
+describe("contas a pagar", () => {
+  const today = "2026-10-19";
+  const bills = [
+    { id: "a", description: "Luz", amount: 200, dueDate: "2026-10-15", paid: false },
+    { id: "b", description: "Água", amount: 80, dueDate: "2026-10-20", paid: false },
+    { id: "c", description: "Aluguel", amount: 1900, dueDate: "2026-10-30", paid: false },
+    { id: "d", description: "Net", amount: 120, dueDate: "2026-10-05", paid: true, paidAt: "2026-10-04" },
+    { id: "e", description: "IPTU", amount: 300, dueDate: "2026-11-10", paid: false },
+  ];
+
+  it("status de cada conta", () => {
+    expect(billStatus(bills[0], today)).toBe("overdue");
+    expect(billStatus(bills[1], today)).toBe("soon");
+    expect(billStatus(bills[2], today)).toBe("pending");
+    expect(billStatus(bills[3], today)).toBe("paid");
+  });
+
+  it("totais do mês", () => {
+    expect(billsSummary(bills, today)).toEqual({ toPay: 1980, overdue: 200, overdueCount: 1, paid: 120 });
+  });
+
+  it("alertas de contas vencidas, perto do vencimento e de faturas", () => {
+    const alerts = buildAlerts({
+      today,
+      bills,
+      invoices: [{ cardId: "c1", cardName: "Nubank", month: "2026-10", dueDate: "2026-10-21", total: 300 }],
+    });
+    const titles = alerts.map((a) => a.title);
+    expect(titles).toContain("Conta vencida: Luz");
+    expect(titles).toContain("Água vence amanhã");
+    expect(titles).toContain("Fatura Nubank vence em 2 dias");
+    expect(titles.some((t) => t.includes("Aluguel"))).toBe(false);
+    expect(alerts[0].level).toBe("critical");
+  });
+});
+
+describe("saldo projetado do mês", () => {
+  it("soma o realizado e o que ainda vai entrar e sair", () => {
+    const p = projectMonthBalance({
+      today: "2026-10-19",
+      transactions: [
+        { date: "2026-10-05", type: "income", amount: 5000, description: "Salário" },
+        { date: "2026-10-10", type: "expense", amount: 800, description: "Mercado" },
+        { date: "2026-10-25", type: "expense", amount: 100, description: "Academia" },
+        { date: "2026-09-25", type: "expense", amount: 999, description: "Mês passado" },
+      ],
+      recurrences: [
+        { description: "Freela", amount: 700, type: "income", dayOfMonth: 28, lastGeneratedMonth: "2026-09" },
+        { description: "Já lançada", amount: 50, type: "expense", dayOfMonth: 2, lastGeneratedMonth: "2026-10" },
+      ],
+      bills: [
+        { description: "Luz", amount: 200, dueDate: "2026-10-28", paid: false },
+        { description: "Vencida", amount: 30, dueDate: "2026-10-01", paid: false },
+        { description: "Paga", amount: 999, dueDate: "2026-10-01", paid: true },
+        { description: "Novembro", amount: 999, dueDate: "2026-11-10", paid: false },
+      ],
+      invoices: [
+        { cardName: "Nubank", dueDate: "2026-10-21", total: 300 },
+        { cardName: "Nubank", dueDate: "2026-11-17", total: 400 },
+      ],
+    });
+    expect(p.realized).toBe(4200);
+    expect(p.incoming).toBe(700);
+    expect(p.outgoing).toBe(630);
+    expect(p.projected).toBe(4270);
+    expect(p.upcoming.map((u) => u.description)).toEqual(["Vencida", "Fatura Nubank", "Academia", "Freela", "Luz"]);
+  });
+});
+
+describe("reserva de emergência", () => {
+  const today = "2026-10-19";
+  const txs = [
+    { date: "2026-09-10", type: "expense", amount: 3000 },
+    { date: "2026-08-10", type: "expense", amount: 2000 },
+    { date: "2026-08-12", type: "income", amount: 9000 },
+    { date: "2026-10-01", type: "expense", amount: 99999 }, // mês atual não conta
+  ];
+
+  it("média dos meses completos com movimento", () => {
+    expect(averageMonthlyExpenses(txs, today)).toBe(2500);
+    expect(averageMonthlyExpenses([], today)).toBeNull();
+  });
+
+  it("meses cobertos e quanto falta para a meta", () => {
+    expect(emergencyReserve({ amount: 10000, monthlyExpenses: 2500, targetMonths: 6 })).toMatchObject({ months: 4, targetAmount: 15000, missing: 5000 });
+    expect(emergencyReserve({ amount: 20000, monthlyExpenses: 2500 })).toMatchObject({ missing: 0, progress: 100 });
+    expect(emergencyReserve({ amount: 1000, monthlyExpenses: null }).months).toBeNull();
+  });
+
+  it("valor somado das fontes escolhidas", () => {
+    const goals = [{ id: "g1", currentAmount: 5000 }];
+    const investments = [{ id: "i1", quantity: 10, avgPrice: 100, currentPrice: 110 }];
+    expect(reserveAmount(["goal:g1", "inv:i1", "inv:inexistente"], goals, investments, 250)).toBe(6350);
+  });
+});
+
+describe("transactionsToCsv", () => {
+  it("gera CSV no padrão do Excel em português", () => {
+    const csv = transactionsToCsv([
+      { date: "2026-10-05", description: "Salário", category: "Salário", type: "income", amount: 5000 },
+      { date: "2026-10-02", description: 'Mercado; "promo"', category: "Alimentação", type: "expense", amount: 123.4 },
+    ]);
+    expect(csv.startsWith("﻿")).toBe(true);
+    const lines = csv.slice(1).split("\r\n");
+    expect(lines[0]).toBe("Data;Descrição;Categoria;Tipo;Valor");
+    expect(lines[1]).toBe('02/10/2026;"Mercado; ""promo""";Alimentação;Despesa;-123,40');
+    expect(lines[2]).toBe("05/10/2026;Salário;Salário;Receita;5000,00");
+  });
+});
+
+describe("buildPushReminders", () => {
+  it("contas e faturas de ontem/hoje/amanhã e proventos de amanhã", () => {
+    const r = buildPushReminders({
+      today: "2026-10-19",
+      bills: [
+        { id: "a", description: "Luz", amount: 200, dueDate: "2026-10-19", paid: false },
+        { id: "b", description: "Água", amount: 80, dueDate: "2026-10-20", paid: false },
+        { id: "c", description: "Gás", amount: 90, dueDate: "2026-10-18", paid: false },
+        { id: "d", description: "Paga", amount: 90, dueDate: "2026-10-19", paid: true },
+        { id: "e", description: "Longe", amount: 90, dueDate: "2026-10-25", paid: false },
+      ],
+      invoices: [{ cardId: "c1", cardName: "Nubank", month: "2026-10", dueDate: "2026-10-20", total: 300 }],
+      upcomingDividends: [
+        { ticker: "MXRF11", paymentDate: "2026-10-20", total: 10 },
+        { ticker: "HGLG11", paymentDate: "2026-10-20", total: 5.5 },
+        { ticker: "XPML11", paymentDate: "2026-10-25", total: 99 },
+      ],
+    });
+    expect(r.map((x) => x.title.replace(/\s/g, " "))).toEqual([
+      "Luz vence hoje",
+      "Água vence amanhã",
+      "Conta vencida: Gás",
+      "Fatura Nubank vence amanhã",
+      "R$ 15,50 em proventos amanhã",
+    ]);
+    expect(r[4].body).toBe("MXRF11, HGLG11");
+    expect(r.every((x) => x.tag && x.view)).toBe(true);
   });
 });

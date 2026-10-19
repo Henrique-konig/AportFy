@@ -378,6 +378,7 @@ export const VIEW_META = {
   transactions: { title: "Transações", subtitle: "Histórico completo de receitas e despesas" },
   goals: { title: "Metas", subtitle: "Acompanhe o progresso dos seus objetivos financeiros" },
   budget: { title: "Orçamento", subtitle: "Acompanhe seus limites de gasto por categoria" },
+  bills: { title: "Contas e Cartões", subtitle: "Contas a pagar, cartões de crédito e faturas" },
   investments: { title: "Investimentos", subtitle: "Acompanhe o rendimento da sua carteira de ativos" },
   history: { title: "Histórico", subtitle: "Compras, vendas e proventos dos seus investimentos" },
   news: { title: "Notícias", subtitle: "Fique por dentro do mercado e dos ativos da sua carteira" },
@@ -393,6 +394,9 @@ export const DELETE_META = {
   dividend: { title: "Excluir provento?", desc: "Esse registro não pode ser recuperado. Deseja continuar?" },
   budget: { title: "Excluir orçamento?", desc: "O limite definido para essa categoria será removido. Você pode recriar depois se quiser." },
   recurrence: { title: "Excluir recorrência?", desc: "Deixa de ser lançada automaticamente. As transações já geradas continuam existindo." },
+  bill: { title: "Excluir conta?", desc: "A conta sai da lista. Se já foi paga, a despesa lançada nas transações continua." },
+  purchase: { title: "Excluir compra?", desc: "Todas as parcelas dessa compra saem das faturas. Despesas de faturas já pagas continuam nas transações." },
+  card: { title: "Excluir cartão?", desc: "O cartão, as compras e os registros de fatura dele serão apagados. Despesas de faturas já pagas continuam nas transações." },
 };
 
 export const EXPENSE_CATEGORIES = ["Alimentação", "Transporte", "Moradia", "Lazer", "Saúde", "Educação", "Outros"];
@@ -408,6 +412,8 @@ export const DIVIDEND_TYPE_COLORS = {
    Helpers
 --------------------------------------------------------------- */
 export function formatCurrency(value) {
+  // Modo privacidade (botão do olho no cabeçalho): nenhum valor em reais aparece.
+  if (document.documentElement.classList.contains("privacy-on")) return "R$ •••••";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 }
 

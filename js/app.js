@@ -16,6 +16,9 @@ import {
   refreshEmailVerification,
   reauthenticate,
   deleteCurrentUser,
+  loginWithGoogle,
+  finishRedirectLogin,
+  reauthenticateWithGoogle,
 } from "./auth.js";
 import {
   listenToTransactions,
@@ -57,7 +60,22 @@ import {
   rejectJoinRequest,
   deleteAccountData,
   clearLocalCache,
+  listenToCollection,
+  addToCollection,
+  updateInCollection,
+  deleteFromCollection,
+  addBills,
+  payBill,
+  unpayBill,
+  payInvoice,
+  unpayInvoice,
+  deleteCard,
+  savePushToken,
+  removePushToken,
+  listenToSettingsDoc,
+  saveSettingsDoc,
 } from "./db.js";
+import { pushSupported, pushPermission, currentPushToken, enablePush, disablePush, showTestNotification } from "./push.js";
 import { fetchQuotes, fetchDividendCalendar, fetchCryptoQuotes, fetchMarketIndices, B3_CATEGORIES, CRYPTO_CATEGORY } from "./api.js";
 import { fetchPortfolioNews, fetchMarketNews } from "./news.js";
 import {
@@ -71,6 +89,9 @@ import {
   applyInvestmentSale,
   getInvestmentSales,
   passwordProblem,
+  addMonthsToDate,
+  splitInstallments,
+  invoicePaymentTransactions,
 } from "./calc.js";
 import * as ui from "./ui.js";
 
@@ -99,6 +120,11 @@ let dividendsLoaded = false;
 const sessionRegisteredKeys = new Set();
 let latestBudgets = [];
 let latestRecurrences = [];
+let latestBills = [];
+let latestCards = [];
+let latestPurchases = [];
+let latestCardInvoices = [];
+let extraUnsubscribes = []; // contas, cartões, compras, faturas e reserva
 let recurrencesProcessing = false;
 let quotesInFlight = false;
 
@@ -148,6 +174,21 @@ function initUIBindings() {
   ui.bindAlerts();
   ui.bindInstallApp();
   ui.bindTheme();
+  ui.bindPrivacy(() => rerenderAll());
+  ui.bindReportsExport();
+  ui.bindPlanning({
+    onSaveReserve: async (data) => {
+      try {
+        await saveSettingsDoc(activeMode, activeSpaceId(), "reserve", data);
+        ui.showToast("Reserva de emergência atualizada.", "success");
+      } catch (err) {
+        console.error(err);
+        ui.showToast("Erro ao salvar a reserva.", "error");
+      }
+    },
+  });
+  bindBillsActions();
+  ui.bindPushSettings({ onEnable: () => turnPushOn(), onDisable: () => turnPushOff(), onTest: () => testPush() });
   ui.bindAccessibility();
   ui.bindOnboarding();
   ui.bindDividendCalendar();
@@ -462,6 +503,21 @@ function initUIBindings() {
       } else if (type === "recurrence") {
         await deleteRecurrence(activeMode, collectionId, id);
         ui.showToast("Recorrência excluída.", "success");
+      } else if (type === "bill") {
+        await deleteFromCollection(activeMode, collectionId, "bills", id);
+        ui.showToast("Conta excluída.", "success");
+      } else if (type === "purchase") {
+        await deleteFromCollection(activeMode, collectionId, "cardPurchases", id);
+        ui.showToast("Compra excluída.", "success");
+      } else if (type === "card") {
+        await deleteCard(
+          activeMode,
+          collectionId,
+          id,
+          latestPurchases.filter((p) => p.cardId === id).map((p) => p.id),
+          latestCardInvoices.filter((i) => i.cardId === id).map((i) => i.month)
+        );
+        ui.showToast("Cartão excluído.", "success");
       } else {
         await deleteTransaction(activeMode, collectionId, id);
         ui.showToast("Transação excluída.", "success");
@@ -559,6 +615,17 @@ function initUIBindings() {
 
   /* -------------------- Auth screen -------------------- */
   ui.elements.toggleAuthModeBtn.addEventListener("click", () => ui.toggleAuthMode());
+
+  document.getElementById("google-login-btn")?.addEventListener("click", async () => {
+    ui.clearAuthError();
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      console.error(err);
+      ui.showAuthError(translateAuthError(err));
+    }
+  });
+  finishRedirectLogin().then((err) => err && ui.showAuthError(translateAuthError(err)));
 
   ui.elements.loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1042,6 +1109,7 @@ async function processRecurrences(recurrences) {
 }
 
 function subscribeToActiveCollection() {
+  stopExtras();
   if (unsubscribeTransactions) {
     unsubscribeTransactions();
     unsubscribeTransactions = null;
@@ -1076,6 +1144,7 @@ function subscribeToActiveCollection() {
 
   const id = activeMode === "couple" ? activeCoupleId : activeUser.uid;
   if (!id) return;
+  subscribeExtras(id);
 
   // Primeiros passos: só no espaço pessoal e depois que transações e investimentos chegaram.
   const onboardingUid = activeMode === "personal" ? activeUser.uid : null;
@@ -1156,6 +1225,7 @@ function subscribeToActiveCollection() {
     }
     latestRecurrences = recurrences;
     ui.renderRecurrences(recurrences);
+    ui.setPlanningData({ recurrences });
     // Lançar recorrências com dado do cache local poderia duplicar o que outro aparelho já lançou.
     if (!meta?.fromCache) processRecurrences(recurrences);
   });
@@ -1319,6 +1389,204 @@ async function switchMode(mode) {
 }
 
 /* ---------------------------------------------------------------
+   Contas a pagar, cartões e faturas
+--------------------------------------------------------------- */
+const activeSpaceId = () => (activeMode === "couple" ? activeCoupleId : activeUser?.uid);
+
+function stopExtras() {
+  extraUnsubscribes.forEach((stop) => stop?.());
+  extraUnsubscribes = [];
+}
+
+function subscribeExtras(id) {
+  const mode = activeMode;
+  const watch = (name, onData) =>
+    listenToCollection(mode, id, name, (docs, error) => {
+      if (error) return ui.showToast("Erro ao carregar contas e cartões.", "error");
+      onData(docs);
+    });
+  latestBills = latestCards = latestPurchases = latestCardInvoices = [];
+  ui.renderBillsData({ bills: [], cards: [], purchases: [], invoices: [] });
+  extraUnsubscribes = [
+    watch("bills", (docs) => ui.renderBillsData({ bills: (latestBills = docs) })),
+    watch("cards", (docs) => ui.renderBillsData({ cards: (latestCards = docs) })),
+    watch("cardPurchases", (docs) => ui.renderBillsData({ purchases: (latestPurchases = docs) })),
+    watch("cardInvoices", (docs) => ui.renderBillsData({ invoices: (latestCardInvoices = docs) })),
+    listenToSettingsDoc(mode, id, "reserve", (reserve) => ui.setPlanningData({ reserve })),
+  ];
+}
+
+const todayLocal = () => new Date().toLocaleDateString("sv-SE");
+
+function bindBillsActions() {
+  const run = async (fn, okMessage, errorMessage) => {
+    try {
+      await fn();
+      if (okMessage) ui.showToast(okMessage, "success");
+      return true;
+    } catch (err) {
+      console.error(err);
+      ui.showToast(errorMessage, "error");
+      return false;
+    }
+  };
+
+  ui.bindBills({
+    saveBill: async (data, editingId) => {
+      const id = activeSpaceId();
+      const base = { description: data.description, amount: data.amount, category: data.category, dueDate: data.dueDate };
+      let ok;
+      if (editingId) {
+        ok = await run(() => updateInCollection(activeMode, id, "bills", editingId, base), "Conta atualizada.", "Erro ao salvar a conta.");
+      } else if (data.repeat === "installments") {
+        const parts = splitInstallments(data.amount, data.installments);
+        const day = Number(data.dueDate.slice(8, 10));
+        const bills = parts.map((amount, i) => ({
+          ...base,
+          description: `${data.description} (${i + 1}/${parts.length})`.slice(0, 200),
+          amount,
+          dueDate: addMonthsToDate(data.dueDate, i, day),
+          paid: false,
+          paidAt: null,
+          recurring: false,
+          installment: i + 1,
+          installments: parts.length,
+        }));
+        ok = await run(() => addBills(activeMode, id, bills), `${parts.length} parcelas criadas.`, "Erro ao salvar as parcelas.");
+      } else {
+        const recurring = data.repeat === "monthly";
+        const bill = { ...base, paid: false, paidAt: null, recurring, ...(recurring ? { dayOfMonth: Number(data.dueDate.slice(8, 10)) } : {}) };
+        ok = await run(() => addToCollection(activeMode, id, "bills", bill), "Conta criada.", "Erro ao salvar a conta.");
+      }
+      if (ok) ui.closeBillModal();
+    },
+
+    payBill: async (bill) => {
+      if (!bill) return;
+      let next = null;
+      if (bill.recurring) {
+        const dueDate = addMonthsToDate(bill.dueDate, 1, bill.dayOfMonth || Number(bill.dueDate.slice(8, 10)));
+        // Pagou, desfez e pagou de novo: a do mês seguinte já existe, não duplica.
+        const exists = latestBills.some((b) => b.recurring && b.description === bill.description && b.dueDate === dueDate);
+        if (!exists) {
+          next = { description: bill.description, amount: Number(bill.amount), category: bill.category, dueDate, paid: false, paidAt: null, recurring: true, dayOfMonth: bill.dayOfMonth || Number(bill.dueDate.slice(8, 10)) };
+        }
+      }
+      await run(() => payBill(activeMode, activeSpaceId(), bill, todayLocal(), next), next ? "Conta paga! A do próximo mês já foi criada." : "Conta paga e lançada nas despesas.", "Erro ao pagar a conta.");
+    },
+
+    unpayBill: async (bill) => {
+      if (!bill) return;
+      await run(() => unpayBill(activeMode, activeSpaceId(), bill), "Pagamento desfeito (a despesa foi removida).", "Erro ao desfazer o pagamento.");
+    },
+
+    saveCard: async (data, editingId) => {
+      const id = activeSpaceId();
+      const ok = editingId
+        ? await run(() => updateInCollection(activeMode, id, "cards", editingId, data), "Cartão atualizado.", "Erro ao salvar o cartão.")
+        : await run(() => addToCollection(activeMode, id, "cards", data), "Cartão criado.", "Erro ao salvar o cartão.");
+      if (ok) ui.closeCardModal();
+    },
+
+    savePurchase: async (data, editingId) => {
+      const id = activeSpaceId();
+      const ok = editingId
+        ? await run(() => updateInCollection(activeMode, id, "cardPurchases", editingId, data), "Compra atualizada.", "Erro ao salvar a compra.")
+        : await run(() => addToCollection(activeMode, id, "cardPurchases", data), data.installments > 1 ? `Compra em ${data.installments}x registrada.` : "Compra registrada.", "Erro ao salvar a compra.");
+      if (ok) ui.closePurchaseModal();
+    },
+
+    payInvoice: async (card, invoice) => {
+      const today = todayLocal();
+      const transactions = invoicePaymentTransactions(card, invoice, today);
+      if (transactions.length > 450) return ui.showToast("Fatura com itens demais para pagar de uma vez.", "error");
+      await run(
+        () => payInvoice(activeMode, activeSpaceId(), card.id, invoice.month, invoice.total, transactions, today),
+        "Fatura paga! As compras entraram nas despesas com as categorias de cada uma.",
+        "Erro ao pagar a fatura."
+      );
+    },
+
+    unpayInvoice: async (card, invoice) => {
+      await run(
+        () => unpayInvoice(activeMode, activeSpaceId(), card.id, invoice.month, invoice.transactionIds || []),
+        "Pagamento da fatura desfeito.",
+        "Erro ao desfazer o pagamento da fatura."
+      );
+    },
+  });
+}
+
+/* ---------------------------------------------------------------
+   Modo privacidade: redesenha tudo com os valores (des)mascarados
+--------------------------------------------------------------- */
+function rerenderAll() {
+  refreshDashboard();
+  ui.renderGoals(latestGoals);
+  ui.renderRecurrences(latestRecurrences);
+  ui.renderInvestments(latestInvestments);
+  ui.renderDividendsData(latestDividends);
+  ui.renderBillsData({});
+  refreshUpcomingDividends();
+}
+
+/* ---------------------------------------------------------------
+   Link direto para uma aba (ex: notificação abre /?view=bills)
+--------------------------------------------------------------- */
+function openViewFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const view = params.get("view");
+  if (view && ui.VIEW_META[view]) ui.setActiveView(view);
+  if (view) history.replaceState(null, "", location.pathname);
+}
+
+/* ---------------------------------------------------------------
+   Notificações (lembretes com o app fechado)
+--------------------------------------------------------------- */
+let pushToken = null;
+
+async function refreshPushStatus(message = "") {
+  if (!pushSupported()) return ui.renderPushStatus({ supported: false, enabled: false, permission: "unsupported" });
+  pushToken = await currentPushToken();
+  if (pushToken && activeUser) await savePushToken(activeUser.uid, pushToken).catch(() => {});
+  ui.renderPushStatus({ supported: true, enabled: !!pushToken, permission: pushPermission(), message });
+}
+
+async function turnPushOn() {
+  ui.renderPushStatus({ supported: true, enabled: false, permission: pushPermission(), busy: true, message: "Ativando…" });
+  try {
+    pushToken = await enablePush();
+    await savePushToken(activeUser.uid, pushToken);
+    ui.showToast("Notificações ativadas neste aparelho.", "success");
+    refreshPushStatus();
+  } catch (err) {
+    console.error(err);
+    refreshPushStatus(err.message || "Não foi possível ativar as notificações.");
+  }
+}
+
+async function turnPushOff() {
+  try {
+    if (pushToken) await removePushToken(activeUser.uid, pushToken).catch(() => {});
+    await disablePush();
+    pushToken = null;
+    ui.showToast("Notificações desativadas neste aparelho.", "info");
+  } catch (err) {
+    console.error(err);
+  }
+  ui.renderPushStatus({ supported: true, enabled: false, permission: pushPermission() });
+}
+
+async function testPush() {
+  try {
+    await showTestNotification();
+  } catch (err) {
+    console.error(err);
+    ui.showToast("Não foi possível mostrar a notificação de teste.", "error");
+  }
+}
+
+/* ---------------------------------------------------------------
    Segurança da conta: e-mail confirmado e exclusão
 --------------------------------------------------------------- */
 async function checkEmailVerification({ announce = false } = {}) {
@@ -1335,6 +1603,7 @@ async function checkEmailVerification({ announce = false } = {}) {
 }
 
 function unsubscribeAll() {
+  stopExtras();
   for (const stop of [unsubscribeTransactions, unsubscribeGoals, unsubscribeInvestments, unsubscribeDividends, unsubscribeBudgets, unsubscribePortfolioSettings, unsubscribeRecurrences]) {
     stop?.();
   }
@@ -1349,7 +1618,9 @@ async function deleteAccountFlow(password) {
   deletingAccount = true;
   ui.setDeleteAccountBusy(true);
   try {
-    await reauthenticate(password); // confirma a senha antes de apagar qualquer coisa
+    // Confirma a identidade antes de apagar qualquer coisa (senha, ou o Google para quem entrou com ele).
+    if (password == null) await reauthenticateWithGoogle();
+    else await reauthenticate(password);
   } catch (err) {
     deletingAccount = false;
     ui.setDeleteAccountBusy(false);
@@ -1413,6 +1684,8 @@ onAuthChange(async (user) => {
     }
 
     subscribeToActiveCollection();
+    refreshPushStatus();
+    openViewFromUrl();
   } else {
     stopCoupleInviteListeners();
     activeUser = null;
