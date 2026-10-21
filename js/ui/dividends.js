@@ -110,6 +110,10 @@ export function populateDividendMonthFilter(dividendsForAsset) {
   refreshDropdown("div-month-filter");
 }
 
+// A tabela mostra os proventos aos poucos: milhares de linhas deixam o layout lento.
+const DIV_TABLE_PAGE_SIZE = 100;
+let divTableLimit = DIV_TABLE_PAGE_SIZE;
+
 export function renderDividends(dividends, investments) {
   // Filtrado só pelo ativo — base para os KPIs, o gráfico e a lista de
   // meses disponíveis (não deve depender do filtro de mês, senão o
@@ -133,6 +137,7 @@ export function renderDividends(dividends, investments) {
 
     const fade = fadeInClass(el.dividendsTbody);
     el.dividendsTbody.innerHTML = tableRows
+      .slice(0, divTableLimit)
       .map((d) => {
         const color = DIVIDEND_TYPE_COLORS[d.type] || DIVIDEND_TYPE_COLORS["Outro"];
         return `
@@ -166,6 +171,11 @@ export function renderDividends(dividends, investments) {
     });
     delegateClick(el.dividendsTbody, ".delete-dividend-btn", (btn) => openDeleteModal(btn.dataset.id, "dividend"));
   }
+
+  const remaining = tableRows.length - divTableLimit;
+  el.divMoreWrap.classList.toggle("hidden", remaining <= 0);
+  el.divMoreWrap.classList.toggle("flex", remaining > 0);
+  el.divMoreRemaining.textContent = remaining > 0 ? `(${remaining})` : "";
 
   // KPIs (sempre calculados sobre o conjunto filtrado só pelo ativo — o
   // filtro de mês afeta apenas a lista abaixo, não esses totais fixos)
@@ -256,6 +266,11 @@ export function bindInvestmentFilters() {
   });
   el.divMonthFilter.addEventListener("change", () => {
     state.divMonthFilterValue = el.divMonthFilter.value;
+    divTableLimit = DIV_TABLE_PAGE_SIZE;
+    renderDividends(state.lastDividends, state.lastInvestments);
+  });
+  el.divMoreBtn?.addEventListener("click", () => {
+    divTableLimit += DIV_TABLE_PAGE_SIZE;
     renderDividends(state.lastDividends, state.lastInvestments);
   });
 }

@@ -11,6 +11,7 @@ const localModules = () =>
   [
     ...readdirSync("js").filter((n) => n.endsWith(".js")).map((n) => `js/${n}`),
     ...readdirSync("js/ui").filter((n) => n.endsWith(".js")).map((n) => `js/ui/${n}`),
+    ...readdirSync("js/app").filter((n) => n.endsWith(".js")).map((n) => `js/app/${n}`),
   ].sort();
 
 describe("carregamento", () => {

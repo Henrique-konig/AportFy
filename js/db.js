@@ -765,6 +765,11 @@ export function addToCollection(mode, id, name, data) {
   return addDoc(collection(db, spacePath(mode, id, name)), { ...data, createdAt: serverTimestamp() });
 }
 
+/** Grava um documento com id escolhido (ex: faturas pagas, id "cartao_AAAA-MM"). */
+export function setInCollection(mode, id, name, docId, data) {
+  return setDoc(doc(db, spacePath(mode, id, name), docId), { ...data, createdAt: serverTimestamp() });
+}
+
 export function updateInCollection(mode, id, name, docId, data) {
   return updateDoc(doc(db, spacePath(mode, id, name), docId), data);
 }

@@ -54,11 +54,26 @@
        um nível por vez (cada nível era uma ida e volta de rede). Mantido em dia por tests/perf.test.js. -->
   <link rel="modulepreload" href="js/api.js" />
   <link rel="modulepreload" href="js/app.js" />
+  <link rel="modulepreload" href="js/app/account-actions.js" />
+  <link rel="modulepreload" href="js/app/backup.js" />
+  <link rel="modulepreload" href="js/app/bills-actions.js" />
+  <link rel="modulepreload" href="js/app/bind-finance.js" />
+  <link rel="modulepreload" href="js/app/bind-investments.js" />
+  <link rel="modulepreload" href="js/app/bind-settings.js" />
+  <link rel="modulepreload" href="js/app/bindings.js" />
+  <link rel="modulepreload" href="js/app/couple.js" />
+  <link rel="modulepreload" href="js/app/dividend-sync.js" />
+  <link rel="modulepreload" href="js/app/news-feed.js" />
+  <link rel="modulepreload" href="js/app/push-actions.js" />
+  <link rel="modulepreload" href="js/app/quotes.js" />
+  <link rel="modulepreload" href="js/app/session.js" />
+  <link rel="modulepreload" href="js/app/subscriptions.js" />
   <link rel="modulepreload" href="js/auth.js" />
   <link rel="modulepreload" href="js/calc.js" />
   <link rel="modulepreload" href="js/datepicker.js" />
   <link rel="modulepreload" href="js/db.js" />
   <link rel="modulepreload" href="js/dropdown.js" />
+  <link rel="modulepreload" href="js/errors.js" />
   <link rel="modulepreload" href="js/firebase-config.js" />
   <link rel="modulepreload" href="js/format.js" />
   <link rel="modulepreload" href="js/gate.js" />
@@ -1147,6 +1162,11 @@
                   <i class="ph-thin ph-coins text-5xl text-slate-700 mb-3"></i>
                   <p class="text-slate-500 text-sm">Nenhum provento registrado ainda.</p>
                   <p class="text-slate-600 text-xs mt-1">Registre dividendos, JCP ou rendimentos recebidos dos seus ativos.</p>
+                </div>
+                <div id="div-more-wrap" class="hidden justify-center py-4 border-t border-slate-800/80">
+                  <button id="div-more-btn" type="button" class="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5">
+                    Carregar mais <span id="div-more-remaining"></span> <i class="ph-bold ph-caret-down"></i>
+                  </button>
                 </div>
               </div>
             </section>

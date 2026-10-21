@@ -5,14 +5,35 @@
 // o app — sempre retorna um resultado parcial utilizável.
 // =========================================================
 
-const BRAPI_QUOTE_BASE = "https://brapi.dev/api/quote";
-const BRAPI_LIST_BASE = "https://brapi.dev/api/quote/list";
+const BRAPI_DIRECT = "https://brapi.dev/api";
 
-// Opcional: cole aqui sua chave gratuita da Brapi (cadastro em brapi.dev)
-// para acelerar/priorizar a busca. Não é obrigatória: Ações usam o
-// endpoint /quote direto e FIIs caem automaticamente no endpoint
-// /quote/list (ambos liberados sem token no plano gratuito).
-const BRAPI_TOKEN = "";
+/**
+ * Pede à Brapi pela função serverless /api/brapi, que guarda a chave (variável BRAPI_TOKEN na
+ * Vercel, nunca no código do site) e mantém um cache compartilhado. Se a função não existir
+ * (ex: `npx serve` local, que não tem /api), cai na Brapi direta, sem chave — o plano gratuito
+ * libera Ações em /quote e FIIs em /quote/list.
+ * @param {"quote"|"list"} kind
+ * @param {{ symbol?: string, search?: string, dividends?: boolean }} params
+ */
+async function brapiFetch(kind, { symbol, search, dividends } = {}) {
+  const proxyQuery = new URLSearchParams({ kind });
+  if (symbol) proxyQuery.set("symbol", symbol);
+  if (search) proxyQuery.set("search", search);
+  if (dividends) proxyQuery.set("dividends", "true");
+
+  try {
+    const viaProxy = await fetch(`/api/brapi?${proxyQuery}`);
+    if (viaProxy.headers.get("x-aportfy-proxy")) return viaProxy; // a função respondeu (mesmo que com erro da Brapi)
+  } catch {
+    /* sem função: segue para a Brapi direta */
+  }
+
+  const direct =
+    kind === "list"
+      ? `${BRAPI_DIRECT}/quote/list?search=${encodeURIComponent(search)}`
+      : `${BRAPI_DIRECT}/quote/${encodeURIComponent(symbol)}${dividends ? "?dividends=true" : ""}`;
+  return fetch(direct);
+}
 
 /** Categorias de investimento que têm ticker negociado na B3. */
 export const B3_CATEGORIES = ["Ações", "FIIs"];
@@ -22,10 +43,7 @@ export const B3_CATEGORIES = ["Ações", "FIIs"];
  * FIIs retornam 401 (MISSING_TOKEN) nesse endpoint no plano gratuito.
  */
 async function fetchViaQuoteEndpoint(symbol) {
-  const url = BRAPI_TOKEN
-    ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?token=${encodeURIComponent(BRAPI_TOKEN)}`
-    : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}`;
-  const res = await fetch(url);
+  const res = await brapiFetch("quote", { symbol });
   if (!res.ok) return null;
   const data = await res.json();
   const price = data.results?.[0]?.regularMarketPrice;
@@ -39,7 +57,7 @@ async function fetchViaQuoteEndpoint(symbol) {
  * fechamento mais recente no campo `close`.
  */
 async function fetchViaListEndpoint(symbol) {
-  const res = await fetch(`${BRAPI_LIST_BASE}?search=${encodeURIComponent(symbol)}`);
+  const res = await brapiFetch("list", { search: symbol });
   if (!res.ok) return null;
   const data = await res.json();
   const match = (data.stocks || []).find((s) => s.stock === symbol);
@@ -129,10 +147,7 @@ async function fetchViaB3Function(symbol, type) {
 
 /** Plano gratuito da Brapi só libera alguns tickers sem token — usada só como reserva para Ações. */
 async function fetchViaBrapi(symbol) {
-  const url = BRAPI_TOKEN
-    ? `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true&token=${encodeURIComponent(BRAPI_TOKEN)}`
-    : `${BRAPI_QUOTE_BASE}/${encodeURIComponent(symbol)}?dividends=true`;
-  const res = await fetch(url);
+  const res = await brapiFetch("quote", { symbol, dividends: true });
   if (!res.ok) return { dividends: [], ok: false };
 
   const data = await res.json();

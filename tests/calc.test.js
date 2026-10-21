@@ -699,11 +699,23 @@ describe("cartão de crédito", () => {
     expect(list[0]).toMatchObject({ cardName: "Nubank", total: 400, dueDate: "2026-11-17" });
   });
 
-  it("pagar a fatura gera uma despesa por parcela, com a categoria da compra", () => {
+  it("pagar a fatura gera uma despesa por categoria", () => {
     const inv = buildCardInvoices(card, purchases)["2026-11"];
     expect(invoicePaymentTransactions(card, inv, "2026-11-17")).toEqual([
-      { description: "TV (1/3) · Nubank", amount: 400, type: "expense", category: "Outros", date: "2026-11-17" },
+      { description: "Fatura Nubank 11/2026 · Outros", amount: 400, type: "expense", category: "Outros", date: "2026-11-17" },
     ]);
+  });
+
+  it("várias compras da mesma categoria viram uma despesa só (centavos exatos)", () => {
+    const many = [
+      { id: "a", cardId: "c1", description: "Pizza", category: "Alimentação", amount: 10.1, installments: 1, purchaseDate: "2026-10-12" },
+      { id: "b", cardId: "c1", description: "Mercado", category: "Alimentação", amount: 20.2, installments: 1, purchaseDate: "2026-10-13" },
+      { id: "c", cardId: "c1", description: "Cinema", category: "Lazer", amount: 30, installments: 1, purchaseDate: "2026-10-14" },
+    ];
+    const inv = buildCardInvoices(card, many)["2026-11"];
+    const out = invoicePaymentTransactions(card, inv, "2026-11-17");
+    expect(out.map((t) => [t.category, t.amount])).toEqual([["Alimentação", 30.3], ["Lazer", 30]]);
+    expect(out.reduce((sum, t) => sum + t.amount, 0)).toBeCloseTo(inv.total, 2);
   });
 
   it("invoiceForMonth devolve fatura vazia para mês sem compras", () => {

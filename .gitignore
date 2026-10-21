@@ -1,3 +1,5 @@
 node_modules/
 firestore-debug.log
 ui-debug.log
+test-results/
+playwright-report/

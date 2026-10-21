@@ -59,7 +59,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - **Contas a pagar** com vencimento, categoria e situação (vencida, vence em breve, a pagar, paga). Podem ser únicas, **mensais** (ao pagar, a do mês seguinte já é criada) ou **parceladas** (uma conta por mês).
 - Ao marcar como paga, a despesa entra sozinha nas transações; dá para desfazer.
 - **Cartões de crédito** com dia de fechamento, vencimento e limite. Compras **parceladas** em até 72x: cada parcela cai na fatura certa (compras a partir do fechamento vão para a fatura seguinte).
-- **Faturas** mês a mês (aberta, fechada, vencida, paga), limite usado e disponível. Pagar a fatura lança uma despesa por parcela, com a categoria de cada compra, então orçamentos e relatórios continuam certos.
+- **Faturas** mês a mês (aberta, fechada, vencida, paga), limite usado e disponível. Pagar a fatura lança **uma despesa por categoria** (a lista não enche de parcelas), então orçamentos e relatórios continuam certos.
 - Contas e faturas vencendo ou vencidas aparecem no sino e nas notificações.
 
 **Metas e Orçamento**
@@ -105,7 +105,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Login com e-mail e senha ou **com Google** (o e-mail já vem verificado, sem depender do e-mail de confirmação), perfil e redefinição de senha por e-mail (em Configurações). Contas novas exigem senha de 8+ caracteres com letras e números e **confirmação do e-mail** (um aviso no topo permite reenviar o link).
 - **Excluir conta** (em Configurações): apaga todos os seus dados e a conta, pedindo a senha para confirmar.
 - **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal. Para pedir entrada é preciso ter o e-mail confirmado.
-- **Backup e restauração** de transações, metas, investimentos e proventos em arquivo `.json`.
+- **Backup e restauração** de transações, metas, investimentos, proventos, **contas, cartões, compras e faturas** em arquivo `.json`. Ao restaurar, cartões ganham ids novos e as compras e faturas são religadas a eles.
 
 **App e acessibilidade**
 - **Instalável (PWA):** pode ser instalado no celular ou no computador e abre como aplicativo; a interface carrega mesmo sem internet e os dados já vistos ficam disponíveis offline (cache do Firestore).
@@ -139,7 +139,17 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── custom.css        # Animações, scrollbars, glassmorphism e temas
 │   └── tailwind.css      # GERADO por `npm run build:css` (não edite à mão)
 ├── js/
-│   ├── app.js            # Ponto de entrada: orquestra listeners e eventos
+│   ├── app.js            # Ponto de entrada: reage ao login/logout e liga o resto
+│   ├── app/              # O "cérebro" do app, dividido por assunto:
+│   │   ├── session.js        #   estado compartilhado (usuário, modo, últimos dados) e o filtro de avisos
+│   │   ├── subscriptions.js  #   assinaturas do Firestore, redesenho, recorrências, troca de modo
+│   │   ├── bindings.js       #   liga a interface (+ bind-finance, bind-investments, bind-settings)
+│   │   ├── bills-actions.js  #   contas, cartões e faturas
+│   │   ├── quotes.js         #   cotações e índices (CDI/IBOV/IFIX)
+│   │   ├── dividend-sync.js  #   proventos da B3
+│   │   ├── couple.js         #   espaço de casal e convites
+│   │   ├── backup.js, news-feed.js, push-actions.js, account-actions.js
+│   ├── errors.js         # Registro de erros em produção (avisa /api/erros)
 │   ├── ui.js             # Fachada que reexporta os módulos de js/ui/
 │   ├── ui/               # Interface dividida por área: core (estado e helpers), dashboard, transações,
 │   │                     # investimentos, proventos, saúde, histórico, alertas, tema, acessibilidade...
@@ -157,6 +167,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 ├── api/
 │   ├── proventos.js      # Função serverless (Vercel): proventos de Ações e FIIs na API da B3
 │   ├── noticias.js       # Função serverless (Vercel): notícias por ticker (chave da Alpha Vantage no servidor)
+│   ├── brapi.js          # Função serverless (Vercel): proxy da Brapi (chave só no servidor + cache)
+│   ├── erros.js          # Função serverless (Vercel): recebe erros do navegador e os põe nos Logs
 │   ├── indices.js        # Função serverless (Vercel): CDI (Banco Central), Ibovespa e IFIX (B3)
 │   ├── notificacoes.js   # Cron diário (Vercel): lembretes de contas, faturas e proventos por push
 │   └── _lib/b3.js        # Busca de proventos na B3, usada por proventos.js e notificacoes.js
@@ -229,7 +241,7 @@ As chaves ficam **fora do código**: variáveis de ambiente da Vercel (Settings 
 
 | Serviço | Onde configurar | Efeito sem a chave |
 | --- | --- | --- |
-| Brapi | `BRAPI_TOKEN` em [`js/api.js`](js/api.js) | Cotações de Ações e FIIs funcionam no plano gratuito, sem token. Os proventos vêm da B3; a Brapi só serve de reserva (sem token, o plano gratuito cobre poucos tickers) |
+| Brapi | Variável de ambiente `BRAPI_TOKEN` na Vercel (usada só por [`api/brapi.js`](api/brapi.js)) | Cotações de Ações e FIIs funcionam no plano gratuito, sem token. Com a chave, o limite é maior. A chave nunca vai para o código do site, e as respostas ficam em cache na rede da Vercel (vários usuários pedindo o mesmo ticker viram uma chamada). Os proventos vêm da B3; a Brapi só serve de reserva |
 | Alpha Vantage | Variável de ambiente `ALPHA_VANTAGE_KEY` na Vercel (usada só por [`api/noticias.js`](api/noticias.js)) | A aba "Minha Carteira" de Notícias fica vazia e exibe um aviso |
 
 > A Alpha Vantage tem limite de 25 requisições por dia no plano gratuito, por isso as respostas ficam em cache local por 3 horas.
@@ -302,15 +314,17 @@ npm install
 npm test
 ```
 
-`npm test` roda cinco camadas, sem Firebase nem rede:
+`npm test` roda seis camadas, sem Firebase nem rede:
 
 - **Cálculos** ([`tests/calc.test.js`](tests/calc.test.js)): os cálculos financeiros ficam isolados em [`js/calc.js`](js/calc.js), sem DOM ou Firebase — métricas e preço médio, vendas e histórico, saúde da carteira, aportes, proventos e calendário, comparação com CDI/Ibovespa/IFIX, independência financeira, alertas, orçamento, recorrências, faturas e parcelas de cartão, contas a pagar, saldo projetado, reserva de emergência, CSV e lembretes.
 - **Telas** ([`tests/ui.test.js`](tests/ui.test.js)): carrega o `index.html` real num DOM simulado (jsdom) e exercita filtros, modais, abas e totais, além de conferir que todo id usado pelo `ui.js` existe no HTML. Pensado para pegar regressões como filtros que não reagem ou proventos duplicados. Também cobre tema, primeiros passos, acessibilidade (modais, teclado nos selects), contas e cartões, modo privacidade e exportação.
 - **Service worker** ([`tests/sw.test.js`](tests/sw.test.js)): o que vai para o cache offline, o que sempre vem da rede (Firebase, APIs) e as notificações (exibir e abrir a aba certa).
-- **Funções serverless** ([`tests/api.test.js`](tests/api.test.js)): o cron de notificações recusa chamadas sem o segredo.
+- **Funções serverless** ([`tests/api.test.js`](tests/api.test.js), [`tests/brapi.test.js`](tests/brapi.test.js), [`tests/errors.test.js`](tests/errors.test.js)): o cron recusa chamadas sem o segredo; o proxy da Brapi só aceita pedidos conhecidos e nunca expõe a chave; o registro de erros limpa e limita o que recebe.
 - **Desempenho** ([`tests/gate.test.js`](tests/gate.test.js), [`tests/perf.test.js`](tests/perf.test.js)): o filtro dos avisos do Firestore e as otimizações de carregamento (CSS do Tailwind em dia, módulos pré-carregados, só os pesos de ícone usados, sem desfoque nos cartões).
 
 **GitHub Actions** ([`.github/workflows/testes.yml`](.github/workflows/testes.yml)) roda `npm test` e os testes das regras (com o emulador) a cada push e pull request. Um X vermelho no commit indica que algo quebrou; em *Settings → Branches* dá para exigir os testes verdes antes de aceitar um pull request.
+
+**Ponta a ponta** (Chromium de verdade, `npm run test:e2e`): o app inteiro abre num navegador, com o Firebase trocado por uma versão falsa em memória ([`tests/e2e/fakes`](tests/e2e/fakes)). Cobrem login, dados na tela, adicionar/excluir transação, pagar conta e fatura, cotações, Modo Casal, restauração de backup, exclusão de conta, importação de proventos, privacidade, tema, registro de erros e o **service worker de verdade** (instala, guarda o app e abre offline). Na primeira vez: `npm install` e `npx playwright install chromium`. Pegam o que o jsdom não vê, e foram a rede de segurança para dividir o `app.js` em módulos.
 
 **Regras do Firestore** (precisam do emulador e de um JDK 21+ instalado):
 
@@ -344,7 +358,7 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 
 ## Limitações conhecidas
 
-- **Contas e cartões não entram no backup** em `.json` (só transações, metas, investimentos e proventos). As despesas geradas ao pagar contas e faturas entram, porque são transações.
+- **Restaurar backup de contas e cartões** perde o vínculo entre contas/faturas pagas e as despesas que elas geraram (os ids mudam): as despesas ficam nas transações, mas "desfazer pagamento" deixa de apagá-las.
 - **Fatura só pode ser paga depois de fechar.** Uma compra registrada depois do pagamento num mês já pago não altera a fatura paga — desfaça e pague de novo.
 - **Notificações** saem uma vez por dia (limite do cron no plano gratuito da Vercel) e dependem das variáveis de ambiente acima. O navegador embutido de alguns apps (Instagram, WhatsApp) não recebe notificações.
 - **Excluir conta no Modo Casal:** se o espaço tem mais de uma pessoa, ele continua com a outra (os dados compartilhados não são apagados); só os seus dados pessoais e a sua conta saem.

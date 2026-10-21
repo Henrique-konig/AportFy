@@ -1055,3 +1055,23 @@ describe("listas não piscam a cada atualização", () => {
     expect(rows.some((r) => r.classList.contains("animate-fade-in"))).toBe(false);
   });
 });
+
+describe("tabela de proventos paginada", () => {
+  it("mostra 100 por vez e carrega mais sob demanda", () => {
+    goTo("investments");
+    const many = Array.from({ length: 250 }, (_, i) => ({ id: `p${i}`, ticker: "TVRI11", type: "Rendimento", amount: 1, date: `2026-0${(i % 9) + 1}-10` }));
+    ui.renderDividendsData(many);
+    $("div-month-filter").value = "all";
+    fire($("div-month-filter"), "change");
+    expect($("dividends-tbody").children).toHaveLength(100);
+    expect($("div-more-wrap").classList.contains("hidden")).toBe(false);
+    expect(text("div-more-remaining")).toBe("(150)");
+    $("div-more-btn").click();
+    expect($("dividends-tbody").children).toHaveLength(200);
+    $("div-more-btn").click();
+    expect($("dividends-tbody").children).toHaveLength(250);
+    expect($("div-more-wrap").classList.contains("hidden")).toBe(true);
+    ui.renderDividendsData([]);
+    goTo("dashboard");
+  });
+});

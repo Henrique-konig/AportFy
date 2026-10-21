@@ -285,6 +285,9 @@ export const el = {
   dividendsTbody: document.getElementById("dividends-tbody"),
   dividendsEmpty: document.getElementById("dividends-empty"),
   divCount: document.getElementById("div-count"),
+  divMoreWrap: document.getElementById("div-more-wrap"),
+  divMoreBtn: document.getElementById("div-more-btn"),
+  divMoreRemaining: document.getElementById("div-more-remaining"),
 
   // Modal: Registrar Provento
   dividendModal: document.getElementById("dividend-modal"),

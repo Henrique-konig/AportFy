@@ -1035,13 +1035,22 @@ export function billsSummary(bills, today) {
   return { toPay: round(toPay), overdue: round(overdue), overdueCount, paid: round(paid) };
 }
 
-/** Transações de despesa geradas ao pagar uma fatura (uma por parcela, com a categoria da compra). */
+/**
+ * Despesas geradas ao pagar uma fatura: uma por CATEGORIA (a lista não enche de parcelas, e o
+ * orçamento de cada categoria continua certo).
+ */
 export function invoicePaymentTransactions(card, invoice, payDate) {
-  return invoice.items.map((it) => ({
-    description: `${it.description}${it.installments > 1 ? ` (${it.installment}/${it.installments})` : ""} · ${card.name}`.slice(0, 200),
-    amount: it.amount,
+  const byCategory = new Map();
+  invoice.items.forEach((it) => {
+    const category = it.category || "Outros";
+    byCategory.set(category, (byCategory.get(category) || 0) + toCents(it.amount));
+  });
+  const [year, month] = invoice.month.split("-");
+  return [...byCategory].map(([category, cents]) => ({
+    description: `Fatura ${card.name} ${month}/${year} · ${category}`.slice(0, 200),
+    amount: cents / 100,
     type: "expense",
-    category: it.category || "Outros",
+    category,
     date: payDate,
   }));
 }
