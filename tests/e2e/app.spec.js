@@ -158,6 +158,7 @@ test.describe("preferências", () => {
     const backup = JSON.parse(await (await import("node:fs/promises")).readFile(await download.path(), "utf8"));
     expect(backup.bills.map((b) => b.description)).toEqual(["Luz"]);
     expect(backup.cards.map((c) => c.name)).toEqual(["Nubank"]);
+    expect(backup.watchlist).toEqual([]);
     expect(backup).toHaveProperty("cardPurchases");
     expect(backup).toHaveProperty("cardInvoices");
   });

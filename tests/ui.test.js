@@ -1290,7 +1290,7 @@ describe("favoritos e alertas (tela)", () => {
     document.querySelector("[data-analysis-tab='fiis']").click();
   });
 
-  it("na ficha: cria e remove alertas; ETF não tem alertas", () => {
+  it("na ficha: cria e remove alertas, também para ETFs", () => {
     ui.bindAssetSheet();
     ui.setWatchlist([{ ticker: "AAAA11", kind: "fiis", alerts: [{ metric: "pvp", op: "lt", value: 0.9, on: false }] }]);
     ui.openAssetSheet({ ticker: "AAAA11", kind: "fiis", row, owned: false });
@@ -1316,7 +1316,8 @@ describe("favoritos e alertas (tela)", () => {
 
     $("asset-close-btn").click();
     ui.openAssetSheet({ ticker: "BOVA11", kind: "etfs", row: { ticker: "BOVA11", preco: 100 }, owned: false });
-    expect($("asset-alerts").classList.contains("hidden")).toBe(true);
+    expect($("asset-alerts").classList.contains("hidden")).toBe(false);
+    expect($("asset-alert-metric").textContent).toContain("Retorno 12m");
     $("asset-close-btn").click();
     ui.setWatchlist([]);
   });

@@ -47,7 +47,7 @@ const tone = (v) => (v > 0 ? "text-emerald-400" : v < 0 ? "text-red-400" : "");
 const day = (iso, options) => fmtDate(new Date(`${iso}T12:00:00`), options);
 const loading = (text) => `<p class="text-xs text-slate-500 py-4 text-center animate-pulse">${text}</p>`;
 
-/** Estrela dos favoritos e lista de alertas (alertas só para FIIs e ações: ETF não tem esses indicadores). */
+/** Estrela dos favoritos e lista de alertas. */
 function renderWatch() {
   if (!current) return;
   const watched = isWatched(current);

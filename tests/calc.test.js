@@ -1193,3 +1193,12 @@ describe("Comparar ativos", () => {
     expect(bestIndexes([5, 9], null)).toEqual([]);
   });
 });
+
+describe("Alertas de ETF", () => {
+  it("alertLabel e evaluateAlerts valem para ETFs", () => {
+    expect(alertLabel("etfs", { metric: "r12m", op: "gt", value: 15 })).toBe("Retorno 12m acima de 15%");
+    const r = evaluateAlerts([{ ticker: "BOVA11", kind: "etfs", alerts: [{ metric: "vol", op: "gt", value: 20, on: false }] }], { etfs: [{ ticker: "BOVA11", vol: 25 }] });
+    expect(r.notifications).toHaveLength(1);
+    expect(r.notifications[0].body).toContain("Volatilidade acima de 20%");
+  });
+});

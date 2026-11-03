@@ -14,6 +14,7 @@ import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { buildPushReminders, buildUpcomingDividends, evaluateAlerts, unpaidInvoices } from "../js/calc.js";
+import { loadEtfs } from "./_lib/etfs.js";
 import { loadFundamentals } from "./_lib/fundamentus.js";
 import { fetchTickerDividends, TICKER_PATTERN } from "./_lib/b3.js";
 
@@ -79,9 +80,13 @@ export default async function handler(req, res) {
     byUser.get(uid).push({ token, ref: d.ref });
   });
 
-  let fundamentalsPromise = null; // só busca o Fundamentus se algum usuário tiver alerta
+  // Só busca o Fundamentus (e os ETFs) se algum usuário tiver alerta; cada fonte uma vez só, mesmo com usuários em paralelo.
+  let fundamentalsPromise = null;
+  let etfsPromise = null;
   const fundamentals = () => (fundamentalsPromise ??= loadFundamentals());
+  const etfs = () => (etfsPromise ??= loadEtfs().catch(() => null));
 
+  const sourceDown = new Set();
   let sent = 0, removed = 0, failed = 0;
   // Usuários em paralelo (poucos de cada vez): um a um, muitos usuários estouravam o tempo da função.
   const queue = [...byUser];
@@ -109,7 +114,10 @@ export default async function handler(req, res) {
         const watchDocs = (await db.collection(`users/${uid}/watchlist`).get()).docs;
         const watching = watchDocs.map((d) => ({ ...d.data(), ref: d.ref })).filter((w) => w.alerts?.length);
         if (watching.length) {
-          const { notifications, updates } = evaluateAlerts(watching, await fundamentals());
+          const data = { ...(await fundamentals()), etfs: watching.some((w) => w.kind === "etfs") ? await etfs() : null };
+          const { notifications, updates } = evaluateAlerts(watching, data);
+          // Fonte fora do ar ou em outro formato: os alertas dela não são conferidos hoje. Fica registrado nos logs da Vercel.
+          for (const [name, list] of Object.entries(data)) if (list === null && watching.some((w) => w.kind === name)) sourceDown.add(name);
           notifications.forEach((n) => reminders.push({ ...n, view: "analysis" }));
           for (const u of updates) await watching.find((w) => w.ticker === u.ticker).ref.update({ alerts: u.alerts });
         }
@@ -137,5 +145,6 @@ export default async function handler(req, res) {
   };
   await Promise.all(Array.from({ length: 5 }, worker));
 
-  return res.status(200).json({ today, users: byUser.size, sent, removed, failed });
+  if (sourceDown.size) console.error(`Alertas não conferidos, fonte sem dados: ${[...sourceDown].join(", ")}`);
+  return res.status(200).json({ today, users: byUser.size, sent, removed, failed, sourceDown: [...sourceDown] });
 }

@@ -1537,6 +1537,7 @@ export function pickEtfs(rows, { minTurnover = 100_000, limit = 60 } = {}) {
 export const ALERT_METRICS = {
   fiis: [["preco", "Cotação", false], ["dy", "DY", true], ["pvp", "P/VP", false], ["vacancia", "Vacância", true]],
   acoes: [["preco", "Cotação", false], ["dy", "DY", true], ["pvp", "P/VP", false], ["pl", "P/L", false]],
+  etfs: [["preco", "Cotação", false], ["r12m", "Retorno 12m", true], ["vol", "Volatilidade", true]],
 };
 
 /** Texto de um alerta: "P/VP abaixo de 0,90". */

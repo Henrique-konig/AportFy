@@ -36,6 +36,7 @@ export function exportBackup() {
     cards: serializeForBackup(session.latestCards),
     cardPurchases: serializeForBackup(session.latestPurchases),
     cardInvoices: serializeForBackup(session.latestCardInvoices),
+    watchlist: ui.watchlistItems().map(({ id: _id, createdAt: _created, ...item }) => item), // favoritos e alertas (sempre do espaço pessoal)
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -72,7 +73,7 @@ export async function importBackup(file) {
   const counts = Object.fromEntries(
     Object.keys(BACKUP_IMPORTERS).map((key) => [key, Array.isArray(data[key]) ? data[key].length : 0])
   );
-  const cardKeys = ["bills", "cards", "cardPurchases", "cardInvoices"];
+  const cardKeys = ["bills", "cards", "cardPurchases", "cardInvoices", "watchlist"];
   const cardCount = cardKeys.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
   const total = Object.values(counts).reduce((a, b) => a + b, 0) + cardCount;
   if (total === 0) {
@@ -82,7 +83,7 @@ export async function importBackup(file) {
 
   const modeLabel = session.activeMode === "couple" ? "Casal" : "Pessoal";
   const confirmed = window.confirm(
-    `Restaurar vai ADICIONAR ${counts.transactions} transação(ões), ${counts.goals} meta(s), ${counts.investments} ativo(s) e ${counts.dividends} provento(s)${cardCount ? ` (e ${cardCount} item(ns) de contas e cartões)` : ""} aos dados atuais do modo ${modeLabel}. Isso não apaga nada existente. Continuar?`
+    `Restaurar vai ADICIONAR ${counts.transactions} transação(ões), ${counts.goals} meta(s), ${counts.investments} ativo(s) e ${counts.dividends} provento(s)${cardCount ? ` (e ${cardCount} item(ns) de contas, cartões e favoritos)` : ""} aos dados atuais do modo ${modeLabel}. Isso não apaga nada existente. Continuar?`
   );
   if (!confirmed) return;
 
@@ -118,6 +119,12 @@ export async function importBackup(file) {
       }
     }
   };
+  // Favoritos voltam ao espaço pessoal sem sobrescrever os que já existem; alertas voltam "armados" para avisar de novo.
+  const personalId = session.activeUser.uid;
+  await run(
+    (data.watchlist || []).filter((w) => w?.ticker && !ui.isWatched(w.ticker)),
+    (_o, { ticker, kind, alerts }) => setInCollection("personal", personalId, "watchlist", ticker, { ticker, kind, alerts: (alerts || []).map((a) => ({ ...a, on: false })) })
+  );
   await run(data.cards, async (oldId, rest) => (cardIds[oldId] = (await addToCollection(session.activeMode, id, "cards", rest)).id));
   await run(data.bills, (_o, { transactionId: _t, ...rest }) => addToCollection(session.activeMode, id, "bills", rest));
   await run(data.cardPurchases, (_o, rest) => {
