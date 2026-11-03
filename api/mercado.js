@@ -61,6 +61,8 @@ export default async function handler(req, res) {
   ]);
 
   const ok = [acoes, fiis, tesouro, selic, cdi, ipca].some((part) => part != null);
-  if (ok) res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=1800");
+  // Resposta completa fica 5 min em cache; incompleta (uma fonte falhou ou veio vazia) só 30 s, para não prender o erro.
+  const complete = acoes && fiis && tesouro?.length > 0 && selic != null && cdi != null && ipca != null;
+  if (ok) res.setHeader("Cache-Control", complete ? "public, s-maxage=300, stale-while-revalidate=1800" : "public, s-maxage=30");
   return res.status(ok ? 200 : 502).json({ updatedAt: new Date().toISOString(), acoes, fiis, tesouro, taxas: { selic, cdi, ipca }, diag });
 }
