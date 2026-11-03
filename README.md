@@ -93,6 +93,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Análise**
 - Ranking de **FIIs** e **ações** da B3 com filtros (DY, P/VP, P/L, ROE, vacância, dívida/PL, liquidez, segmento, busca por ticker) e ordenação por qualquer coluna. Ativos que você já tem aparecem com ★.
+- **Ficha do ativo:** clique no ticker para abrir cotação, gráfico de 1 ano (Yahoo Finance, `/api/ativo`), variações, indicadores e proventos dos últimos 12 meses (B3).
 - Dados do Fundamentus (`/api/fundamentos`, raspagem das tabelas públicas, cache de 6 h), referentes ao último fechamento. São indicadores, não recomendação de compra ou venda.
 
 **Relatórios**

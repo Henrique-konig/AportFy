@@ -1167,3 +1167,39 @@ describe("análise de ativos (tela)", () => {
     document.querySelector("[data-analysis-tab='fiis']").click();
   });
 });
+
+describe("ficha do ativo (tela)", () => {
+  const row = { ticker: "AAAA11", segmento: "Papel", preco: 10, dy: 12, pvp: 0.9, vacancia: null, capRate: null, mercado: 1e9, liquidez: 900000 };
+
+  it("abre com os indicadores, mostra proventos e ignora resposta de outro ativo", () => {
+    ui.bindAssetSheet();
+    ui.openAssetSheet({ ticker: "AAAA11", kind: "fiis", row, owned: true });
+    expect($("asset-modal").classList.contains("hidden")).toBe(false);
+    expect(text("asset-title")).toBe("AAAA11");
+    expect(text("asset-indicators")).toContain("Papel");
+    expect(text("asset-dividends")).toContain("Carregando");
+
+    ui.setAssetDividends("OUTRO11", { ok: true, dividends: [] }, 10);
+    expect(text("asset-dividends")).toContain("Carregando");
+
+    const today = new Date().toLocaleDateString("sv-SE");
+    ui.setAssetDividends("AAAA11", { ok: true, dividends: [{ type: "Rendimento", rate: 0.1, paymentDate: today }] }, 10);
+    expect(text("asset-dividends")).toContain("Rendimento");
+    ui.setAssetHistory("AAAA11", { ok: false });
+    expect(text("asset-stats")).toContain("indisponível");
+
+    $("asset-close-btn").click();
+    expect($("asset-modal").classList.contains("hidden")).toBe(true);
+  });
+
+  it("clicar no ticker da Análise chama onOpen com a linha", () => {
+    const onOpen = vi.fn();
+    ui.bindAnalysis({ onOpen });
+    const seg = document.querySelector("[data-analysis-segment]");
+    seg.value = ""; // o teste da Análise deixou "Logística" escolhido
+    seg.dispatchEvent(new Event("input", { bubbles: true }));
+    ui.setAnalysisData({ updatedAt: "2026-11-03T15:00:00Z", fiis: [row], acoes: [] });
+    document.querySelector("[data-analysis-open='AAAA11']").click();
+    expect(onOpen).toHaveBeenCalledWith("AAAA11", "fiis", row, false);
+  });
+});

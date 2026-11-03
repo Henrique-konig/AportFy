@@ -1430,3 +1430,21 @@ export function applyScreen(rows, { search = "", segmento = "", min = {}, max = 
     return (typeof x === "string" ? x.localeCompare(y) : x - y) * sign;
   });
 }
+
+/** Proventos pagos nos últimos 12 meses: total por cota, rendimento sobre o preço e quantos pagamentos. */
+export function dividendSummary(dividends, price, today = new Date().toLocaleDateString("sv-SE")) {
+  const from = new Date(new Date(`${today}T12:00:00`).getTime() - 365 * 86400000).toLocaleDateString("sv-SE");
+  const paid = dividends.filter((d) => d.paymentDate && d.paymentDate <= today && d.paymentDate > from);
+  const total = paid.reduce((sum, d) => sum + d.rate, 0);
+  return { total, count: paid.length, yieldPct: price > 0 ? (total / price) * 100 : null };
+}
+
+/** Variação do dia, de 12 meses e distância da máxima/mínima do período, a partir de [[data, fechamento], ...]. */
+export function priceStats(closes) {
+  if (!Array.isArray(closes) || closes.length < 2) return null;
+  const last = closes.at(-1)[1];
+  const values = closes.map((c) => c[1]);
+  const high = Math.max(...values);
+  const low = Math.min(...values);
+  return { last, day: pctChange(last, closes.at(-2)[1]), year: pctChange(last, closes[0][1]), high, low, fromHigh: pctChange(last, high) };
+}

@@ -32,3 +32,4 @@ export * from "./ui/privacy.js";
 export * from "./ui/notifications.js";
 export * from "./ui/market.js";
 export * from "./ui/analysis.js";
+export * from "./ui/asset.js";

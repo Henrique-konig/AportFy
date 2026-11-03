@@ -58,6 +58,8 @@ import {
   brNumber,
   parseFundamentusTable,
   applyScreen,
+  dividendSummary,
+  priceStats,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -1020,5 +1022,30 @@ describe("Análise: Fundamentus", () => {
     expect(applyScreen(rows, { max: { pvp: 1 }, min: { dy: null } }).map((r) => r.ticker)).toEqual(["AAAA11", "CCCC11"]);
     expect(applyScreen(rows, { sort: { key: "dy", dir: "desc" } }).map((r) => r.ticker)).toEqual(["AAAA11", "BBBB11", "CCCC11"]);
     expect(applyScreen(rows, { sort: { key: "dy", dir: "asc" } }).map((r) => r.ticker)).toEqual(["BBBB11", "AAAA11", "CCCC11"]);
+  });
+});
+
+describe("Ficha do ativo", () => {
+  it("dividendSummary soma só o que foi pago nos últimos 12 meses", () => {
+    const divs = [
+      { rate: 0.1, paymentDate: "2026-10-15" },
+      { rate: 0.1, paymentDate: "2025-12-15" },
+      { rate: 0.1, paymentDate: "2025-10-01" }, // fora da janela
+      { rate: 0.1, paymentDate: "2026-12-15" }, // ainda não pago
+    ];
+    const s = dividendSummary(divs, 10, "2026-11-03");
+    expect(s.total).toBeCloseTo(0.2);
+    expect(s.count).toBe(2);
+    expect(s.yieldPct).toBeCloseTo(2);
+    expect(dividendSummary([], 0, "2026-11-03").yieldPct).toBeNull();
+  });
+
+  it("priceStats calcula variações e distância da máxima", () => {
+    const s = priceStats([["2025-11-03", 10], ["2026-06-01", 20], ["2026-11-02", 16], ["2026-11-03", 18]]);
+    expect(s).toMatchObject({ last: 18, high: 20, low: 10 });
+    expect(s.day).toBeCloseTo(12.5);
+    expect(s.year).toBeCloseTo(80);
+    expect(s.fromHigh).toBeCloseTo(-10);
+    expect(priceStats([["2026-11-03", 1]])).toBeNull();
   });
 });

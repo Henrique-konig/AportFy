@@ -119,7 +119,7 @@ function renderTable() {
             .map(
               (r) => `<tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors">${cfg.columns
                 .map(([key, , fmt], i) => {
-                  if (i === 0) return `<td class="py-2.5 pr-3 font-semibold whitespace-nowrap">${owned.has(r.ticker) ? `<span class="text-amber-400" title="Você tem este ativo">★</span> ` : ""}${escapeHtml(r.ticker)}</td>`;
+                  if (i === 0) return `<td class="py-2.5 pr-3 font-semibold whitespace-nowrap"><button type="button" data-analysis-open="${escapeHtml(r.ticker)}" class="font-semibold hover:text-blue-400 transition-colors">${owned.has(r.ticker) ? `<span class="text-amber-400" title="Você tem este ativo">★</span> ` : ""}${escapeHtml(r.ticker)}</button></td>`;
                   return `<td class="py-2.5 px-3 whitespace-nowrap ${key === "segmento" ? "text-slate-400" : "text-right"}">${fmt ? fmt(r[key]) : r[key]}</td>`;
                 })
                 .join("")}</tr>`
@@ -142,7 +142,8 @@ export function setAnalysisData(next) {
   aEl.status.textContent = next?.updatedAt ? `Fonte: Fundamentus, dados do último fechamento (atualizado às ${new Date(next.updatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}). Indicadores não são recomendação de compra ou venda.` : "";
 }
 
-export function bindAnalysis() {
+/** `onOpen(ticker, kind, row, owned)` é chamado ao clicar num ticker (abre a ficha do ativo). */
+export function bindAnalysis({ onOpen } = {}) {
   if (!aEl.table) return;
   aEl.tabs.forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -168,9 +169,16 @@ export function bindAnalysis() {
     st.limit = PAGE;
     renderTable();
   });
+  delegateClick(aEl.table, "[data-analysis-open]", (btn) => {
+    const ticker = btn.dataset.analysisOpen;
+    const row = data?.[tab]?.find((r) => r.ticker === ticker);
+    if (row) onOpen?.(ticker, tab, row, state.lastInvestments.some((i) => i.ticker === ticker));
+  });
   aEl.moreBtn.addEventListener("click", () => {
     tabState[tab].limit += PAGE;
     renderTable();
   });
   renderAll();
 }
+
+export const FMT = { num, pct, money, big: bigMoney };

@@ -314,3 +314,18 @@ export async function fetchMarketOverview() {
     return { ok: false, data: null };
   }
 }
+
+/**
+ * Histórico de 1 ano de preço de uma ação ou FII (ficha do ativo) pela função /api/ativo.
+ * @returns {Promise<{ ok: boolean, data: { name:string, price:number, closes:Array<[string, number]> }|null }>}
+ */
+export async function fetchAssetHistory(ticker) {
+  try {
+    const res = await fetch(`/api/ativo?ticker=${encodeURIComponent(ticker)}`);
+    if (!res.ok) return { ok: false, data: null };
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    console.warn(`Falha ao buscar o histórico de ${ticker}:`, err.message);
+    return { ok: false, data: null };
+  }
+}
