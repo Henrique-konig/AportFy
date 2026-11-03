@@ -1482,3 +1482,49 @@ export function portfolioIndicators(investments, fundamentals) {
     missing,
   };
 }
+
+/** Classe do ETF pelo nome (a ordem importa: "futuro de dólar S&P/B3" é dólar, não exterior). */
+export function etfClass(name) {
+  const n = String(name || "").toUpperCase();
+  if (/BITCOIN|CRYPTO|CRIPTO|ETHER|SOLANA|\bXRP\b|BLOCKCHAIN|DIGITAL/.test(n)) return "Cripto";
+  if (/\bOURO\b|\bGOLD\b|LBMA/.test(n)) return "Ouro";
+  if (/D[ÓO]LAR|\bUSD\b/.test(n)) return "Dólar";
+  if (/TREASURY|SELIC|\bCDI\b|IPCA|\bIMA\b|IRF|IDKA|TESOURO|RENDA FIXA|TARGET|DEBENT|CR[ÉE]DITO|\bLFT|PR[ÉE]-?FIXAD/.test(n)) return "Renda fixa";
+  if (/S&P ?500|NASDAQ|CHINA|WORLD|ACWI|EXTERIOR|EUROP|EMERGING|MSCI|ARGENTIN|GLOBAL|\bUSA\b|\bEUA\b/.test(n)) return "Exterior";
+  return "Ações Brasil";
+}
+
+/** Nome curto do ETF: tira o sufixo jurídico ("... CLASSE DE ÍNDICE - RESPONSABILIDADE LIMITADA"). */
+export function etfLabel(name) {
+  return String(name || "").replace(/\s+(CLASSE|FUNDO) DE\s+[ÍI]NDICE.*$/i, "").replace(/\s{2,}/g, " ").trim();
+}
+
+/** Retornos (1, 6 e 12 meses), volatilidade anualizada e maior queda de um ETF, a partir de [[data, fechamento], ...]. */
+export function etfStats(closes) {
+  const list = Array.isArray(closes) ? closes : [];
+  const last = list.at(-1)?.[1];
+  const back = (sessions) => (list.length > sessions ? pctChange(last, list.at(-1 - sessions)[1]) : null);
+  const returns = list.slice(1).map((c, i) => c[1] / list[i][1] - 1);
+  let vol = null;
+  if (returns.length >= 60) {
+    const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
+    vol = Math.sqrt(returns.reduce((s, r) => s + (r - mean) ** 2, 0) / (returns.length - 1)) * Math.sqrt(252) * 100;
+  }
+  let peak = 0;
+  let drawdown = 0;
+  for (const [, price] of list) {
+    peak = Math.max(peak, price);
+    if (peak > 0) drawdown = Math.min(drawdown, pctChange(price, peak));
+  }
+  return { r1m: back(21), r6m: back(126), r12m: list.length >= 240 ? pctChange(last, list[0][1]) : null, vol, drawdown: list.length ? drawdown : null };
+}
+
+/** ETFs da lista "fund" da Brapi (subType "etf"), por giro financeiro, já com classe e nome curto. */
+export function pickEtfs(rows, { minTurnover = 100_000, limit = 60 } = {}) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((r) => r.subType === "etf" && /^[A-Z]{4}\d{1,2}$/.test(String(r.stock || "")) && Number(r.close) > 0)
+    .map((r) => ({ ticker: r.stock, nome: etfLabel(r.name) || r.stock, segmento: etfClass(r.name), preco: Number(r.close), liquidez: Number(r.volume) * Number(r.close) }))
+    .filter((r) => r.liquidez >= minTurnover)
+    .sort((a, b) => b.liquidez - a.liquidez)
+    .slice(0, limit);
+}

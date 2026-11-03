@@ -93,7 +93,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - **Notícias:** *Minha Carteira* (filtradas pelos seus ativos, Alpha Vantage) e *Manchetes* (mercado em pt-BR, Google News RSS).
 
 **Análise**
-- Ranking de **FIIs** e **ações** da B3 com filtros (DY, P/VP, P/L, ROE, vacância, dívida/PL, liquidez, segmento, busca por ticker) e ordenação por qualquer coluna. Ativos que você já tem aparecem com ★.
+- Ranking de **FIIs**, **ações** e **ETFs** da B3 com filtros (DY, P/VP, P/L, ROE, vacância, dívida/PL, liquidez, segmento ou classe, busca por ticker) e ordenação por qualquer coluna. Ativos que você já tem aparecem com ★.
+- **ETFs:** os mais negociados, por classe (ações Brasil, exterior, renda fixa, ouro, dólar, cripto), com retorno de 1, 6 e 12 meses, volatilidade e maior queda do último ano (`/api/etfs`, Brapi + Yahoo Finance). ETF não tem P/L nem DY como ações e FIIs, então a comparação é por desempenho e risco.
 - **Ficha do ativo:** clique no ticker para abrir cotação, gráfico de 1 ano (Yahoo Finance, `/api/ativo`), variações, indicadores e proventos dos últimos 12 meses (B3).
 - Dados do Fundamentus (`/api/fundamentos`, raspagem das tabelas públicas, cache de 6 h), referentes ao último fechamento. São indicadores, não recomendação de compra ou venda.
 

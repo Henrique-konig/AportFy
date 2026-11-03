@@ -25,6 +25,7 @@ const sEl = {
 // Indicadores mostrados na ficha: [chave, rótulo, formatador].
 const INDICATORS = {
   fiis: [["segmento", "Segmento", escapeHtml], ["dy", "Dividend yield", FMT.pct], ["pvp", "P/VP", FMT.num], ["vacancia", "Vacância", FMT.pct], ["capRate", "Cap rate", FMT.pct], ["mercado", "Valor de mercado", FMT.big], ["liquidez", "Liquidez diária", FMT.big]],
+  etfs: [["segmento", "Classe", escapeHtml], ["r1m", "Retorno 1 mês", FMT.pct], ["r6m", "Retorno 6 meses", FMT.pct], ["r12m", "Retorno 12 meses", FMT.pct], ["vol", "Volatilidade", FMT.pct], ["drawdown", "Maior queda 12m", FMT.pct], ["liquidez", "Liquidez diária", FMT.big]],
   acoes: [["pl", "P/L", FMT.num], ["pvp", "P/VP", FMT.num], ["dy", "Dividend yield", FMT.pct], ["roe", "ROE", FMT.pct], ["roic", "ROIC", FMT.pct], ["mLiquida", "Margem líquida", FMT.pct], ["dividaPl", "Dívida/PL", FMT.num], ["evEbitda", "EV/EBITDA", FMT.num], ["cresc5a", "Crescimento 5 anos", FMT.pct], ["liquidez", "Liquidez diária", FMT.big]],
 };
 

@@ -12,7 +12,7 @@ import { bindFinance } from "./bind-finance.js";
 import { bindInvestments } from "./bind-investments.js";
 import { bindSettings } from "./bind-settings.js";
 import { loadNewsView } from "./news-feed.js";
-import { loadFundamentals } from "./analysis.js";
+import { loadEtfs, loadFundamentals } from "./analysis.js";
 import { openAsset } from "./asset.js";
 import { testPush, turnPushOff, turnPushOn } from "./push-actions.js";
 import { refreshQuotes } from "./quotes.js";
@@ -68,7 +68,7 @@ export function initUIBindings() {
   ui.bindHistory();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();
-  ui.bindAnalysis({ onOpen: openAsset });
+  ui.bindAnalysis({ onOpen: openAsset, onTab: (tab) => tab === "etfs" && loadEtfs() });
   ui.bindAssetSheet();
   ui.bindPortfolioIndicators({ onOpen: openAsset });
 

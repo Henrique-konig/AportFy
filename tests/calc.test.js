@@ -61,6 +61,10 @@ import {
   dividendSummary,
   priceStats,
   portfolioIndicators,
+  etfClass,
+  etfLabel,
+  etfStats,
+  pickEtfs,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -1075,5 +1079,47 @@ describe("Indicadores da carteira", () => {
   it("sem posições ou sem dados devolve médias nulas", () => {
     expect(portfolioIndicators([], fundamentals).avg.fiis.dy).toBeNull();
     expect(portfolioIndicators([inv("AAAA11", "FIIs", 1, 10)], null).missing).toEqual(["AAAA11"]);
+  });
+});
+
+describe("ETFs", () => {
+  it("etfClass separa as classes pelo nome", () => {
+    const cases = {
+      "ISHARES IBOVESPA CLASSE DE ÍNDICE": "Ações Brasil",
+      "BB ETF ÍNDICE FUTURO DE DOLAR S&P/B3 FUNDO DE ÍNDICE": "Dólar",
+      "TREND ETF LBMA OURO CLASSE DE ÍNDICE INVESTIMENTO NO EXTERIOR": "Ouro",
+      "HASHDEX NASDAQ CME CRYPTO INDEX FUNDO DE ÍNDICE": "Cripto",
+      "IT NOW S&P500 TRN FUNDO DE ÍNDICE": "Exterior",
+      "INVESTO ETF MARKETVECTOR BRAZIL TREASURY 760 DAY TARGET DURATION": "Renda fixa",
+    };
+    for (const [name, expected] of Object.entries(cases)) expect(etfClass(name)).toBe(expected);
+  });
+
+  it("etfLabel tira o sufixo jurídico", () => {
+    expect(etfLabel("ISHARES IBOVESPA CLASSE DE ÍNDICE - RESPONSABILIDADE LIMITADA")).toBe("ISHARES IBOVESPA");
+    expect(etfLabel("IT NOW IDIV FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA")).toBe("IT NOW IDIV");
+  });
+
+  it("etfStats calcula retorno, volatilidade e maior queda", () => {
+    const rising = Array.from({ length: 250 }, (_, i) => [`d${i}`, 100 + i]);
+    const s = etfStats(rising);
+    expect(s.r1m).toBeCloseTo((349 / 328 - 1) * 100);
+    expect(s.r12m).toBeCloseTo(249);
+    expect(s.drawdown).toBe(0);
+    expect(s.vol).toBeGreaterThan(0);
+    const dip = etfStats([["a", 100], ["b", 50], ["c", 75]]);
+    expect(dip.drawdown).toBe(-50);
+    expect(dip).toMatchObject({ r1m: null, r12m: null, vol: null });
+    expect(etfStats([]).drawdown).toBeNull();
+  });
+
+  it("pickEtfs só pega ETFs líquidos, por giro", () => {
+    const rows = [
+      { stock: "BOVA11", name: "ISHARES IBOVESPA CLASSE DE ÍNDICE", close: 100, volume: 10000, subType: "etf" },
+      { stock: "MXRF11", name: "MAXI RENDA FII", close: 10, volume: 999999, subType: "fii" },
+      { stock: "SMAL11", name: "ISHARES SMALL", close: 100, volume: 5, subType: "etf" },
+      { stock: "IVVB11", name: "ISHARES S&P 500", close: 300, volume: 20000, subType: "etf" },
+    ];
+    expect(pickEtfs(rows).map((r) => r.ticker)).toEqual(["IVVB11", "BOVA11"]);
   });
 });

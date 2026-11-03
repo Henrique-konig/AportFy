@@ -316,6 +316,21 @@ export async function fetchMarketOverview() {
 }
 
 /**
+ * Ranking de ETFs (retorno, volatilidade e maior queda) pela função /api/etfs.
+ * @returns {Promise<{ ok: boolean, data: { etfs: Array<Object> }|null }>}
+ */
+export async function fetchEtfs() {
+  try {
+    const res = await fetch("/api/etfs");
+    if (!res.ok) return { ok: false, data: null };
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    console.warn("Falha ao buscar os ETFs:", err.message);
+    return { ok: false, data: null };
+  }
+}
+
+/**
  * Histórico de 1 ano de preço de uma ação ou FII (ficha do ativo) pela função /api/ativo.
  * @returns {Promise<{ ok: boolean, data: { name:string, price:number, closes:Array<[string, number]> }|null }>}
  */

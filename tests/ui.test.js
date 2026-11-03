@@ -1229,3 +1229,34 @@ describe("indicadores da carteira (tela)", () => {
     ui.renderInvestments([]);
   });
 });
+
+describe("ETFs na Análise (tela)", () => {
+  const etfs = [
+    { ticker: "BOVA11", nome: "ISHARES IBOVESPA", segmento: "Ações Brasil", preco: 100, liquidez: 9e6, r1m: 1, r6m: 5, r12m: 10, vol: 25, drawdown: -20 },
+    { ticker: "IVVB11", nome: "ISHARES S&P 500", segmento: "Exterior", preco: 300, liquidez: 8e6, r1m: -1, r6m: 6, r12m: 14, vol: 15, drawdown: -13 },
+  ];
+  const rows = () => [...document.querySelectorAll("#analysis-table tbody tr")].map((r) => r.firstElementChild.textContent.trim());
+
+  it("mostra carregando, lista por retorno 12m e filtra por classe", () => {
+    const onTab = vi.fn();
+    ui.bindAnalysis({ onTab });
+    ui.setEtfData(undefined);
+    document.querySelector("[data-analysis-tab='etfs']").click();
+    expect(onTab).toHaveBeenCalledWith("etfs");
+    expect(text("analysis-table")).toContain("Carregando");
+
+    ui.setEtfData({ updatedAt: "2026-11-03T15:00:00Z", etfs });
+    expect(rows()).toEqual(["IVVB11", "BOVA11"]); // maior retorno em 12 meses primeiro
+    expect(text("analysis-status")).toContain("Yahoo");
+    const seg = document.querySelector("[data-analysis-segment]");
+    seg.value = "Exterior";
+    seg.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(rows()).toEqual(["IVVB11"]);
+    seg.value = "";
+    seg.dispatchEvent(new Event("input", { bubbles: true }));
+
+    ui.setEtfData(null);
+    expect(text("analysis-table")).toContain("Indisponível");
+    document.querySelector("[data-analysis-tab='fiis']").click();
+  });
+});
