@@ -410,6 +410,20 @@ export async function updateInvestment(mode, id, investmentId, updates) {
 }
 
 /**
+ * Atualiza várias posições de uma vez (ex: cotações): uma gravação em lote e um aviso só do Firestore,
+ * em vez de uma ida e volta de rede e um redesenho por ativo.
+ * @param {"personal"|"couple"} mode
+ * @param {string} id
+ * @param {Array<{ id: string, updates: Object }>} changes
+ */
+export async function updateInvestments(mode, id, changes) {
+  const batch = writeBatch(db);
+  const path = mode === "couple" ? `couples/${id}/investments` : `users/${id}/investments`;
+  changes.forEach(({ id: investmentId, updates }) => batch.update(doc(db, path, investmentId), updates));
+  return batch.commit();
+}
+
+/**
  * Remove uma posição de investimento.
  * @param {"personal"|"couple"} mode
  * @param {string} id

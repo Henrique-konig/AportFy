@@ -30,12 +30,6 @@ export function formatQuantity(n) {
   return fmtNum(Number(n), { maximumFractionDigits: 8 });
 }
 
-export let editInvestmentPriceHandler = null;
-
-export function onEditInvestmentPrice(handler) {
-  editInvestmentPriceHandler = handler;
-}
-
 /** Aplica ativo, categoria e busca da barra de filtros — usado por tabela, KPIs, gráficos e aportes. */
 export function getFilteredInvestments(investments, { includeClosed = false } = {}) {
   const term = (el.invSearchInput.value || "").toLowerCase().trim();

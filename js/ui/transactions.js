@@ -13,14 +13,9 @@ import { openDeleteModal } from "./forms.js";
    Tabela de Transações (Dashboard + view completa)
 --------------------------------------------------------------- */
 export let editHandler = null;
-export let deleteHandler = null;
 
 export function onEditTransaction(handler) {
   editHandler = handler;
-}
-
-export function onDeleteTransaction(handler) {
-  deleteHandler = handler;
 }
 
 export function buildRowHtml(t, fade = "animate-fade-in") {

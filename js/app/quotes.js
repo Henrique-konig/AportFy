@@ -6,10 +6,12 @@
 import * as ui from "../ui.js";
 import { B3_CATEGORIES, CRYPTO_CATEGORY, fetchCryptoQuotes, fetchMarketIndices, fetchQuotes } from "../api.js";
 import { getInvestmentPurchases } from "../calc.js";
-import { updateInvestment } from "../db.js";
+import { updateInvestments } from "../db.js";
 import { session } from "./session.js";
 
 let quotesInFlight = false;
+let lastQuotesAt = 0;
+const SILENT_REFRESH_MIN_MS = 60 * 1000; // abrir Investimentos de novo em menos de 1 min não busca outra vez
 
 /** Últimos N pontos de preço mantidos por ativo (evita crescimento infinito do documento). */
 export const PRICE_HISTORY_LIMIT = 24;
@@ -34,7 +36,7 @@ export function buildPriceHistory(investment, price) {
    Cotações automáticas da B3 (Brapi)
 --------------------------------------------------------------- */
 export async function refreshQuotes({ silent }) {
-  if (quotesInFlight) return;
+  if (quotesInFlight || (silent && Date.now() - lastQuotesAt < SILENT_REFRESH_MIN_MS)) return;
 
   const isAutoQuoted = (inv) => B3_CATEGORIES.includes(inv.category) || inv.category === CRYPTO_CATEGORY;
   const eligible = session.latestInvestments.filter((inv) => isAutoQuoted(inv) && (Number(inv.quantity) || 0) > 0);
@@ -44,6 +46,7 @@ export async function refreshQuotes({ silent }) {
   }
 
   quotesInFlight = true;
+  lastQuotesAt = Date.now();
   ui.setQuotesLoading(true);
 
   try {
@@ -59,25 +62,20 @@ export async function refreshQuotes({ silent }) {
     const networkError = (b3Tickers.length === 0 || b3.networkError) && (cryptoTickers.length === 0 || crypto.networkError);
     const id = session.activeMode === "couple" ? session.activeCoupleId : session.activeUser.uid;
 
+    // Tudo numa gravação em lote só. Falha num ticker específico: mantém o último preço salvo e só
+    // sinaliza o alerta visual na linha do ativo (sem regravar se o alerta já estava ligado).
+    const changes = [];
     let updated = 0;
-    await Promise.all(
-      eligible.map(async (inv) => {
-        const price = prices[inv.ticker.toUpperCase()];
-        if (typeof price === "number") {
-          await updateInvestment(session.activeMode, id, inv.id, {
-            currentPrice: price,
-            lastQuoteAt: new Date().toISOString(),
-            lastQuoteError: false,
-            priceHistory: buildPriceHistory(inv, price),
-          });
-          updated++;
-        } else {
-          // Falha nesse ticker específico: mantém o último currentPrice
-          // salvo e só sinaliza o alerta visual na linha do ativo.
-          await updateInvestment(session.activeMode, id, inv.id, { lastQuoteError: true });
-        }
-      })
-    );
+    for (const inv of eligible) {
+      const price = prices[inv.ticker.toUpperCase()];
+      if (typeof price === "number") {
+        changes.push({ id: inv.id, updates: { currentPrice: price, lastQuoteAt: new Date().toISOString(), lastQuoteError: false, priceHistory: buildPriceHistory(inv, price) } });
+        updated++;
+      } else if (!inv.lastQuoteError) {
+        changes.push({ id: inv.id, updates: { lastQuoteError: true } });
+      }
+    }
+    if (changes.length) await updateInvestments(session.activeMode, id, changes);
 
     if (networkError) {
       ui.showToast("Não foi possível conectar às fontes de cotação agora. Mantendo os últimos preços salvos.", "error");

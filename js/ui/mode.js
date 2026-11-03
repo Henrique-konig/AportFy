@@ -46,7 +46,3 @@ export function onModeToggle(handler) {
   });
 }
 
-export function getCurrentMode() {
-  return state.currentMode;
-}
-

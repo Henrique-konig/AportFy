@@ -83,53 +83,59 @@ export default async function handler(req, res) {
   const fundamentals = () => (fundamentalsPromise ??= loadFundamentals());
 
   let sent = 0, removed = 0, failed = 0;
-  for (const [uid, tokens] of byUser) {
-    try {
-      const reminders = [];
-      for (const space of await spacesOf(db, uid)) {
-        const [bills, cards, purchases, paidInvoices, investments] = await Promise.all(
-          ["bills", "cards", "cardPurchases", "cardInvoices", "investments"].map((name) => docsOf(db, `${space.path}/${name}`))
-        );
-        const eligible = investments.filter((inv) => DIVIDEND_CATEGORIES.includes(inv.category) && (Number(inv.quantity) || 0) > 0);
-        const calendars = {};
-        await Promise.all(eligible.map(async (inv) => (calendars[inv.ticker] = await calendarOf(inv))));
-        buildPushReminders({
-          today,
-          bills,
-          invoices: unpaidInvoices(cards, purchases, paidInvoices),
-          upcomingDividends: buildUpcomingDividends(eligible, calendars, today),
-        }).forEach((r) => reminders.push({ ...r, title: space.label + r.title }));
-      }
+  // Usuários em paralelo (poucos de cada vez): um a um, muitos usuários estouravam o tempo da função.
+  const queue = [...byUser];
+  const worker = async () => {
+    for (let next; (next = queue.shift()); ) {
+      const [uid, tokens] = next;
+      try {
+        const reminders = [];
+        for (const space of await spacesOf(db, uid)) {
+          const [bills, cards, purchases, paidInvoices, investments] = await Promise.all(
+            ["bills", "cards", "cardPurchases", "cardInvoices", "investments"].map((name) => docsOf(db, `${space.path}/${name}`))
+          );
+          const eligible = investments.filter((inv) => DIVIDEND_CATEGORIES.includes(inv.category) && (Number(inv.quantity) || 0) > 0);
+          const calendars = {};
+          await Promise.all(eligible.map(async (inv) => (calendars[inv.ticker] = await calendarOf(inv))));
+          buildPushReminders({
+            today,
+            bills,
+            invoices: unpaidInvoices(cards, purchases, paidInvoices),
+            upcomingDividends: buildUpcomingDividends(eligible, calendars, today),
+          }).forEach((r) => reminders.push({ ...r, title: space.label + r.title }));
+        }
 
-      // Alertas dos favoritos (só no espaço pessoal). Grava o estado "já avisou" de volta.
-      const watchDocs = (await db.collection(`users/${uid}/watchlist`).get()).docs;
-      const watching = watchDocs.map((d) => ({ ...d.data(), ref: d.ref })).filter((w) => w.alerts?.length);
-      if (watching.length) {
-        const { notifications, updates } = evaluateAlerts(watching, await fundamentals());
-        notifications.forEach((n) => reminders.push({ ...n, view: "analysis" }));
-        for (const u of updates) await watching.find((w) => w.ticker === u.ticker).ref.update({ alerts: u.alerts });
-      }
+        // Alertas dos favoritos (só no espaço pessoal). Grava o estado "já avisou" de volta.
+        const watchDocs = (await db.collection(`users/${uid}/watchlist`).get()).docs;
+        const watching = watchDocs.map((d) => ({ ...d.data(), ref: d.ref })).filter((w) => w.alerts?.length);
+        if (watching.length) {
+          const { notifications, updates } = evaluateAlerts(watching, await fundamentals());
+          notifications.forEach((n) => reminders.push({ ...n, view: "analysis" }));
+          for (const u of updates) await watching.find((w) => w.ticker === u.ticker).ref.update({ alerts: u.alerts });
+        }
 
-      for (const r of reminders) {
-        const result = await messaging.sendEachForMulticast({
-          tokens: tokens.map((t) => t.token),
-          data: { title: r.title, body: r.body, tag: r.tag, url: `/?view=${r.view}` },
-          webpush: { headers: { Urgency: "high", TTL: "86400" } },
-        });
-        sent += result.successCount;
-        result.responses.forEach((resp, i) => {
-          if (!resp.success && INVALID_TOKEN_CODES.includes(resp.error?.code)) tokens[i].dead = true;
-        });
+        for (const r of reminders) {
+          const result = await messaging.sendEachForMulticast({
+            tokens: tokens.map((t) => t.token),
+            data: { title: r.title, body: r.body, tag: r.tag, url: `/?view=${r.view}` },
+            webpush: { headers: { Urgency: "high", TTL: "86400" } },
+          });
+          sent += result.successCount;
+          result.responses.forEach((resp, i) => {
+            if (!resp.success && INVALID_TOKEN_CODES.includes(resp.error?.code)) tokens[i].dead = true;
+          });
+        }
+        for (const t of tokens.filter((t) => t.dead)) {
+          await t.ref.delete().catch(() => {});
+          removed++;
+        }
+      } catch (err) {
+        failed++;
+        console.error(`Lembretes do usuário ${uid} falharam:`, err.message);
       }
-      for (const t of tokens.filter((t) => t.dead)) {
-        await t.ref.delete().catch(() => {});
-        removed++;
-      }
-    } catch (err) {
-      failed++;
-      console.error(`Lembretes do usuário ${uid} falharam:`, err.message);
     }
-  }
+  };
+  await Promise.all(Array.from({ length: 5 }, worker));
 
   return res.status(200).json({ today, users: byUser.size, sent, removed, failed });
 }
