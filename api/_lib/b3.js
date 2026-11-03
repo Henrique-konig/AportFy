@@ -5,7 +5,7 @@
 // (Arquivos em pastas com "_" não viram rotas na Vercel.)
 // =========================================================
 
-import { parseB3CashDividends, filterByAssetClass } from "../../js/calc.js";
+import { parseB3CashDividends, filterByAssetClass, filterFiiQuotas } from "../../js/calc.js";
 
 const B3_FUNDS_URL = "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds";
 const B3_COMPANY_URL = "https://sistemaswebb3-listados.b3.com.br/listedCompaniesProxy/CompanyCall/GetListedSupplementCompany";
@@ -38,7 +38,7 @@ export async function fetchTickerDividends(ticker, isStock) {
     cashDividends = filterByAssetClass((Array.isArray(data) ? data[0] : data)?.cashDividends, ticker);
   } else {
     const data = await fetchB3Json(`${B3_FUNDS_URL}/${encodeParams({ identifierFund: code, typeFund: FII_TYPE_FUND, pageNumber: 1, pageSize: 40 })}`);
-    cashDividends = data.cashDividends;
+    cashDividends = filterFiiQuotas(data.cashDividends);
   }
   return parseB3CashDividends(cashDividends);
 }

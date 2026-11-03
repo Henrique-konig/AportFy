@@ -29,6 +29,7 @@ import {
   financialIndependencePlan,
   buildAlerts,
   passwordProblem,
+  filterFiiQuotas,
   dateInMonth,
   addMonthsToDate,
   splitInstallments,
@@ -861,5 +862,27 @@ describe("buildPushReminders", () => {
     ]);
     expect(r[4].body).toBe("MXRF11, HGLG11");
     expect(r.every((x) => x.tag && x.view)).toBe(true);
+  });
+});
+
+describe("filterFiiQuotas (FIIs: só a cota, sem recibos de subscrição)", () => {
+  const row = (assetIssued, rate, paymentDate = "13/11/2026") => ({ assetIssued, rate, paymentDate, label: "RENDIMENTO", lastDatePrior: "30/10/2026", relatedTo: "OUTUBRO 2026/2026", approvedOn: "30/10/2026" });
+
+  it("KNCR11: fica só o 1,10 da cota e descarta os recibos (0,47 e 0,20)", () => {
+    const raw = [row("BRKNCRCTF000", "1,10"), row("BRKNCRR44M19", "0,47"), row("BRKNCRR45M18", "0,20")];
+    const out = parseB3CashDividends(filterFiiQuotas(raw));
+    expect(out.map((d) => d.rate)).toEqual([1.1]);
+  });
+
+  it("aceita os vários finais de ISIN de cota (CTF000, CTF004, CTF008...)", () => {
+    for (const isin of ["BRHGLGCTF004", "BRMXRFCTF008", "BRTVRICTF001", "BRXPMLCTF000"]) {
+      expect(filterFiiQuotas([row(isin, "1"), row(isin.slice(0, 6) + "R26M17", "9")])).toHaveLength(1);
+    }
+  });
+
+  it("formato inesperado: não esconde tudo (devolve a lista original)", () => {
+    const raw = [row("XYZ", "1"), row(undefined, "2")];
+    expect(filterFiiQuotas(raw)).toEqual(raw);
+    expect(filterFiiQuotas(undefined)).toEqual([]);
   });
 });

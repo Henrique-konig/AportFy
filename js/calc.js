@@ -162,6 +162,18 @@ export function filterByAssetClass(cashDividends, ticker) {
   return (Array.isArray(cashDividends) ? cashDividends : []).filter((d) => String(d.assetIssued || "").slice(6).startsWith(isinClass));
 }
 
+/**
+ * A B3 lista, junto com os rendimentos da cota do FII (ISIN "BR<código>CTF<3 dígitos>"), os de outros papéis
+ * do mesmo fundo — recibos de subscrição (ISIN "BR<código>R44M19" etc.), que não são a cota que o usuário tem.
+ * Sem este filtro, um mês aparecia 2 ou 3 vezes, com valores por cota que não existem (ex: KNCR11: 1,10 + 0,47 + 0,20).
+ * Se nenhum item tiver ISIN de cota (formato inesperado), devolve a lista original em vez de esconder tudo.
+ */
+export function filterFiiQuotas(cashDividends) {
+  const list = Array.isArray(cashDividends) ? cashDividends : [];
+  const quotas = list.filter((d) => /^BR[A-Z0-9]{4}CTF\d{3}$/.test(String(d.assetIssued || "")));
+  return quotas.length > 0 ? quotas : list;
+}
+
 /** O JCP é divulgado bruto e cai na conta com 15% de IR retido na fonte; dividendos e rendimentos são isentos. */
 export function dividendNetAmount(type, rate, shares) {
   return rate * shares * (type === "JCP" ? 0.85 : 1);
