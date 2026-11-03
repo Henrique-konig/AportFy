@@ -99,6 +99,7 @@
   <link rel="modulepreload" href="js/ui/analysis.js" />
   <link rel="modulepreload" href="js/ui/asset.js" />
   <link rel="modulepreload" href="js/ui/market.js" />
+  <link rel="modulepreload" href="js/ui/portfolio-indicators.js" />
   <link rel="modulepreload" href="js/ui/mode.js" />
   <link rel="modulepreload" href="js/ui/news-view.js" />
   <link rel="modulepreload" href="js/ui/notifications.js" />
@@ -940,6 +941,15 @@
                   <p class="text-slate-600 text-xs mt-1">Adicione seu primeiro investimento para começar a acompanhar.</p>
                 </div>
               </div>
+            </section>
+
+            <!-- Indicadores da carteira (FIIs e ações) -->
+            <section id="inv-indicators" class="hidden glass-card rounded-2xl p-5 sm:p-6 animate-slide-up" aria-labelledby="inv-ind-title">
+              <h3 id="inv-ind-title" class="font-bold text-base mb-1">Indicadores da carteira</h3>
+              <p class="text-xs text-slate-500 mb-4">Como seus FIIs e ações estão avaliados hoje. Clique num ativo para abrir a ficha.</p>
+              <div id="inv-ind-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 mb-4"></div>
+              <div id="inv-ind-table" class="overflow-x-auto"></div>
+              <p id="inv-ind-note" class="text-[11px] text-slate-500 mt-3"></p>
             </section>
 
             <!-- Gráficos -->

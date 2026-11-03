@@ -33,3 +33,4 @@ export * from "./ui/notifications.js";
 export * from "./ui/market.js";
 export * from "./ui/analysis.js";
 export * from "./ui/asset.js";
+export * from "./ui/portfolio-indicators.js";

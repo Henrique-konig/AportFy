@@ -1448,3 +1448,37 @@ export function priceStats(closes) {
   const low = Math.min(...values);
   return { last, day: pctChange(last, closes.at(-2)[1]), year: pctChange(last, closes[0][1]), high, low, fromHigh: pctChange(last, high) };
 }
+
+/**
+ * Indicadores da carteira: cruza as posições abertas de FIIs e ações com a tabela do Fundamentus.
+ * As médias são ponderadas pelo valor da posição (só entra quem tem o indicador); P/L e P/VP usam
+ * média harmônica, que é a forma correta de tirar a média de um preço sobre lucro/patrimônio.
+ * @returns {{ rows: Array<Object>, avg: { fiis: Object<string,number|null>, acoes: Object<string,number|null> }, missing: string[] }}
+ */
+export function portfolioIndicators(investments, fundamentals) {
+  const kinds = { FIIs: "fiis", "Ações": "acoes" };
+  const open = investments.map((inv) => ({ inv, value: calcInvestmentMetrics(inv).totalValue })).filter(({ inv, value }) => kinds[inv.category] && value > 0);
+  const total = open.reduce((sum, p) => sum + p.value, 0);
+  const rows = [];
+  const missing = [];
+  for (const { inv, value } of open) {
+    const kind = kinds[inv.category];
+    const data = fundamentals?.[kind]?.find((r) => r.ticker === inv.ticker);
+    if (!data) missing.push(inv.ticker);
+    else rows.push({ ...data, kind, value, weight: (value / total) * 100 });
+  }
+  const average = (kind, key, harmonic = false) => {
+    const list = rows.filter((r) => r.kind === kind && r[key] != null && (!harmonic || r[key] > 0));
+    const weight = list.reduce((sum, r) => sum + r.value, 0);
+    if (!weight) return null;
+    return harmonic ? weight / list.reduce((sum, r) => sum + r.value / r[key], 0) : list.reduce((sum, r) => sum + r[key] * r.value, 0) / weight;
+  };
+  return {
+    rows: rows.sort((a, b) => b.value - a.value),
+    avg: {
+      fiis: { dy: average("fiis", "dy"), pvp: average("fiis", "pvp", true), vacancia: average("fiis", "vacancia") },
+      acoes: { dy: average("acoes", "dy"), pl: average("acoes", "pl", true), pvp: average("acoes", "pvp", true), roe: average("acoes", "roe") },
+    },
+    missing,
+  };
+}

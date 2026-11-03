@@ -10,6 +10,7 @@ import { hexToRgba } from "./charts.js";
 import { delegateClick, DIVIDEND_TYPE_COLORS, el, escapeHtml, formatCurrency, formatDate, getModeColor, showToast, state, todayISO, fadeInClass } from "./core.js";
 import { openDeleteModal } from "./forms.js";
 import { renderPortfolioHealth } from "./health.js";
+import { renderPortfolioIndicators } from "./portfolio-indicators.js";
 import { renderHistory } from "./history.js";
 import { formatQuantity, populateAssetFilter, populateDividendTickerSelect, refreshInvestmentViews, renderAssetDetail, renderInvestmentsTable } from "./investments.js";
 import { scheduleAlertsRender } from "./alerts.js";
@@ -225,6 +226,7 @@ export function renderInvestments(investments) {
   renderAssetDetail(investments, state.lastDividends);
   renderDividends(state.lastDividends, investments);
   renderPortfolioHealth();
+  renderPortfolioIndicators();
   renderHistory();
 }
 

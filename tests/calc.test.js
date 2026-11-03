@@ -60,6 +60,7 @@ import {
   applyScreen,
   dividendSummary,
   priceStats,
+  portfolioIndicators,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -1047,5 +1048,32 @@ describe("Ficha do ativo", () => {
     expect(s.year).toBeCloseTo(80);
     expect(s.fromHigh).toBeCloseTo(-10);
     expect(priceStats([["2026-11-03", 1]])).toBeNull();
+  });
+});
+
+describe("Indicadores da carteira", () => {
+  const inv = (ticker, category, quantity, currentPrice) => ({ ticker, category, quantity, avgPrice: currentPrice, currentPrice });
+  const fundamentals = {
+    fiis: [{ ticker: "AAAA11", dy: 10, pvp: 1, vacancia: null }, { ticker: "BBBB11", dy: 20, pvp: 0.5, vacancia: 5 }],
+    acoes: [{ ticker: "CCCC3", dy: 6, pl: 10, pvp: 2, roe: 20 }],
+  };
+
+  it("pondera pelo valor, ignora vendidos e outras categorias e lista quem não achou", () => {
+    const r = portfolioIndicators(
+      [inv("AAAA11", "FIIs", 100, 10), inv("BBBB11", "FIIs", 100, 30), inv("CCCC3", "Ações", 10, 10), inv("ZZZZ11", "FIIs", 1, 10), inv("DDDD11", "FIIs", 0, 10), inv("BTC", "Criptomoedas", 1, 99)],
+      fundamentals
+    );
+    expect(r.missing).toEqual(["ZZZZ11"]);
+    expect(r.rows.map((x) => x.ticker)).toEqual(["BBBB11", "AAAA11", "CCCC3"]);
+    expect(r.rows[0].weight).toBeCloseTo((3000 / 4110) * 100); // peso sobre todas as posições B3, inclusive a sem dados
+    expect(r.avg.fiis.dy).toBeCloseTo((10 * 1000 + 20 * 3000) / 4000); // 17,5
+    expect(r.avg.fiis.pvp).toBeCloseTo(4000 / (1000 / 1 + 3000 / 0.5)); // harmônica
+    expect(r.avg.fiis.vacancia).toBe(5); // só quem tem o dado
+    expect(r.avg.acoes).toMatchObject({ dy: 6, pl: 10, roe: 20 });
+  });
+
+  it("sem posições ou sem dados devolve médias nulas", () => {
+    expect(portfolioIndicators([], fundamentals).avg.fiis.dy).toBeNull();
+    expect(portfolioIndicators([inv("AAAA11", "FIIs", 1, 10)], null).missing).toEqual(["AAAA11"]);
   });
 });

@@ -12,7 +12,7 @@ import { bindFinance } from "./bind-finance.js";
 import { bindInvestments } from "./bind-investments.js";
 import { bindSettings } from "./bind-settings.js";
 import { loadNewsView } from "./news-feed.js";
-import { loadAnalysisView } from "./analysis.js";
+import { loadFundamentals } from "./analysis.js";
 import { openAsset } from "./asset.js";
 import { testPush, turnPushOff, turnPushOn } from "./push-actions.js";
 import { refreshQuotes } from "./quotes.js";
@@ -70,12 +70,13 @@ export function initUIBindings() {
   ui.bindNewsSubtabs();
   ui.bindAnalysis({ onOpen: openAsset });
   ui.bindAssetSheet();
+  ui.bindPortfolioIndicators({ onOpen: openAsset });
 
   ui.onNavChange((view) => {
     ui.setActiveView(view);
     if (view === "investments") refreshQuotes({ silent: true });
+    if (view === "investments" || view === "analysis") loadFundamentals();
     if (view === "news") loadNewsView();
-    if (view === "analysis") loadAnalysisView();
   });
   ui.onModeToggle((mode) => switchMode(mode));
 

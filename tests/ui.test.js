@@ -1203,3 +1203,29 @@ describe("ficha do ativo (tela)", () => {
     expect(onOpen).toHaveBeenCalledWith("AAAA11", "fiis", row, false);
   });
 });
+
+describe("indicadores da carteira (tela)", () => {
+  const own = (ticker, category, quantity, currentPrice) => ({ ticker, category, quantity, avgPrice: currentPrice, currentPrice });
+  const fund = { fiis: [{ ticker: "AAAA11", dy: 12, pvp: 0.9, vacancia: null }], acoes: [] };
+
+  it("some sem FIIs/ações, mostra carregando, depois médias e a ficha ao clicar", () => {
+    const onOpen = vi.fn();
+    ui.bindPortfolioIndicators({ onOpen });
+    ui.setPortfolioFundamentals(undefined);
+    ui.renderInvestments([own("BTC", "Criptomoedas", 1, 10)]);
+    expect($("inv-indicators").classList.contains("hidden")).toBe(true);
+
+    ui.renderInvestments([own("AAAA11", "FIIs", 10, 10), own("ZZZZ11", "FIIs", 1, 10)]);
+    expect(text("inv-ind-table")).toContain("Carregando");
+
+    ui.setPortfolioFundamentals(fund);
+    expect(text("inv-ind-kpis")).toContain("DY médio · FIIs");
+    expect(text("inv-ind-note")).toContain("ZZZZ11");
+    document.querySelector("[data-ind-open='AAAA11']").click();
+    expect(onOpen).toHaveBeenCalledWith("AAAA11", "fiis", fund.fiis[0], true);
+
+    ui.setPortfolioFundamentals(null);
+    expect(text("inv-ind-table")).toContain("indisponíveis");
+    ui.renderInvestments([]);
+  });
+});

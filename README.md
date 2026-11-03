@@ -68,6 +68,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 
 **Investimentos**
 - Carteira por ativo, com preço médio recalculado a cada nova compra do mesmo ativo.
+- **Indicadores da carteira:** DY, P/VP, P/L, ROE e vacância dos seus FIIs e ações (Fundamentus), com médias ponderadas pelo valor de cada posição e peso de cada ativo. Clique no ativo para abrir a ficha.
 - **Vendas:** registro de venda parcial ou total com o lucro/prejuízo realizado (o preço médio não muda na venda). Posições vendidas por completo saem da carteira, mas continuam no Histórico.
 - Cotações automáticas de **Ações e FIIs da B3** (Brapi) e de **Criptomoedas** em reais (Binance, com a CoinGecko como reserva), com fallback para o último preço salvo.
 - **Carteira × Mercado:** quanto o seu dinheiro teria rendido se cada aporte (e cada venda) tivesse ido para o **CDI**, o **Ibovespa** ou o **IFIX** nas mesmas datas, comparado ao resultado real da carteira.
