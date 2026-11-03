@@ -85,9 +85,11 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Linha do tempo de compras, vendas e proventos, agrupada por mês, no estilo de extrato.
 - Filtros por tipo (compras, vendas, proventos), ativo, mês e busca, com totais comprados, vendidos, proventos recebidos e resultado das vendas.
 
-**Notícias**
-- *Minha Carteira*: notícias filtradas pelos ativos cadastrados (Alpha Vantage).
-- *Mercado Diário*: manchetes do mercado em pt-BR (Google News RSS).
+**Radar do Mercado** (antiga aba Notícias)
+- **Índices:** Ibovespa e IFIX com o valor, a variação do dia, de 30 dias e de 12 meses.
+- **Altas e baixas do dia** de Ações e de FIIs. Só entram papéis com bom volume de negociação (variação de papel parado não significa nada); FIIs vêm separados de ETFs.
+- **Renda fixa e Tesouro:** ranking do que cada opção rende por ano já com IR (Tesouro Selic, IPCA+ e Prefixado com as taxas do dia; CDB e LCI/LCA como exemplos em % do CDI; poupança), com Selic, CDI e IPCA de 12 meses, e o % do CDI que um CDB precisa pagar para empatar com uma LCI/LCA. É estimativa para 1 a 2 anos, não recomendação nem oferta real de banco.
+- **Notícias:** *Minha Carteira* (filtradas pelos seus ativos, Alpha Vantage) e *Manchetes* (mercado em pt-BR, Google News RSS).
 
 **Relatórios**
 - Receitas, despesas e economia líquida por mês/ano ou acumulado, maiores categorias e maiores despesas, e fluxo de caixa de 12 meses.
@@ -168,6 +170,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 │   ├── proventos.js      # Função serverless (Vercel): proventos de Ações e FIIs na API da B3
 │   ├── noticias.js       # Função serverless (Vercel): notícias por ticker (chave da Alpha Vantage no servidor)
 │   ├── brapi.js          # Função serverless (Vercel): proxy da Brapi (chave só no servidor + cache)
+│   ├── mercado.js        # Função serverless (Vercel): altas/baixas (Brapi), Tesouro Direto e Selic/CDI/IPCA (Banco Central)
 │   ├── erros.js          # Função serverless (Vercel): recebe erros do navegador e os põe nos Logs
 │   ├── indices.js        # Função serverless (Vercel): CDI (Banco Central), Ibovespa e IFIX (B3)
 │   ├── notificacoes.js   # Cron diário (Vercel): lembretes de contas, faturas e proventos por push

@@ -284,3 +284,18 @@ export async function fetchMarketIndices(desde) {
     return { ok: false, data: null };
   }
 }
+
+/**
+ * Dados do Radar do Mercado (altas/baixas, Tesouro, taxas) pela função /api/mercado.
+ * @returns {Promise<{ ok: boolean, data: Object|null }>}
+ */
+export async function fetchMarketOverview() {
+  try {
+    const res = await fetch("/api/mercado");
+    if (!res.ok) return { ok: false, data: null };
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    console.warn("Falha ao buscar o radar do mercado:", err.message);
+    return { ok: false, data: null };
+  }
+}

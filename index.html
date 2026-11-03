@@ -94,6 +94,7 @@
   <link rel="modulepreload" href="js/ui/health.js" />
   <link rel="modulepreload" href="js/ui/history.js" />
   <link rel="modulepreload" href="js/ui/investments.js" />
+  <link rel="modulepreload" href="js/ui/market.js" />
   <link rel="modulepreload" href="js/ui/mode.js" />
   <link rel="modulepreload" href="js/ui/news-view.js" />
   <link rel="modulepreload" href="js/ui/notifications.js" />
@@ -232,8 +233,8 @@
             <span class="sidebar-label">Histórico</span>
           </button>
           <button data-view="news" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
-            <i class="ph-bold ph-newspaper text-lg shrink-0"></i>
-            <span class="sidebar-label">Notícias</span>
+            <i class="ph-bold ph-binoculars text-lg shrink-0"></i>
+            <span class="sidebar-label">Radar</span>
           </button>
           <button data-view="reports" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-chart-pie-slice text-lg shrink-0"></i>
@@ -1174,12 +1175,33 @@
 
           <!-- ======================= VIEW: NOTÍCIAS ======================= -->
           <div id="view-news" class="view-section hidden space-y-6">
+            <!-- RADAR: índices, altas e baixas, renda fixa -->
+            <p id="radar-status" class="hidden text-[11px] text-slate-500"></p>
+
+            <section aria-labelledby="radar-indices-title" class="space-y-3 animate-slide-up">
+              <h3 id="radar-indices-title" class="font-bold text-base">Índices</h3>
+              <div id="radar-indices" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </section>
+
+            <section aria-labelledby="radar-movers-title" class="space-y-3 animate-slide-up">
+              <h3 id="radar-movers-title" class="font-bold text-base">Altas e baixas do dia</h3>
+              <p class="text-xs text-slate-500 -mt-2">Só papéis com bom volume de negociação (variações em papéis parados não significam nada).</p>
+              <div id="radar-movers" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
+            </section>
+
+            <section aria-labelledby="radar-fixed-title" class="glass-card rounded-2xl p-5 sm:p-6 animate-slide-up">
+              <h3 id="radar-fixed-title" class="font-bold text-base mb-1">Renda fixa e Tesouro</h3>
+              <p class="text-xs text-slate-500 mb-4">Quanto cada opção rende por ano, já descontado o IR, da melhor para a pior.</p>
+              <div id="radar-fixed"></div>
+            </section>
+
+            <h3 class="font-bold text-base pt-2">Notícias</h3>
             <section class="glass-card rounded-2xl p-1.5 inline-flex items-center gap-1.5 animate-slide-up">
               <button data-news-tab="portfolio" class="news-tab-btn active-news-tab px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2">
                 <i class="ph-bold ph-briefcase text-base"></i> Minha Carteira
               </button>
               <button data-news-tab="market" class="news-tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2">
-                <i class="ph-bold ph-globe-hemisphere-west text-base"></i> Mercado Diário
+                <i class="ph-bold ph-globe-hemisphere-west text-base"></i> Manchetes
               </button>
             </section>
 
@@ -1194,7 +1216,7 @@
               </div>
             </div>
 
-            <!-- Sub-aba: Mercado Diário -->
+            <!-- Sub-aba: Manchetes do mercado -->
             <div id="news-panel-market" class="news-panel hidden space-y-4">
               <p class="text-xs text-slate-500">Principais manchetes de economia, finanças e mercado global.</p>
               <section id="news-market-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-slide-up"></section>

@@ -4,6 +4,7 @@
 // =========================================================
 
 import * as ui from "../ui.js";
+import { fetchMarketIndices, fetchMarketOverview } from "../api.js";
 import { fetchMarketNews, fetchPortfolioNews } from "../news.js";
 import { session } from "./session.js";
 
@@ -31,7 +32,22 @@ export function newsErrorMessage(reason, target) {
     : { title: "Não foi possível carregar as notícias agora.", desc: "Verifique sua conexão e tente novamente." };
 }
 
+// Radar: índices e taxas mudam devagar; reabrir a aba em poucos minutos não busca de novo.
+const RADAR_REFRESH_MS = 5 * 60 * 1000;
+let radarLoadedAt = 0;
+
+async function loadRadar() {
+  if (Date.now() - radarLoadedAt < RADAR_REFRESH_MS) return;
+  ui.setRadarStatus("Carregando o radar do mercado…");
+  const from = new Date(Date.now() - 400 * 86400000).toLocaleDateString("sv-SE"); // ~13 meses, para a variação de 12 meses
+  const [overview, indices] = await Promise.all([fetchMarketOverview(), fetchMarketIndices(from)]);
+  ui.renderRadar({ overview: overview.ok ? overview.data : null, indices: indices.ok ? indices.data : null });
+  if (overview.ok || indices.ok) radarLoadedAt = Date.now();
+}
+
 export async function loadNewsView() {
+  loadRadar();
+
   // Mercado Diário independe da carteira — dispara em paralelo com a busca por ativo.
   ui.renderNewsSkeletons("market", 6);
   fetchMarketNews().then((res) => {

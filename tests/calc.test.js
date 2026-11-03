@@ -30,6 +30,11 @@ import {
   buildAlerts,
   passwordProblem,
   filterFiiQuotas,
+  pickMovers,
+  parseTesouro,
+  parseBcbLast,
+  indexStats,
+  fixedIncomeRanking,
   dateInMonth,
   addMonthsToDate,
   splitInstallments,
@@ -884,5 +889,73 @@ describe("filterFiiQuotas (FIIs: só a cota, sem recibos de subscrição)", () =
     const raw = [row("XYZ", "1"), row(undefined, "2")];
     expect(filterFiiQuotas(raw)).toEqual(raw);
     expect(filterFiiQuotas(undefined)).toEqual([]);
+  });
+});
+
+describe("radar do mercado", () => {
+  it("pickMovers: só papéis líquidos, sem fracionário, e FIIs sem ETFs (nameMatch)", () => {
+    const rows = [
+      { stock: "AAAA3", name: "Boa SA", close: 10, change: 5, volume: 1_000_000 },
+      { stock: "BBBB3", name: "Ilíquida", close: 3, change: 85, volume: 2 },
+      { stock: "CCCC3F", name: "Fracionário", close: 3, change: 60, volume: 9_000_000 },
+      { stock: "DDDD4", name: "Cai SA", close: 20, change: -7, volume: 500_000 },
+      { stock: "EEEE11", name: "FUNDO IMOBILIÁRIO X", close: 100, change: 2, volume: 50_000 },
+      { stock: "FFFF11", name: "HASHDEX FUNDO DE ÍNDICE", close: 30, change: 9, volume: 900_000 },
+    ];
+    const acoes = pickMovers(rows, { minTurnover: 5_000_000 });
+    expect(acoes.up.map((r) => r.ticker)).toEqual(["FFFF11", "AAAA3", "EEEE11"]);
+    expect(acoes.down.map((r) => r.ticker)).toEqual(["DDDD4"]);
+    const fiis = pickMovers(rows, { minTurnover: 2_000_000, nameMatch: /IMOBILI/i });
+    expect(fiis.up.map((r) => r.ticker)).toEqual(["EEEE11"]);
+  });
+
+  it("parseTesouro: só os títulos tradicionais, com tipo e taxa", () => {
+    const json = { TesouroLegado: [
+      { treasuryBondName: "Tesouro Selic 2031", investmentProfitabilityIndexerName: "SELIC + 0,1057%", segmentCode: 1, maturityDate: "2031-03-01T00:00", investmentBondMinimumValue: 201.3 },
+      { treasuryBondName: "Tesouro Prefixado 2029", investmentProfitabilityIndexerName: "15,30%", segmentCode: 1, maturityDate: "2029-01-01T00:00", investmentBondMinimumValue: 7.37 },
+      { treasuryBondName: "Tesouro IPCA+ 2032", investmentProfitabilityIndexerName: "IPCA + 8,02%", segmentCode: 1, maturityDate: "2032-08-15T00:00", investmentBondMinimumValue: 30.63 },
+      { treasuryBondName: "Tesouro Renda+ 2030", investmentProfitabilityIndexerName: "IPCA + 7,71%", segmentCode: 2 },
+      { treasuryBondName: "Sem taxa", investmentProfitabilityIndexerName: "", segmentCode: 1 },
+    ] };
+    expect(parseTesouro(json)).toEqual([
+      { nome: "Tesouro Selic 2031", tipo: "selic", taxa: 0.1057, vencimento: "2031-03-01", minimo: 201.3 },
+      { nome: "Tesouro Prefixado 2029", tipo: "pre", taxa: 15.3, vencimento: "2029-01-01", minimo: 7.37 },
+      { nome: "Tesouro IPCA+ 2032", tipo: "ipca", taxa: 8.02, vencimento: "2032-08-15", minimo: 30.63 },
+    ]);
+    expect(parseTesouro(null)).toEqual([]);
+  });
+
+  it("parseBcbLast lê o último valor da série", () => {
+    expect(parseBcbLast([{ data: "01/01/2026", valor: "13.5" }, { data: "04/11/2026", valor: "13.75" }])).toBe(13.75);
+    expect(parseBcbLast([])).toBeNull();
+  });
+
+  it("indexStats: valor, dia, 30 dias e 12 meses", () => {
+    const series = [["2025-10-30", 100], ["2026-09-30", 110], ["2026-10-29", 120], ["2026-10-30", 126]];
+    const s = indexStats(series);
+    expect(s).toMatchObject({ date: "2026-10-30", value: 126 });
+    expect(s.day).toBeCloseTo(5, 5);
+    expect(s.month).toBeCloseTo(((126 / 110) - 1) * 100, 5);
+    expect(s.year).toBeCloseTo(26, 5);
+    expect(indexStats([])).toBeNull();
+  });
+
+  it("fixedIncomeRanking: ordena pelo líquido e calcula o CDB que empata com a LCI", () => {
+    const tesouro = [
+      { nome: "Tesouro Selic 2031", tipo: "selic", taxa: 0.1, vencimento: "2031-03-01" },
+      { nome: "Tesouro IPCA+ 2032", tipo: "ipca", taxa: 8, vencimento: "2032-08-15" },
+      { nome: "Tesouro IPCA+ 2040", tipo: "ipca", taxa: 7.5, vencimento: "2040-08-15" },
+      { nome: "Tesouro Prefixado 2029", tipo: "pre", taxa: 15, vencimento: "2029-01-01" },
+    ];
+    const { rows, breakevenCdb } = fixedIncomeRanking({ cdi: 13.65, selic: 13.75, ipca: 4.5, tesouro });
+    const liquids = rows.map((r) => r.liquido);
+    expect([...liquids].sort((a, b) => b - a)).toEqual(liquids);
+    expect(rows.find((r) => r.key === "tesouro-ipca").nome).toBe("Tesouro IPCA+ 2032"); // a de maior taxa
+    expect(rows.find((r) => r.key === "tesouro-selic").bruto).toBeCloseTo(13.85, 5);
+    expect(rows.find((r) => r.key === "lci-90")).toMatchObject({ ir: 0 });
+    expect(rows.find((r) => r.key === "lci-90").liquido).toBeCloseTo(13.65 * 0.9, 5);
+    expect(rows.find((r) => r.key === "cdb-100").liquido).toBeCloseTo(13.65 * 0.825, 5);
+    expect(rows.at(-1).key).toBe("poupanca");
+    expect(breakevenCdb).toBe(109.1);
   });
 });

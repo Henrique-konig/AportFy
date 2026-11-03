@@ -1257,3 +1257,103 @@ export function buildPushReminders({ today, bills = [], invoices = [], upcomingD
   }
   return reminders;
 }
+
+/* =========================================================
+   Radar do mercado: altas e baixas, índices, Tesouro e renda fixa
+   ========================================================= */
+
+const toNumber = (v) => {
+  const text = String(v ?? "").trim();
+  if (!text) return null; // vazio não é zero
+  const n = Number(text.replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * Maiores altas e baixas do dia entre papéis LÍQUIDOS da lista da Brapi. Fora: fracionário (final "F"),
+ * papéis com giro financeiro pequeno (uma negociação de 2 ações faz "+85%" e não significa nada) e, com `nameMatch`,
+ * o que não bate com o nome (a lista "fund" da Brapi mistura FIIs e ETFs).
+ * @param {Array<{stock:string, name?:string, close:number, change:number, volume:number}>} rows
+ * @returns {{ up: Array, down: Array }} cada item: { ticker, name, price, change }
+ */
+export function pickMovers(rows, { minTurnover = 1_000_000, top = 5, nameMatch = null } = {}) {
+  const liquid = (Array.isArray(rows) ? rows : [])
+    .filter((r) => !nameMatch || nameMatch.test(String(r.name || "")))
+    .filter((r) => /^[A-Z]{4}\d{1,2}$/.test(String(r.stock || "")) && Number.isFinite(r.change) && Number(r.close) > 0 && Number(r.volume) * Number(r.close) >= minTurnover)
+    .map((r) => ({ ticker: r.stock, name: r.name || r.stock, price: Number(r.close), change: Number(r.change) }))
+    .sort((a, b) => b.change - a.change);
+  return { up: liquid.filter((r) => r.change > 0).slice(0, top), down: liquid.filter((r) => r.change < 0).reverse().slice(0, top) };
+}
+
+/** Títulos do Tesouro Direto à venda (só os tradicionais: Selic, Prefixado e IPCA+). */
+export function parseTesouro(json) {
+  return (Array.isArray(json?.TesouroLegado) ? json.TesouroLegado : [])
+    .filter((b) => b.segmentCode === 1)
+    .map((b) => {
+      const indexer = String(b.investmentProfitabilityIndexerName || "");
+      return {
+        nome: String(b.treasuryBondName || ""),
+        tipo: /^SELIC/i.test(indexer) ? "selic" : /^IPCA/i.test(indexer) ? "ipca" : "pre",
+        taxa: toNumber((indexer.match(/([\d.,]+)\s*%/) || [])[1]), // % a.a. (Selic: o que vem somado à Selic)
+        vencimento: String(b.maturityDate || "").slice(0, 10),
+        minimo: toNumber(b.investmentBondMinimumValue),
+      };
+    })
+    .filter((b) => b.nome && b.taxa != null);
+}
+
+/** Último valor de uma série do Banco Central ([{data, valor}]). */
+export function parseBcbLast(rows) {
+  const last = Array.isArray(rows) ? rows[rows.length - 1] : null;
+  return last ? toNumber(last.valor) : null;
+}
+
+/**
+ * Valor, variação do dia, do mês (30 dias) e de 12 meses de um índice.
+ * @param {Array<[string, number]>} series [data AAAA-MM-DD, valor], em ordem de data
+ */
+export function indexStats(series) {
+  const list = (Array.isArray(series) ? series : []).filter((p) => p && Number.isFinite(p[1]));
+  if (list.length === 0) return null;
+  const [date, value] = list[list.length - 1];
+  const at = (days) => {
+    const target = addDays(date, -days);
+    const past = [...list].reverse().find((p) => p[0] <= target);
+    return past ? ((value / past[1]) - 1) * 100 : null;
+  };
+  const prev = list.length > 1 ? list[list.length - 2][1] : null;
+  return { date, value, day: prev ? ((value / prev) - 1) * 100 : null, month: at(30), year: at(365) };
+}
+
+/**
+ * Comparação de renda fixa em % ao ano, já com IR (estimativa para prazo de 1 a 2 anos).
+ * Não são ofertas reais de bancos (isso depende de cada instituição): mostra o que o Tesouro paga hoje
+ * e quanto de CDI um CDB/LCI precisaria pagar para empatar.
+ * @param {{ cdi:number, selic:number, ipca:number, tesouro:Array }} p taxas em % a.a.
+ */
+export function fixedIncomeRanking({ cdi, selic, ipca, tesouro = [] }) {
+  const IR_2Y = 0.175; // 361 a 720 dias
+  const IR_LONG = 0.15; // acima de 720 dias
+  const net = (gross, ir) => gross * (1 - ir);
+  const best = (tipo) => tesouro.filter((b) => b.tipo === tipo).sort((a, b) => b.taxa - a.taxa)[0];
+  const rows = [];
+  const add = (key, nome, bruto, ir, nota) => rows.push({ key, nome, bruto, liquido: net(bruto, ir), ir, nota });
+
+  const selicBond = tesouro.filter((b) => b.tipo === "selic").sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0];
+  if (selicBond && selic != null) add("tesouro-selic", selicBond.nome, selic + selicBond.taxa, IR_2Y, "Liquidez diária, risco baixo");
+  const ipcaBond = best("ipca");
+  if (ipcaBond && ipca != null) add("tesouro-ipca", ipcaBond.nome, ((1 + ipca / 100) * (1 + ipcaBond.taxa / 100) - 1) * 100, IR_LONG, `IPCA + ${ipcaBond.taxa.toLocaleString("pt-BR")}% (inflação de 12 meses: ${ipca.toLocaleString("pt-BR")}%)`);
+  const preBond = best("pre");
+  if (preBond) add("tesouro-pre", preBond.nome, preBond.taxa, IR_LONG, "Taxa travada até o vencimento");
+  if (cdi != null) {
+    add("cdb-110", "CDB 110% do CDI", cdi * 1.1, IR_2Y, "Exemplo: oferta comum em bancos médios");
+    add("cdb-100", "CDB 100% do CDI", cdi, IR_2Y, "Exemplo: oferta comum em bancos grandes");
+    add("lci-90", "LCI/LCA 90% do CDI", cdi * 0.9, 0, "Isento de IR (pessoa física)");
+  }
+  if (selic != null) rows.push({ key: "poupanca", nome: "Poupança", bruto: selic > 8.5 ? 6.17 : selic * 0.7, liquido: selic > 8.5 ? 6.17 : selic * 0.7, ir: 0, nota: "Isenta de IR, rende bem menos" });
+
+  rows.sort((a, b) => b.liquido - a.liquido);
+  // CDB que empata com LCI/LCA de 90% do CDI (a LCI não paga IR, o CDB paga).
+  const breakevenCdb = Math.round((90 / (1 - IR_2Y)) * 10) / 10;
+  return { rows, breakevenCdb };
+}

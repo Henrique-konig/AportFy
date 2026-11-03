@@ -1075,3 +1075,43 @@ describe("tabela de proventos paginada", () => {
     goTo("dashboard");
   });
 });
+
+describe("radar do mercado (tela)", () => {
+  const overview = () => ({
+    updatedAt: "2026-11-03T15:00:00Z",
+    acoes: { up: [{ ticker: "AAAA3", name: "Boa SA", price: 10.5, change: 5.25 }], down: [{ ticker: "DDDD4", name: "Cai SA", price: 20, change: -7.1 }] },
+    fiis: { up: [], down: [{ ticker: "MXRF11", name: "FII MAXI", price: 9.5, change: -3.49 }] },
+    tesouro: [{ nome: "Tesouro Selic 2031", tipo: "selic", taxa: 0.1, vencimento: "2031-03-01" }],
+    taxas: { selic: 13.75, cdi: 13.65, ipca: 4.58 },
+  });
+  const indices = () => ({ ibov: [["2025-10-30", 100000], ["2026-10-29", 120000], ["2026-10-30", 126000]], ifix: [["2026-10-30", 3500]] });
+
+  it("mostra índices, altas e baixas, renda fixa e o aviso quando não há FII em alta", () => {
+    ui.renderRadar({ overview: overview(), indices: indices() });
+    expect(text("radar-indices")).toContain("Ibovespa");
+    expect(text("radar-indices")).toContain("126.000");
+    expect(text("radar-indices")).toContain("+5,00%"); // dia
+    expect(text("radar-movers")).toContain("AAAA3");
+    expect(text("radar-movers")).toContain("+5,25%");
+    expect(text("radar-movers")).toContain("-7,10%");
+    expect(text("radar-movers")).toContain("Nenhuma em alta entre as mais negociadas.");
+    expect(text("radar-fixed")).toContain("Tesouro Selic 2031");
+    expect(text("radar-fixed")).toContain("109,1% do CDI");
+    expect(text("radar-status")).toContain("Atualizado às");
+  });
+
+  it("se uma parte falha, mostra 'indisponível' só nela", () => {
+    ui.renderRadar({ overview: { ...overview(), acoes: null }, indices: null });
+    expect(text("radar-indices")).toContain("Indisponível");
+    expect(text("radar-movers")).toContain("Indisponível");
+    expect(text("radar-movers")).toContain("MXRF11"); // FIIs seguem
+    expect(text("radar-fixed")).toContain("Selic");
+  });
+
+  it("a aba se chama Radar", () => {
+    expect(document.querySelector('.nav-item[data-view="news"] .sidebar-label').textContent).toBe("Radar");
+    goTo("news");
+    expect(text("page-title")).toBe("Radar do Mercado");
+    goTo("dashboard");
+  });
+});

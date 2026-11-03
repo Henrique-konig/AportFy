@@ -30,3 +30,4 @@ export * from "./ui/bills.js";
 export * from "./ui/planning.js";
 export * from "./ui/privacy.js";
 export * from "./ui/notifications.js";
+export * from "./ui/market.js";
