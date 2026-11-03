@@ -55,6 +55,7 @@
   <link rel="modulepreload" href="js/api.js" />
   <link rel="modulepreload" href="js/app.js" />
   <link rel="modulepreload" href="js/app/account-actions.js" />
+  <link rel="modulepreload" href="js/app/analysis.js" />
   <link rel="modulepreload" href="js/app/backup.js" />
   <link rel="modulepreload" href="js/app/bills-actions.js" />
   <link rel="modulepreload" href="js/app/bind-finance.js" />
@@ -94,6 +95,7 @@
   <link rel="modulepreload" href="js/ui/health.js" />
   <link rel="modulepreload" href="js/ui/history.js" />
   <link rel="modulepreload" href="js/ui/investments.js" />
+  <link rel="modulepreload" href="js/ui/analysis.js" />
   <link rel="modulepreload" href="js/ui/market.js" />
   <link rel="modulepreload" href="js/ui/mode.js" />
   <link rel="modulepreload" href="js/ui/news-view.js" />
@@ -235,6 +237,10 @@
           <button data-view="news" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-binoculars text-lg shrink-0"></i>
             <span class="sidebar-label">Radar</span>
+          </button>
+          <button data-view="analysis" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
+            <i class="ph-bold ph-funnel text-lg shrink-0"></i>
+            <span class="sidebar-label">Análise</span>
           </button>
           <button data-view="reports" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all">
             <i class="ph-bold ph-chart-pie-slice text-lg shrink-0"></i>
@@ -1171,6 +1177,25 @@
                 </div>
               </div>
             </section>
+          </div>
+
+          <!-- ======================= VIEW: ANÁLISE ======================= -->
+          <div id="view-analysis" class="view-section hidden space-y-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="glass-card rounded-xl p-1 inline-flex items-center gap-1">
+                <button type="button" data-analysis-tab="fiis" class="bill-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all" aria-pressed="true">FIIs</button>
+                <button type="button" data-analysis-tab="acoes" class="bill-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all" aria-pressed="false">Ações</button>
+              </div>
+              <p id="analysis-count" class="text-xs text-slate-500"></p>
+            </div>
+            <section id="analysis-filters" class="glass-card rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3" aria-label="Filtros"></section>
+            <section class="glass-card rounded-2xl p-4 sm:p-5">
+              <div id="analysis-table" class="overflow-x-auto"></div>
+              <div id="analysis-more-wrap" class="hidden justify-center pt-4">
+                <button type="button" id="analysis-more-btn" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 transition-colors">Carregar mais <span id="analysis-more-remaining" class="text-slate-500"></span></button>
+              </div>
+            </section>
+            <p id="analysis-status" class="text-[11px] text-slate-500"></p>
           </div>
 
           <!-- ======================= VIEW: NOTÍCIAS ======================= -->

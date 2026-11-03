@@ -1362,3 +1362,71 @@ export function fixedIncomeRanking({ cdi, selic, ipca, tesouro = [] }) {
   const breakevenCdb = Math.round((90 / (1 - IR_2Y)) * 10) / 10;
   return { rows, breakevenCdb };
 }
+
+/* =========================================================
+   Análise: ranking de FIIs e ações (indicadores do Fundamentus)
+   ========================================================= */
+
+// Ordem das colunas das tabelas do Fundamentus (a 1ª é o ticker). "text" = texto; o resto, número pt-BR.
+export const FUNDAMENTUS_FII_COLUMNS = [
+  ["ticker", "text"], ["segmento", "text"], ["preco", "n"], ["ffo", "n"], ["dy", "n"], ["pvp", "n"], ["mercado", "n"],
+  ["liquidez", "n"], ["imoveis", "n"], ["precoM2", "n"], ["aluguelM2", "n"], ["capRate", "n"], ["vacancia", "n"],
+];
+export const FUNDAMENTUS_STOCK_COLUMNS = [
+  ["ticker", "text"], ["preco", "n"], ["pl", "n"], ["pvp", "n"], ["psr", "n"], ["dy", "n"], ["pAtivo", "n"], ["pCapGiro", "n"],
+  ["pEbit", "n"], ["pAtivCirc", "n"], ["evEbit", "n"], ["evEbitda", "n"], ["mBruta", "n"], ["mEbit", "n"], ["mLiquida", "n"],
+  ["liqCorr", "n"], ["roic", "n"], ["roe", "n"], ["liquidez", "n"], ["patrimonio", "n"], ["dividaPl", "n"], ["cresc5a", "n"],
+];
+
+/** "1.234,56" / "12,3%" / "-" -> número (ou null). */
+export function brNumber(text) {
+  const t = String(text ?? "").replace("%", "").replace(/\./g, "").replace(",", ".").trim();
+  if (t === "" || t === "-") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Lê uma tabela HTML do Fundamentus (já decodificada) em objetos, pela ordem de `columns`.
+ * Linhas sem ticker válido (cabeçalho, rodapé) são ignoradas.
+ */
+export function parseFundamentusTable(html, columns) {
+  const rows = [];
+  for (const m of String(html ?? "").matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((c) => c[1].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim());
+    if (cells.length < columns.length || !/^[A-Z]{4}\d{1,2}$/.test(cells[0])) continue;
+    const row = {};
+    columns.forEach(([key, kind], i) => (row[key] = kind === "text" ? cells[i] : brNumber(cells[i])));
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Filtra e ordena as linhas do ranking.
+ * @param {Array<Object>} rows
+ * @param {{ search?:string, segmento?:string, min?:Object<string,number|null>, max?:Object<string,number|null>, sort?:{key:string, dir:"asc"|"desc"} }} opts
+ *   `min`/`max`: limites por indicador; quem não tem o indicador (null) fica de fora quando o filtro está ligado.
+ */
+export function applyScreen(rows, { search = "", segmento = "", min = {}, max = {}, sort = null } = {}) {
+  const query = search.trim().toUpperCase();
+  const active = (limits) => Object.entries(limits).filter(([, v]) => v != null && Number.isFinite(v));
+  const mins = active(min);
+  const maxs = active(max);
+  const out = rows.filter(
+    (r) =>
+      (!query || r.ticker.includes(query)) &&
+      (!segmento || r.segmento === segmento) &&
+      mins.every(([k, v]) => r[k] != null && r[k] >= v) &&
+      maxs.every(([k, v]) => r[k] != null && r[k] <= v)
+  );
+  if (!sort?.key) return out;
+  const sign = sort.dir === "desc" ? -1 : 1;
+  return out.sort((a, b) => {
+    const x = a[sort.key];
+    const y = b[sort.key];
+    if (x == null) return y == null ? 0 : 1; // sem valor vai sempre para o fim
+    if (y == null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * sign;
+  });
+}

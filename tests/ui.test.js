@@ -1133,3 +1133,37 @@ describe("radar: carregamento por partes", () => {
     expect(text("radar-fixed")).toContain("Indisponível");
   });
 });
+
+describe("análise de ativos (tela)", () => {
+  const data = {
+    updatedAt: "2026-11-03T15:00:00Z",
+    fiis: [
+      { ticker: "AAAA11", segmento: "Papel", preco: 10, dy: 12, pvp: 0.9, vacancia: null, capRate: null, liquidez: 900000 },
+      { ticker: "BBBB11", segmento: "Logística", preco: 100, dy: 8, pvp: 1.1, vacancia: 3, capRate: 8, liquidez: 800000 },
+    ],
+    acoes: [{ ticker: "CCCC3", preco: 20, pl: 5, pvp: 1, dy: 6, roe: 15, roic: 12, mLiquida: 10, dividaPl: 0.5, cresc5a: 8, liquidez: 5000000 }],
+  };
+  beforeAll(() => ui.bindAnalysis());
+  const rows = () => [...document.querySelectorAll("#analysis-table tbody tr")].map((r) => r.firstElementChild.textContent.trim());
+
+  it("lista FIIs, filtra por segmento e ordena pelo cabeçalho", () => {
+    ui.setAnalysisData(data);
+    expect(rows()).toEqual(["AAAA11", "BBBB11"]); // DY maior primeiro
+    document.querySelector("[data-analysis-sort='pvp']").click();
+    expect(rows()).toEqual(["AAAA11", "BBBB11"]); // P/VP menor primeiro
+    const seg = document.querySelector("[data-analysis-segment]");
+    seg.value = "Logística";
+    seg.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(rows()).toEqual(["BBBB11"]);
+    expect(text("analysis-count")).toBe("1 de 2");
+  });
+
+  it("troca para ações e mostra indisponível quando a lista falha", () => {
+    ui.setAnalysisData(data);
+    document.querySelector("[data-analysis-tab='acoes']").click();
+    expect(rows()).toEqual(["CCCC3"]);
+    ui.setAnalysisData({ ...data, acoes: null });
+    expect(text("analysis-table")).toContain("Indisponível");
+    document.querySelector("[data-analysis-tab='fiis']").click();
+  });
+});

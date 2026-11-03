@@ -387,6 +387,7 @@ export const VIEW_META = {
   investments: { title: "Investimentos", subtitle: "Acompanhe o rendimento da sua carteira de ativos" },
   history: { title: "Histórico", subtitle: "Compras, vendas e proventos dos seus investimentos" },
   news: { title: "Radar do Mercado", subtitle: "Índices, altas e baixas, Tesouro, renda fixa e notícias" },
+  analysis: { title: "Análise", subtitle: "Ranking de FIIs e ações com filtros" },
   reports: { title: "Relatórios", subtitle: "Análise detalhada do seu fluxo de caixa" },
   health: { title: "Saúde da Carteira", subtitle: "Diagnóstico, projeção e onde aportar na sua carteira" },
   settings: { title: "Configurações", subtitle: "Preferências da sua conta AportFy" },

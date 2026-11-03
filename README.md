@@ -91,6 +91,10 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - **Renda fixa e Tesouro:** ranking do que cada opção rende por ano já com IR (Tesouro Selic, IPCA+ e Prefixado com as taxas do dia; CDB e LCI/LCA como exemplos em % do CDI; poupança), com Selic, CDI e IPCA de 12 meses, e o % do CDI que um CDB precisa pagar para empatar com uma LCI/LCA. É estimativa para 1 a 2 anos, não recomendação nem oferta real de banco.
 - **Notícias:** *Minha Carteira* (filtradas pelos seus ativos, Alpha Vantage) e *Manchetes* (mercado em pt-BR, Google News RSS).
 
+**Análise**
+- Ranking de **FIIs** e **ações** da B3 com filtros (DY, P/VP, P/L, ROE, vacância, dívida/PL, liquidez, segmento, busca por ticker) e ordenação por qualquer coluna. Ativos que você já tem aparecem com ★.
+- Dados do Fundamentus (`/api/fundamentos`, raspagem das tabelas públicas, cache de 6 h), referentes ao último fechamento. São indicadores, não recomendação de compra ou venda.
+
 **Relatórios**
 - Receitas, despesas e economia líquida por mês/ano ou acumulado, maiores categorias e maiores despesas, e fluxo de caixa de 12 meses.
 - **Exportar:** CSV das transações do período (abre direto no Excel, com vírgula decimal) e PDF do relatório (pela impressão do navegador, só com a aba Relatórios, em fundo branco).

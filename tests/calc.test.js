@@ -54,6 +54,10 @@ import {
   reserveAmount,
   transactionsToCsv,
   buildPushReminders,
+  FUNDAMENTUS_FII_COLUMNS,
+  brNumber,
+  parseFundamentusTable,
+  applyScreen,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -986,5 +990,35 @@ describe("indexStats com cotação ao vivo", () => {
   it("ignora cotação inválida", () => {
     expect(indexStats(series, { price: 0, prev: 1, time: "x" }).live).toBe(false);
     expect(indexStats(undefined, { price: 0, prev: 0 })).toBeNull();
+  });
+});
+
+describe("Análise: Fundamentus", () => {
+  const cell = (v) => `<td>${v}</td>`;
+  const fiiRow = (t, seg, dy, pvp) => `<tr>${[t, seg, "10,00", "0,00", dy, pvp, "1.000", "2.000.000", "5", "0", "0", "0,00%", "-"].map(cell).join("")}</tr>`;
+  const html = `<table><tr><th>Papel</th></tr>${fiiRow("AAAA11", "Papel", "12,5%", "0,95")}${fiiRow("BBBB11", "Logística", "8,0%", "1,10")}${fiiRow("CCCC11", "Papel", "-", "0,80")}<tr><td>Total</td></tr></table>`;
+  const rows = parseFundamentusTable(html, FUNDAMENTUS_FII_COLUMNS);
+
+  it("brNumber lê formato pt-BR", () => {
+    expect(brNumber("1.234,56")).toBe(1234.56);
+    expect(brNumber("12,5%")).toBe(12.5);
+    expect(brNumber("-")).toBeNull();
+    expect(brNumber("")).toBeNull();
+  });
+
+  it("parseFundamentusTable ignora cabeçalho e rodapé", () => {
+    expect(rows.map((r) => r.ticker)).toEqual(["AAAA11", "BBBB11", "CCCC11"]);
+    expect(rows[0]).toMatchObject({ segmento: "Papel", dy: 12.5, pvp: 0.95, liquidez: 2000000 });
+    expect(rows[2].dy).toBeNull();
+    expect(rows[0].vacancia).toBeNull();
+  });
+
+  it("applyScreen filtra, busca e manda sem valor para o fim", () => {
+    expect(applyScreen(rows, { segmento: "Papel" }).map((r) => r.ticker)).toEqual(["AAAA11", "CCCC11"]);
+    expect(applyScreen(rows, { search: " bbb" }).map((r) => r.ticker)).toEqual(["BBBB11"]);
+    expect(applyScreen(rows, { min: { dy: 10 } }).map((r) => r.ticker)).toEqual(["AAAA11"]); // sem DY fica de fora
+    expect(applyScreen(rows, { max: { pvp: 1 }, min: { dy: null } }).map((r) => r.ticker)).toEqual(["AAAA11", "CCCC11"]);
+    expect(applyScreen(rows, { sort: { key: "dy", dir: "desc" } }).map((r) => r.ticker)).toEqual(["AAAA11", "BBBB11", "CCCC11"]);
+    expect(applyScreen(rows, { sort: { key: "dy", dir: "asc" } }).map((r) => r.ticker)).toEqual(["BBBB11", "AAAA11", "CCCC11"]);
   });
 });

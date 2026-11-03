@@ -286,6 +286,21 @@ export async function fetchMarketIndices(desde, { cdi = true } = {}) {
 }
 
 /**
+ * Indicadores de FIIs e ações (aba Análise) pela função /api/fundamentos.
+ * @returns {Promise<{ ok: boolean, data: Object|null }>}
+ */
+export async function fetchFundamentals() {
+  try {
+    const res = await fetch("/api/fundamentos");
+    if (!res.ok) return { ok: false, data: null };
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    console.warn("Falha ao buscar a análise de ativos:", err.message);
+    return { ok: false, data: null };
+  }
+}
+
+/**
  * Dados do Radar do Mercado (altas/baixas, Tesouro, taxas) pela função /api/mercado.
  * @returns {Promise<{ ok: boolean, data: Object|null }>}
  */

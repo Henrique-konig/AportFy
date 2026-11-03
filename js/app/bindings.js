@@ -12,6 +12,7 @@ import { bindFinance } from "./bind-finance.js";
 import { bindInvestments } from "./bind-investments.js";
 import { bindSettings } from "./bind-settings.js";
 import { loadNewsView } from "./news-feed.js";
+import { loadAnalysisView } from "./analysis.js";
 import { testPush, turnPushOff, turnPushOn } from "./push-actions.js";
 import { refreshQuotes } from "./quotes.js";
 import { activeSpaceId, session } from "./session.js";
@@ -66,11 +67,13 @@ export function initUIBindings() {
   ui.bindHistory();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();
+  ui.bindAnalysis();
 
   ui.onNavChange((view) => {
     ui.setActiveView(view);
     if (view === "investments") refreshQuotes({ silent: true });
     if (view === "news") loadNewsView();
+    if (view === "analysis") loadAnalysisView();
   });
   ui.onModeToggle((mode) => switchMode(mode));
 
