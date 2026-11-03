@@ -22,12 +22,13 @@ const loading = `<p class="text-xs text-slate-500 py-6 text-center animate-pulse
 // Cada parte do radar chega sozinha: undefined = ainda carregando, null = falhou.
 const placeholder = (data) => (data === undefined ? loading : unavailable);
 
-function renderIndices(indices) {
+// `indices`: histórico de fechamentos (/api/indices); `live`: cotação de agora (/api/mercado).
+function renderIndices(indices, live) {
   const cards = [
-    ["IBOVESPA", "Ibovespa", indices?.ibov],
-    ["IFIX", "IFIX (fundos imobiliários)", indices?.ifix],
-  ].map(([code, label, series]) => {
-    const s = indexStats(series);
+    ["IBOVESPA", "Ibovespa", indices?.ibov, live?.ibov],
+    ["IFIX", "IFIX (fundos imobiliários)", indices?.ifix, live?.ifix],
+  ].map(([code, label, series, quote]) => {
+    const s = indexStats(series, quote);
     if (!s) return `<div class="glass-card rounded-2xl p-5"><p class="text-xs font-medium text-slate-400">${escapeHtml(label)}</p>${placeholder(indices)}</div>`;
     const cell = (name, v) => `<div class="min-w-0"><p class="text-[11px] text-slate-500">${name}</p><p class="text-sm font-bold ${tone(v)}">${pct(v)}</p></div>`;
     return `
@@ -35,7 +36,11 @@ function renderIndices(indices) {
         <p class="text-xs font-medium text-slate-400">${escapeHtml(label)}</p>
         <p class="text-2xl font-extrabold tracking-tight mt-1">${fmtNum(s.value, { maximumFractionDigits: 0 })} <span class="text-xs font-semibold text-slate-500">pontos</span></p>
         <div class="grid grid-cols-3 gap-3 mt-4">${cell("Dia", s.day)}${cell("30 dias", s.month)}${cell("12 meses", s.year)}</div>
-        <p class="text-[11px] text-slate-600 mt-3">Fechamento de ${s.date.split("-").reverse().join("/")} (${code})</p>
+        <p class="text-[11px] text-slate-600 mt-3">${
+          s.live
+            ? `Ao vivo, com atraso de alguns minutos · ${new Date(quote.time).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} (${code})`
+            : `Fechamento de ${s.date.split("-").reverse().join("/")} (${code})`
+        }</p>
       </div>`;
   });
   rEl.indices.innerHTML = cards.join("");
@@ -113,7 +118,7 @@ export function setRadarStatus(text) {
  */
 export function renderRadar({ overview, indices }) {
   if (!rEl.indices) return;
-  renderIndices(indices);
+  renderIndices(indices, overview?.indices);
   renderMovers(overview);
   renderFixed(overview);
   setRadarStatus(overview?.updatedAt ? `Atualizado às ${new Date(overview.updatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Variações do dia, com atraso.` : "");

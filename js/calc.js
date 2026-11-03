@@ -1312,17 +1312,22 @@ export function parseBcbLast(rows) {
  * Valor, variação do dia, do mês (30 dias) e de 12 meses de um índice.
  * @param {Array<[string, number]>} series [data AAAA-MM-DD, valor], em ordem de data
  */
-export function indexStats(series) {
+export function indexStats(series, live = null) {
   const list = (Array.isArray(series) ? series : []).filter((p) => p && Number.isFinite(p[1]));
-  if (list.length === 0) return null;
-  const [date, value] = list[list.length - 1];
+  const hasLive = live && live.price > 0 && live.prev > 0;
+  if (list.length === 0 && !hasLive) return null;
+  // Com cotação ao vivo ({ price, prev, time }): valor e variação do dia vêm dela (o histórico da B3 só tem fechamentos);
+  // 30 dias e 12 meses comparam esse valor com o histórico.
+  const [lastDate, lastValue] = list.length ? list[list.length - 1] : [null, null];
+  const date = hasLive ? String(live.time || "").slice(0, 10) || lastDate : lastDate;
+  const value = hasLive ? live.price : lastValue;
+  const prev = hasLive ? live.prev : list.length > 1 ? list[list.length - 2][1] : null;
   const at = (days) => {
     const target = addDays(date, -days);
     const past = [...list].reverse().find((p) => p[0] <= target);
     return past ? ((value / past[1]) - 1) * 100 : null;
   };
-  const prev = list.length > 1 ? list[list.length - 2][1] : null;
-  return { date, value, day: prev ? ((value / prev) - 1) * 100 : null, month: at(30), year: at(365) };
+  return { date, value, live: !!hasLive, day: prev ? ((value / prev) - 1) * 100 : null, month: at(30), year: at(365) };
 }
 
 /**

@@ -32,8 +32,8 @@ export function newsErrorMessage(reason, target) {
     : { title: "Não foi possível carregar as notícias agora.", desc: "Verifique sua conexão e tente novamente." };
 }
 
-// Radar: índices e taxas mudam devagar; reabrir a aba em poucos minutos não busca de novo.
-const RADAR_REFRESH_MS = 5 * 60 * 1000;
+// Radar: reabrir a aba em menos de 1 minuto não busca de novo.
+const RADAR_REFRESH_MS = 60 * 1000; // os índices são ao vivo: reabrir depois de 1 min busca de novo
 const RADAR_CACHE_KEY = "aportfy_radar";
 let radarLoadedAt = 0;
 let radarLoading = false;

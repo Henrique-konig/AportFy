@@ -959,3 +959,32 @@ describe("radar do mercado", () => {
     expect(breakevenCdb).toBe(109.1);
   });
 });
+
+describe("indexStats com cotação ao vivo", () => {
+  const series = [["2025-11-03", 100000], ["2026-10-03", 180000], ["2026-10-29", 169186], ["2026-10-30", 167921.8]];
+
+  it("valor e dia vêm da cotação de agora; 30 dias e 12 meses, do histórico", () => {
+    const s = indexStats(series, { price: 165336.16, prev: 167921.8, time: "2026-11-03T17:54:00.000Z" });
+    expect(s).toMatchObject({ date: "2026-11-03", value: 165336.16, live: true });
+    expect(s.day).toBeCloseTo(-1.54, 2);
+    expect(s.month).toBeCloseTo(((165336.16 / 180000) - 1) * 100, 5);
+    expect(s.year).toBeCloseTo(65.34, 1);
+  });
+
+  it("sem cotação ao vivo, usa o último fechamento (como antes)", () => {
+    const s = indexStats(series);
+    expect(s).toMatchObject({ date: "2026-10-30", value: 167921.8, live: false });
+  });
+
+  it("só com a cotação ao vivo (histórico indisponível), mostra valor e dia", () => {
+    const s = indexStats(undefined, { price: 3549, prev: 3646.62, time: "2026-11-03T17:54:00.000Z" });
+    expect(s.value).toBe(3549);
+    expect(s.day).toBeCloseTo(-2.68, 2);
+    expect(s.month).toBeNull();
+  });
+
+  it("ignora cotação inválida", () => {
+    expect(indexStats(series, { price: 0, prev: 1, time: "x" }).live).toBe(false);
+    expect(indexStats(undefined, { price: 0, prev: 0 })).toBeNull();
+  });
+});

@@ -32,6 +32,14 @@ async function movers(type, { limit, ...options }) {
   return pickMovers(stocks, { top: 5, ...options });
 }
 
+/** Cotação de agora de um índice (Yahoo Finance, atraso de alguns minutos) e o fechamento anterior. */
+async function liveIndex(symbol) {
+  const json = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
+  const meta = json.chart?.result?.[0]?.meta;
+  if (!(meta?.regularMarketPrice > 0) || !(meta?.chartPreviousClose > 0)) throw new Error("sem cotação");
+  return { price: meta.regularMarketPrice, prev: meta.chartPreviousClose, time: new Date(meta.regularMarketTime * 1000).toISOString() };
+}
+
 // FIIs e Fiagros (a lista "fund" também traz ETFs, que ficam de fora).
 export const FII_NAME = /IMOBILI|\bFII\b|AGROINDUSTRI|FIAGRO/i;
 
@@ -45,7 +53,9 @@ const settled = async (promise) => {
 
 export default async function handler(req, res) {
   const diag = {}; // diagnóstico curto de cada fonte (ajuda quando uma delas muda de formato)
-  const [acoes, fiis, tesouro, selicMeta, cdiAnual, ipca] = await Promise.all([
+  const [ibov, ifix, acoes, fiis, tesouro, selicMeta, cdiAnual, ipca] = await Promise.all([
+    settled(liveIndex("%5EBVSP")),
+    settled(liveIndex("IFIX.SA")),
     settled(movers("stock", { limit: 100, minTurnover: 5_000_000 })),
     settled(movers("fund", { limit: 250, minTurnover: 2_000_000, nameMatch: FII_NAME })),
     settled(
@@ -65,9 +75,10 @@ export default async function handler(req, res) {
   const cdi = cdiAnual ?? (selicMeta != null ? Math.round((selicMeta - 0.1) * 100) / 100 : null);
   if (selicMeta == null && selic != null) diag.selic = "estimada pelo CDI";
 
-  const ok = [acoes, fiis, tesouro, selic, cdi, ipca].some((part) => part != null);
-  // Resposta completa fica 5 min em cache; incompleta (uma fonte falhou ou veio vazia) só 30 s, para não prender o erro.
-  const complete = acoes && fiis && tesouro?.length > 0 && selic != null && cdi != null && ipca != null;
-  if (ok) res.setHeader("Cache-Control", complete ? "public, s-maxage=300, stale-while-revalidate=1800" : "public, s-maxage=30");
-  return res.status(ok ? 200 : 502).json({ updatedAt: new Date().toISOString(), acoes, fiis, tesouro, taxas: { selic, cdi, ipca }, diag });
+  const ok = [acoes, fiis, tesouro, selic, cdi, ipca, ibov, ifix].some((part) => part != null);
+  // Resposta completa fica 1 min em cache (os índices são ao vivo); incompleta (uma fonte falhou ou veio vazia) só 20 s,
+  // para não prender o erro.
+  const complete = acoes && fiis && tesouro?.length > 0 && selic != null && cdi != null && ipca != null && ibov && ifix;
+  if (ok) res.setHeader("Cache-Control", complete ? "public, s-maxage=60, stale-while-revalidate=300" : "public, s-maxage=20");
+  return res.status(ok ? 200 : 502).json({ updatedAt: new Date().toISOString(), indices: { ibov, ifix }, acoes, fiis, tesouro, taxas: { selic, cdi, ipca }, diag });
 }
