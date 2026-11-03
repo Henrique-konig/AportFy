@@ -44,10 +44,17 @@ const settled = async (promise) => {
 };
 
 export default async function handler(req, res) {
+  const diag = {}; // diagnóstico curto de cada fonte (ajuda quando uma delas muda de formato)
   const [acoes, fiis, tesouro, selic, cdi, ipca] = await Promise.all([
     settled(movers("stock", { minTurnover: 5_000_000 })),
     settled(movers("fund", { minTurnover: 2_000_000, nameMatch: FII_NAME })),
-    settled(getJson(TESOURO_URL).then(parseTesouro)),
+    settled(
+      getJson(TESOURO_URL).then((json) => {
+        const list = parseTesouro(json);
+        diag.tesouro = { chaves: Object.keys(json || {}).slice(0, 6), legado: Array.isArray(json?.TesouroLegado) ? json.TesouroLegado.length : null, aceitos: list.length };
+        return list;
+      })
+    ),
     settled(getJson(bcb(432)).then(parseBcbLast)), // meta da Selic, % a.a.
     settled(getJson(bcb(4389)).then(parseBcbLast)), // CDI anualizado, % a.a.
     settled(getJson(bcb(13522)).then(parseBcbLast)), // IPCA acumulado em 12 meses, %
@@ -55,5 +62,5 @@ export default async function handler(req, res) {
 
   const ok = [acoes, fiis, tesouro, selic, cdi, ipca].some((part) => part != null);
   if (ok) res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=1800");
-  return res.status(ok ? 200 : 502).json({ updatedAt: new Date().toISOString(), acoes, fiis, tesouro, taxas: { selic, cdi, ipca } });
+  return res.status(ok ? 200 : 502).json({ updatedAt: new Date().toISOString(), acoes, fiis, tesouro, taxas: { selic, cdi, ipca }, diag });
 }
