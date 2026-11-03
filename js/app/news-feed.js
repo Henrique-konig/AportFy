@@ -34,15 +34,61 @@ export function newsErrorMessage(reason, target) {
 
 // Radar: índices e taxas mudam devagar; reabrir a aba em poucos minutos não busca de novo.
 const RADAR_REFRESH_MS = 5 * 60 * 1000;
+const RADAR_CACHE_KEY = "aportfy_radar";
 let radarLoadedAt = 0;
+let radarLoading = false;
 
+const readRadarCache = () => {
+  try {
+    return JSON.parse(localStorage.getItem(RADAR_CACHE_KEY) || "null") || {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Cada parte (altas/baixas/Tesouro e índices) aparece assim que chega, em vez de esperar a mais lenta.
+ * Enquanto busca, mostra os últimos dados guardados no aparelho; se a busca falhar, esses dados continuam na tela.
+ */
 async function loadRadar() {
-  if (Date.now() - radarLoadedAt < RADAR_REFRESH_MS) return;
-  ui.setRadarStatus("Carregando o radar do mercado…");
+  if (radarLoading || Date.now() - radarLoadedAt < RADAR_REFRESH_MS) return;
+  radarLoading = true;
+  const cached = readRadarCache();
+  const current = { overview: cached.overview, indices: cached.indices }; // undefined = ainda sem nada (mostra "Carregando…")
+  const show = () => ui.renderRadar({ ...current });
+  const save = () => {
+    try {
+      localStorage.setItem(RADAR_CACHE_KEY, JSON.stringify(current));
+    } catch {
+      /* sem storage: só não guarda */
+    }
+  };
+  show();
+  if (cached.overview === undefined) ui.setRadarStatus("Carregando o radar do mercado…");
+
   const from = new Date(Date.now() - 400 * 86400000).toLocaleDateString("sv-SE"); // ~13 meses, para a variação de 12 meses
-  const [overview, indices] = await Promise.all([fetchMarketOverview(), fetchMarketIndices(from)]);
-  ui.renderRadar({ overview: overview.ok ? overview.data : null, indices: indices.ok ? indices.data : null });
-  if (overview.ok || indices.ok) radarLoadedAt = Date.now();
+  const loadOverview = fetchMarketOverview().then((res) => {
+    current.overview = res.ok ? res.data : (cached.overview ?? null);
+    if (res.ok) save();
+    show();
+    return res.ok;
+  });
+  const loadIndices = (async () => {
+    // Sem o CDI (o Radar não usa) e com uma segunda tentativa: a primeira chamada do dia, a frio, às vezes falha.
+    let res = await fetchMarketIndices(from, { cdi: false });
+    if (!res.ok) {
+      await new Promise((r) => setTimeout(r, 2500));
+      res = await fetchMarketIndices(from, { cdi: false });
+    }
+    current.indices = res.ok ? { ibov: res.data.ibov, ifix: res.data.ifix } : (cached.indices ?? null);
+    if (res.ok) save();
+    show();
+    return res.ok;
+  })();
+
+  const [overviewOk, indicesOk] = await Promise.all([loadOverview, loadIndices]);
+  if (overviewOk || indicesOk) radarLoadedAt = Date.now();
+  radarLoading = false;
 }
 
 export async function loadNewsView() {

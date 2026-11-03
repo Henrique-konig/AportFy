@@ -50,8 +50,10 @@ export default async function handler(req, res) {
   const from = start.toISOString().slice(0, 10);
 
   try {
+    // ?cdi=0: o Radar só quer IBOV/IFIX, então pula a busca do CDI (uma chamada a menos).
+    const wantsCdi = String(req.query?.cdi ?? "1") !== "0";
     const [cdiRows, ibov, ifix] = await Promise.all([
-      fetchJson(`${BCB_CDI_URL}?formato=json&dataInicial=${toBr(from)}&dataFinal=${toBr(today)}`),
+      wantsCdi ? fetchJson(`${BCB_CDI_URL}?formato=json&dataInicial=${toBr(from)}&dataFinal=${toBr(today)}`) : [],
       fetchB3Index("IBOV", Number(from.slice(0, 4)), Number(today.slice(0, 4))),
       fetchB3Index("IFIX", Number(from.slice(0, 4)), Number(today.slice(0, 4))),
     ]);

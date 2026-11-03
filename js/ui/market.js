@@ -18,6 +18,9 @@ const pct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${fmtNum(v, { minimu
 const tone = (v) => (v == null || v === 0 ? "text-slate-400" : v > 0 ? "text-emerald-400" : "text-red-400");
 const reais = (v) => fmtNum(v, { style: "currency", currency: "BRL" }); // dado de mercado: não é mascarado pelo modo privacidade
 const unavailable = `<p class="text-xs text-slate-500 py-6 text-center">Indisponível agora. Tente de novo em instantes.</p>`;
+const loading = `<p class="text-xs text-slate-500 py-6 text-center animate-pulse">Carregando…</p>`;
+// Cada parte do radar chega sozinha: undefined = ainda carregando, null = falhou.
+const placeholder = (data) => (data === undefined ? loading : unavailable);
 
 function renderIndices(indices) {
   const cards = [
@@ -25,7 +28,7 @@ function renderIndices(indices) {
     ["IFIX", "IFIX (fundos imobiliários)", indices?.ifix],
   ].map(([code, label, series]) => {
     const s = indexStats(series);
-    if (!s) return `<div class="glass-card rounded-2xl p-5"><p class="text-xs font-medium text-slate-400">${escapeHtml(label)}</p>${unavailable}</div>`;
+    if (!s) return `<div class="glass-card rounded-2xl p-5"><p class="text-xs font-medium text-slate-400">${escapeHtml(label)}</p>${placeholder(indices)}</div>`;
     const cell = (name, v) => `<div class="min-w-0"><p class="text-[11px] text-slate-500">${name}</p><p class="text-sm font-bold ${tone(v)}">${pct(v)}</p></div>`;
     return `
       <div class="glass-card rounded-2xl p-5 min-w-0">
@@ -60,7 +63,7 @@ function renderMovers(overview) {
       ${
         data
           ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">${moverList("Maiores altas", data.up, "Nenhuma em alta entre as mais negociadas.")}${moverList("Maiores baixas", data.down, "Nenhuma em queda entre as mais negociadas.")}</div>`
-          : unavailable
+          : placeholder(overview)
       }
     </div>`;
   rEl.movers.innerHTML = block("Ações", overview?.acoes) + block("Fundos imobiliários (FIIs)", overview?.fiis);
@@ -70,7 +73,7 @@ function renderFixed(overview) {
   const t = overview?.taxas || {};
   const { rows, breakevenCdb } = fixedIncomeRanking({ cdi: t.cdi, selic: t.selic, ipca: t.ipca, tesouro: overview?.tesouro || [] });
   if (!overview || rows.length === 0) {
-    rEl.fixed.innerHTML = unavailable;
+    rEl.fixed.innerHTML = placeholder(overview);
     return;
   }
   const chip = (label, v) => (v == null ? "" : `<span class="px-2.5 py-1 rounded-full bg-slate-800/70 text-[11px] font-semibold">${label} ${fmtNum(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>`);

@@ -1115,3 +1115,21 @@ describe("radar do mercado (tela)", () => {
     goTo("dashboard");
   });
 });
+
+describe("radar: carregamento por partes", () => {
+  it("parte ainda carregando mostra 'Carregando…'; só falha mostra 'Indisponível'", () => {
+    ui.renderRadar({ overview: undefined, indices: undefined });
+    expect(text("radar-indices")).toContain("Carregando");
+    expect(text("radar-movers")).toContain("Carregando");
+    expect(text("radar-fixed")).toContain("Carregando");
+    expect(text("radar-indices")).not.toContain("Indisponível");
+
+    ui.renderRadar({ overview: undefined, indices: { ibov: [["2026-10-29", 100], ["2026-10-30", 101]], ifix: [["2026-10-30", 3500]] } });
+    expect(text("radar-indices")).toContain("Ibovespa"); // índices já apareceram
+    expect(text("radar-movers")).toContain("Carregando"); // altas/baixas ainda não
+
+    ui.renderRadar({ overview: null, indices: null });
+    expect(text("radar-indices")).toContain("Indisponível");
+    expect(text("radar-fixed")).toContain("Indisponível");
+  });
+});

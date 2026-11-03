@@ -274,9 +274,9 @@ export async function fetchCryptoQuotes(tickers) {
  * Séries diárias desde a data informada. Só existe com o app na Vercel.
  * @returns {Promise<{ ok: boolean, data: {from:string, cdi:Array, ibov:Array, ifix:Array}|null }>}
  */
-export async function fetchMarketIndices(desde) {
+export async function fetchMarketIndices(desde, { cdi = true } = {}) {
   try {
-    const res = await fetch(`/api/indices?desde=${encodeURIComponent(desde)}`);
+    const res = await fetch(`/api/indices?desde=${encodeURIComponent(desde)}${cdi ? "" : "&cdi=0"}`);
     if (!res.ok) return { ok: false, data: null };
     return { ok: true, data: await res.json() };
   } catch (err) {
