@@ -3,7 +3,8 @@
 // Manda, por Firebase Cloud Messaging, os lembretes do dia para
 // cada aparelho que ativou as notificações:
 //   - contas e faturas de cartão que vencem hoje/amanhã (ou ontem);
-//   - proventos que caem amanhã.
+//   - proventos que caem amanhã;
+//   - alertas dos favoritos (indicador ou cotação que passou do alvo, pelo último fechamento).
 // Lê os dados com o Firebase Admin (credencial de serviço na variável
 // FIREBASE_SERVICE_ACCOUNT) e só aceita chamadas com o CRON_SECRET
 // (a Vercel envia "Authorization: Bearer <CRON_SECRET>" no cron).
@@ -12,7 +13,8 @@
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
-import { buildPushReminders, buildUpcomingDividends, unpaidInvoices } from "../js/calc.js";
+import { buildPushReminders, buildUpcomingDividends, evaluateAlerts, unpaidInvoices } from "../js/calc.js";
+import { loadFundamentals } from "./_lib/fundamentus.js";
 import { fetchTickerDividends, TICKER_PATTERN } from "./_lib/b3.js";
 
 export const config = { maxDuration: 60 };
@@ -77,6 +79,9 @@ export default async function handler(req, res) {
     byUser.get(uid).push({ token, ref: d.ref });
   });
 
+  let fundamentalsPromise = null; // só busca o Fundamentus se algum usuário tiver alerta
+  const fundamentals = () => (fundamentalsPromise ??= loadFundamentals());
+
   let sent = 0, removed = 0, failed = 0;
   for (const [uid, tokens] of byUser) {
     try {
@@ -94,6 +99,15 @@ export default async function handler(req, res) {
           invoices: unpaidInvoices(cards, purchases, paidInvoices),
           upcomingDividends: buildUpcomingDividends(eligible, calendars, today),
         }).forEach((r) => reminders.push({ ...r, title: space.label + r.title }));
+      }
+
+      // Alertas dos favoritos (só no espaço pessoal). Grava o estado "já avisou" de volta.
+      const watchDocs = (await db.collection(`users/${uid}/watchlist`).get()).docs;
+      const watching = watchDocs.map((d) => ({ ...d.data(), ref: d.ref })).filter((w) => w.alerts?.length);
+      if (watching.length) {
+        const { notifications, updates } = evaluateAlerts(watching, await fundamentals());
+        notifications.forEach((n) => reminders.push({ ...n, view: "analysis" }));
+        for (const u of updates) await watching.find((w) => w.ticker === u.ticker).ref.update({ alerts: u.alerts });
       }
 
       for (const r of reminders) {

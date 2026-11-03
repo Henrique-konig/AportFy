@@ -251,6 +251,14 @@ describe("contas, cartões e notificações", () => {
     await assertFails(setDoc(doc(as(OWNER), "couples", OWNER, "pushTokens", "tk4"), { token: "abc" }));
   });
 
+  it("favoritos só no espaço pessoal do dono, com formato válido", async () => {
+    await assertSucceeds(setDoc(col(STRANGER, "watchlist", "MXRF11"), { ticker: "MXRF11", kind: "fiis", alerts: [{ metric: "pvp", op: "lt", value: 0.9, on: false }] }));
+    await assertFails(setDoc(col(STRANGER, "watchlist", "X1"), { ticker: "MXRF11", kind: "outro", alerts: [] }));
+    await assertFails(setDoc(col(STRANGER, "watchlist", "X2"), { ticker: "MXRF11", kind: "fiis", alerts: Array.from({ length: 11 }, () => ({})) }));
+    await assertFails(setDoc(doc(as(OTHER), "users", STRANGER, "watchlist", "MXRF11"), { ticker: "MXRF11", kind: "fiis" }));
+    await assertFails(setDoc(doc(as(OWNER), "couples", OWNER, "watchlist", "MXRF11"), { ticker: "MXRF11", kind: "fiis" }));
+  });
+
   it("o casal usa as mesmas validações nas contas", async () => {
     const bill = { description: "Aluguel", amount: 1900, dueDate: "2026-11-05", category: "Moradia", paid: false };
     await assertSucceeds(setDoc(doc(as(PARTNER), "couples", OWNER, "bills", "b1"), bill));

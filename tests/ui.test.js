@@ -1220,6 +1220,10 @@ describe("indicadores da carteira (tela)", () => {
 
     ui.setPortfolioFundamentals(fund);
     expect(text("inv-ind-kpis")).toContain("DY médio · FIIs");
+    expect(ui.portfolioNeedsEtfs()).toBe(true); // ZZZZ11 pode ser um ETF
+    expect(text("inv-ind-note")).not.toContain("ZZZZ11");
+    ui.setPortfolioEtfs([]);
+    expect(ui.portfolioNeedsEtfs()).toBe(false);
     expect(text("inv-ind-note")).toContain("ZZZZ11");
     document.querySelector("[data-ind-open='AAAA11']").click();
     expect(onOpen).toHaveBeenCalledWith("AAAA11", "fiis", fund.fiis[0], true);
@@ -1258,5 +1262,110 @@ describe("ETFs na Análise (tela)", () => {
     ui.setEtfData(null);
     expect(text("analysis-table")).toContain("Indisponível");
     document.querySelector("[data-analysis-tab='fiis']").click();
+  });
+});
+
+describe("favoritos e alertas (tela)", () => {
+  const row = { ticker: "AAAA11", segmento: "Papel", preco: 10, dy: 12, pvp: 0.9, vacancia: null, capRate: null, mercado: 1e9, liquidez: 900000 };
+  const handlers = { onToggle: vi.fn(), onSaveAlerts: vi.fn() };
+
+  it("a estrela pede para favoritar e a aba Favoritos mostra o ativo com seus alertas", () => {
+    ui.bindWatchlist(handlers);
+    ui.bindAnalysis({});
+    ui.setAnalysisData({ updatedAt: "2026-11-03T15:00:00Z", fiis: [row], acoes: [] });
+    document.querySelector("[data-analysis-tab='fiis']").click();
+    const seg = document.querySelector("[data-analysis-segment]");
+    seg.value = "";
+    seg.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("[data-analysis-watch='AAAA11']").click();
+    expect(handlers.onToggle).toHaveBeenCalledWith("AAAA11", "fiis", false);
+
+    document.querySelector("[data-analysis-tab='favoritos']").click();
+    expect(text("analysis-table")).toContain("Nenhum favorito");
+    ui.setWatchlist([{ ticker: "AAAA11", kind: "fiis", alerts: [{ metric: "pvp", op: "lt", value: 0.9, on: false }] }]);
+    expect([...document.querySelectorAll("#analysis-table tbody tr")].map((r) => r.firstElementChild.textContent.trim())).toEqual(["AAAA11"]);
+    expect(text("analysis-table")).toContain("FII");
+    document.querySelector("[data-analysis-watch='AAAA11']").click();
+    expect(handlers.onToggle).toHaveBeenLastCalledWith("AAAA11", "fiis", true);
+    document.querySelector("[data-analysis-tab='fiis']").click();
+  });
+
+  it("na ficha: cria e remove alertas; ETF não tem alertas", () => {
+    ui.bindAssetSheet();
+    ui.setWatchlist([{ ticker: "AAAA11", kind: "fiis", alerts: [{ metric: "pvp", op: "lt", value: 0.9, on: false }] }]);
+    ui.openAssetSheet({ ticker: "AAAA11", kind: "fiis", row, owned: false });
+    expect($("asset-alerts").classList.contains("hidden")).toBe(false);
+    expect(text("asset-alerts-list")).toContain("P/VP abaixo de 0,9");
+    expect($("asset-watch-btn").getAttribute("aria-pressed")).toBe("true");
+
+    $("asset-alert-metric").value = "dy";
+    $("asset-alert-op").value = "gt";
+    $("asset-alert-value").value = "13";
+    $("asset-alert-add-btn").click();
+    expect(handlers.onSaveAlerts).toHaveBeenLastCalledWith("AAAA11", "fiis", [
+      { metric: "pvp", op: "lt", value: 0.9, on: false },
+      { metric: "dy", op: "gt", value: 13, on: false },
+    ]);
+    document.querySelector("[data-alert-remove='0']").click();
+    expect(handlers.onSaveAlerts).toHaveBeenLastCalledWith("AAAA11", "fiis", []);
+
+    $("asset-alert-value").value = "";
+    const calls = handlers.onSaveAlerts.mock.calls.length;
+    $("asset-alert-add-btn").click(); // sem valor: não cria
+    expect(handlers.onSaveAlerts.mock.calls.length).toBe(calls);
+
+    $("asset-close-btn").click();
+    ui.openAssetSheet({ ticker: "BOVA11", kind: "etfs", row: { ticker: "BOVA11", preco: 100 }, owned: false });
+    expect($("asset-alerts").classList.contains("hidden")).toBe(true);
+    $("asset-close-btn").click();
+    ui.setWatchlist([]);
+  });
+});
+
+describe("comparar ativos (tela)", () => {
+  const fii = (ticker, dy, pvp) => ({ ticker, segmento: "Papel", preco: 10, dy, pvp, vacancia: null, capRate: null, mercado: 1e9, liquidez: 900000 });
+  const list = ["AAAA11", "BBBB11", "CCCC11", "DDDD11", "EEEE11"].map((t, i) => fii(t, 8 + i, 1 + i / 10));
+  const box = (t) => document.querySelector(`[data-analysis-compare='${t}']`);
+  const tick = (t) => {
+    box(t).checked = !box(t).checked;
+    box(t).dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  it("marca até 4, abre a comparação e destaca o melhor de cada linha", () => {
+    const onCompare = vi.fn();
+    ui.bindAnalysis({ onCompare });
+    ui.bindCompareSheet();
+    ui.setAnalysisData({ updatedAt: "2026-11-03T15:00:00Z", fiis: list, acoes: [] });
+    document.querySelector("[data-analysis-tab='fiis']").click();
+    expect($("analysis-compare-bar").classList.contains("hidden")).toBe(true);
+
+    tick("AAAA11");
+    expect($("analysis-compare-btn").disabled).toBe(true);
+    tick("BBBB11");
+    expect($("analysis-compare-btn").disabled).toBe(false);
+    tick("CCCC11");
+    tick("DDDD11");
+    tick("EEEE11"); // o 5º é recusado
+    expect(box("EEEE11").checked).toBe(false);
+
+    $("analysis-compare-btn").click();
+    const items = onCompare.mock.calls[0][0];
+    expect(items.map((i) => i.ticker)).toEqual(["AAAA11", "BBBB11", "CCCC11", "DDDD11"]);
+
+    ui.openCompareSheet(items);
+    expect($("compare-modal").classList.contains("hidden")).toBe(false);
+    expect(text("compare-table")).toContain("P/VP");
+    expect(text("compare-table")).not.toContain("Vacância"); // linha sem nenhum valor some
+    const dyCells = [...document.querySelectorAll("#compare-table tbody tr")].find((r) => r.firstElementChild.textContent === "Dividend yield").querySelectorAll("td.text-emerald-400");
+    expect(dyCells).toHaveLength(1); // só o maior DY
+    ui.setCompareHistory(["OUTRO"], []); // resposta de outra comparação: ignorada
+    expect(text("compare-status")).toContain("Carregando");
+    ui.setCompareHistory(items.map((i) => i.ticker), []);
+    expect(text("compare-status")).toContain("indisponível");
+    $("compare-close-btn").click();
+    expect($("compare-modal").classList.contains("hidden")).toBe(true);
+
+    $("analysis-compare-clear").click();
+    expect($("analysis-compare-bar").classList.contains("hidden")).toBe(true);
   });
 });

@@ -14,6 +14,8 @@ import { bindSettings } from "./bind-settings.js";
 import { loadNewsView } from "./news-feed.js";
 import { loadEtfs, loadFundamentals } from "./analysis.js";
 import { openAsset } from "./asset.js";
+import { bindWatchlist } from "./watchlist.js";
+import { openCompare } from "./compare.js";
 import { testPush, turnPushOff, turnPushOn } from "./push-actions.js";
 import { refreshQuotes } from "./quotes.js";
 import { activeSpaceId, session } from "./session.js";
@@ -68,14 +70,16 @@ export function initUIBindings() {
   ui.bindHistory();
   ui.bindSettingsForms();
   ui.bindNewsSubtabs();
-  ui.bindAnalysis({ onOpen: openAsset, onTab: (tab) => tab === "etfs" && loadEtfs() });
+  ui.bindAnalysis({ onOpen: openAsset, onCompare: openCompare, onTab: (tab) => (tab === "etfs" || (tab === "favoritos" && ui.watchlistItems().some((i) => i.kind === "etfs"))) && loadEtfs() });
   ui.bindAssetSheet();
+  bindWatchlist();
+  ui.bindCompareSheet();
   ui.bindPortfolioIndicators({ onOpen: openAsset });
 
   ui.onNavChange((view) => {
     ui.setActiveView(view);
     if (view === "investments") refreshQuotes({ silent: true });
-    if (view === "investments" || view === "analysis") loadFundamentals();
+    if (view === "investments" || view === "analysis") loadFundamentals().then(() => ui.portfolioNeedsEtfs() && loadEtfs());
     if (view === "news") loadNewsView();
   });
   ui.onModeToggle((mode) => switchMode(mode));

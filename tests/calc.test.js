@@ -65,6 +65,10 @@ import {
   etfLabel,
   etfStats,
   pickEtfs,
+  alertLabel,
+  evaluateAlerts,
+  compareSeries,
+  bestIndexes,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -1121,5 +1125,71 @@ describe("ETFs", () => {
       { stock: "IVVB11", name: "ISHARES S&P 500", close: 300, volume: 20000, subType: "etf" },
     ];
     expect(pickEtfs(rows).map((r) => r.ticker)).toEqual(["IVVB11", "BOVA11"]);
+  });
+});
+
+describe("Indicadores da carteira com ETFs", () => {
+  it("ETF cadastrado como ação entra pela lista de ETFs", () => {
+    const own = [{ ticker: "BOVA11", category: "Ações", quantity: 10, avgPrice: 100, currentPrice: 100 }];
+    const etfs = [{ ticker: "BOVA11", nome: "ISHARES IBOVESPA", r12m: 10, vol: 25 }];
+    const without = portfolioIndicators(own, { fiis: [], acoes: [] });
+    expect(without.missing).toEqual(["BOVA11"]);
+    const r = portfolioIndicators(own, { fiis: [], acoes: [] }, etfs);
+    expect(r.missing).toEqual([]);
+    expect(r.rows[0]).toMatchObject({ ticker: "BOVA11", kind: "etfs", weight: 100 });
+    expect(r.avg.etfs).toEqual({ r12m: 10, vol: 25 });
+  });
+});
+
+describe("Alertas dos favoritos", () => {
+  const fundamentals = { fiis: [{ ticker: "AAAA11", preco: 10, pvp: 0.85, dy: 9 }], acoes: [{ ticker: "CCCC3", preco: 20, pl: 12 }] };
+  const watch = (ticker, kind, alerts) => ({ ticker, kind, alerts });
+
+  it("alertLabel descreve o alerta", () => {
+    expect(alertLabel("fiis", { metric: "pvp", op: "lt", value: 0.9 })).toBe("P/VP abaixo de 0,9");
+    expect(alertLabel("fiis", { metric: "dy", op: "gt", value: 12 })).toBe("DY acima de 12%");
+    expect(alertLabel("acoes", { metric: "preco", op: "lt", value: 10 })).toContain("R$");
+  });
+
+  it("avisa uma vez quando a condição passa a valer, e rearma quando deixa de valer", () => {
+    const items = [watch("AAAA11", "fiis", [{ metric: "pvp", op: "lt", value: 0.9, on: false }, { metric: "dy", op: "gt", value: 12, on: false }])];
+    const first = evaluateAlerts(items, fundamentals);
+    expect(first.notifications).toHaveLength(1);
+    expect(first.notifications[0].body).toContain("P/VP abaixo de");
+    expect(first.updates[0].alerts.map((a) => a.on)).toEqual([true, false]);
+
+    const again = evaluateAlerts([watch("AAAA11", "fiis", first.updates[0].alerts)], fundamentals);
+    expect(again.notifications).toEqual([]); // já avisou
+    expect(again.updates).toEqual([]);
+
+    const rearmed = evaluateAlerts([watch("AAAA11", "fiis", first.updates[0].alerts)], { fiis: [{ ticker: "AAAA11", pvp: 0.95 }] });
+    expect(rearmed.notifications).toEqual([]);
+    expect(rearmed.updates[0].alerts[0].on).toBe(false);
+  });
+
+  it("ignora ativo sem dados, sem alertas ou indicador vazio", () => {
+    const r = evaluateAlerts([watch("ZZZZ11", "fiis", [{ metric: "pvp", op: "lt", value: 1 }]), watch("CCCC3", "acoes", []), watch("CCCC3", "acoes", [{ metric: "pl", op: "gt", value: 5 }, { metric: "preco", op: "lt", value: 30 }]), watch("AAAA11", "fiis", [{ metric: "vacancia", op: "lt", value: 5 }])], fundamentals);
+    expect(r.notifications.map((n) => n.ticker)).toEqual(["CCCC3", "CCCC3"]);
+  });
+});
+
+describe("Comparar ativos", () => {
+  it("compareSeries coloca todos na base 100 e alinha as datas", () => {
+    const r = compareSeries([
+      { ticker: "A", closes: [["2026-01-01", 10], ["2026-01-02", 12], ["2026-01-03", 9]] },
+      { ticker: "B", closes: [["2026-01-02", 50], ["2026-01-03", 100]] },
+      { ticker: "C", closes: [] },
+    ]);
+    expect(r.labels).toEqual(["2026-01-01", "2026-01-02", "2026-01-03"]);
+    expect(r.lines.map((l) => l.ticker)).toEqual(["A", "B"]);
+    expect(r.lines[0].data).toEqual([100, 120, 90]);
+    expect(r.lines[1].data).toEqual([null, 100, 200]);
+  });
+
+  it("bestIndexes marca o melhor valor só quando há com o que comparar", () => {
+    expect(bestIndexes([5, 9, null], "high")).toEqual([1]);
+    expect(bestIndexes([5, 9, 5], "low")).toEqual([0, 2]);
+    expect(bestIndexes([5, null], "high")).toEqual([]);
+    expect(bestIndexes([5, 9], null)).toEqual([]);
   });
 });

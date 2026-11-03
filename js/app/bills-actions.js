@@ -7,6 +7,7 @@ import * as ui from "../ui.js";
 import { addMonthsToDate, invoicePaymentTransactions, splitInstallments } from "../calc.js";
 import { addBills, addToCollection, listenToCollection, listenToSettingsDoc, payBill, payInvoice, unpayBill, unpayInvoice, updateInCollection } from "../db.js";
 import { activeSpaceId, gate, session } from "./session.js";
+import { subscribeWatchlist } from "./watchlist.js";
 
 let extraUnsubscribes = []; // contas, cartões, compras, faturas e reserva
 
@@ -39,6 +40,7 @@ export function subscribeExtras(id) {
     watch("cardPurchases", (docs) => ui.renderBillsData({ purchases: (session.latestPurchases = docs) })),
     watch("cardInvoices", (docs) => ui.renderBillsData({ invoices: (session.latestCardInvoices = docs) })),
     listenToSettingsDoc(mode, id, "reserve", (reserve) => ui.setPlanningData({ reserve })),
+    subscribeWatchlist(),
   ];
 }
 

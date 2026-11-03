@@ -684,7 +684,7 @@ export async function savePortfolioSettings(mode, id, settings) {
 
 const ACCOUNT_COLLECTIONS = [
   "transactions", "goals", "investments", "dividends", "budgets", "recurrences", "settings",
-  "bills", "cards", "cardPurchases", "cardInvoices", "pushTokens",
+  "bills", "cards", "cardPurchases", "cardInvoices", "pushTokens", "watchlist",
 ];
 
 /** Apaga todos os documentos de uma coleção, em lotes (o Firestore limita 500 por lote). */

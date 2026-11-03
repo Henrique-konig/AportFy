@@ -63,6 +63,7 @@
   <link rel="modulepreload" href="js/app/bind-investments.js" />
   <link rel="modulepreload" href="js/app/bind-settings.js" />
   <link rel="modulepreload" href="js/app/bindings.js" />
+  <link rel="modulepreload" href="js/app/compare.js" />
   <link rel="modulepreload" href="js/app/couple.js" />
   <link rel="modulepreload" href="js/app/dividend-sync.js" />
   <link rel="modulepreload" href="js/app/news-feed.js" />
@@ -70,6 +71,7 @@
   <link rel="modulepreload" href="js/app/quotes.js" />
   <link rel="modulepreload" href="js/app/session.js" />
   <link rel="modulepreload" href="js/app/subscriptions.js" />
+  <link rel="modulepreload" href="js/app/watchlist.js" />
   <link rel="modulepreload" href="js/auth.js" />
   <link rel="modulepreload" href="js/calc.js" />
   <link rel="modulepreload" href="js/datepicker.js" />
@@ -86,6 +88,7 @@
   <link rel="modulepreload" href="js/ui/account.js" />
   <link rel="modulepreload" href="js/ui/alerts.js" />
   <link rel="modulepreload" href="js/ui/bills.js" />
+  <link rel="modulepreload" href="js/ui/compare.js" />
   <link rel="modulepreload" href="js/ui/budget.js" />
   <link rel="modulepreload" href="js/ui/charts.js" />
   <link rel="modulepreload" href="js/ui/core.js" />
@@ -111,6 +114,7 @@
   <link rel="modulepreload" href="js/ui/settings.js" />
   <link rel="modulepreload" href="js/ui/theme.js" />
   <link rel="modulepreload" href="js/ui/transactions.js" />
+  <link rel="modulepreload" href="js/ui/watchlist.js" />
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js" crossorigin />
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js" crossorigin />
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js" crossorigin />
@@ -1198,8 +1202,16 @@
                 <button type="button" data-analysis-tab="fiis" class="bill-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all" aria-pressed="true">FIIs</button>
                 <button type="button" data-analysis-tab="acoes" class="bill-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all" aria-pressed="false">Ações</button>
                 <button type="button" data-analysis-tab="etfs" class="bill-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all" aria-pressed="false">ETFs</button>
+                <button type="button" data-analysis-tab="favoritos" class="bill-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all" aria-pressed="false"><i class="ph-bold ph-bookmark-simple" aria-hidden="true"></i> Favoritos</button>
               </div>
               <p id="analysis-count" class="text-xs text-slate-500"></p>
+            </div>
+            <div id="analysis-compare-bar" class="hidden glass-card rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <p id="analysis-compare-text" class="text-sm text-slate-300"></p>
+              <div class="flex items-center gap-2">
+                <button type="button" id="analysis-compare-clear" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-colors">Limpar</button>
+                <button type="button" id="analysis-compare-btn" class="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Comparar</button>
+              </div>
             </div>
             <section id="analysis-filters" class="glass-card rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3" aria-label="Filtros"></section>
             <section class="glass-card rounded-2xl p-4 sm:p-5">
@@ -1793,6 +1805,9 @@
         </div>
         <div class="flex items-start gap-3 shrink-0">
           <p id="asset-price" class="text-xl font-bold"></p>
+          <button type="button" id="asset-watch-btn" class="text-slate-500 hover:text-white transition-colors" aria-pressed="false" aria-label="Adicionar aos favoritos">
+            <i class="ph-bold ph-bookmark-simple text-xl"></i>
+          </button>
           <button id="asset-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
             <i class="ph-bold ph-x text-xl"></i>
           </button>
@@ -1802,9 +1817,36 @@
       <div id="asset-chart-wrap" class="hidden h-48 mb-5"><canvas id="asset-chart"></canvas></div>
       <h4 class="font-semibold text-sm mb-2">Indicadores</h4>
       <div id="asset-indicators" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5"></div>
+      <div id="asset-alerts" class="hidden mb-5">
+        <h4 class="font-semibold text-sm mb-2">Alertas</h4>
+        <div id="asset-alerts-list" class="mb-3"></div>
+        <div class="flex flex-wrap items-end gap-2">
+          <select id="asset-alert-metric" aria-label="Indicador" class="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all"></select>
+          <select id="asset-alert-op" aria-label="Condição" class="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all"><option value="lt">abaixo de</option><option value="gt">acima de</option></select>
+          <input id="asset-alert-value" type="number" step="any" inputmode="decimal" aria-label="Valor do alerta" placeholder="Valor" class="bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-all w-28" />
+          <button type="button" id="asset-alert-add-btn" class="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 transition-colors">Criar alerta</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-2">Aviso no celular, conferido uma vez por dia de manhã, com o último fechamento. Precisa das notificações ativadas em Configurações.</p>
+      </div>
       <h4 class="font-semibold text-sm mb-2">Proventos</h4>
       <div id="asset-dividends"></div>
       <p class="text-[11px] text-slate-500 mt-4">Indicadores do Fundamentus e preços do Yahoo Finance. Não é recomendação de compra ou venda.</p>
+    </div>
+  </div>
+
+  <div id="compare-modal" class="hidden fixed inset-0 z-50 items-center justify-center px-4">
+    <div id="compare-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md"></div>
+
+    <div class="relative w-full max-w-3xl glass-card rounded-3xl p-5 sm:p-7 animate-scale-in max-h-[90vh] overflow-y-auto custom-scroll" role="dialog" aria-labelledby="compare-title">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold" id="compare-title">Comparar ativos</h3>
+        <button id="compare-close-btn" class="text-slate-500 hover:text-white transition-colors" aria-label="Fechar">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+      <div id="compare-table" class="overflow-x-auto mb-5"></div>
+      <div id="compare-chart-wrap" class="hidden h-56"><canvas id="compare-chart"></canvas></div>
+      <p id="compare-status" class="text-[11px] text-slate-500 mt-3"></p>
     </div>
   </div>
 

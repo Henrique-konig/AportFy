@@ -46,6 +46,11 @@ export async function loadFundamentals() {
   }
 }
 
+const setEtfs = (data) => {
+  ui.setEtfData(data);
+  ui.setPortfolioEtfs(data);
+};
+
 const ETF_CACHE_KEY = "aportfy_etfs";
 const ETF_REFRESH_MS = 30 * 60 * 1000; // cotação e retornos mudam ao longo do dia
 let loadingEtfs = false;
@@ -59,20 +64,20 @@ export async function loadEtfs() {
   } catch {
     /* cópia ilegível: busca de novo */
   }
-  if (cached) ui.setEtfData(cached);
+  if (cached) setEtfs(cached);
   if (cached && Date.now() - new Date(cached.updatedAt).getTime() < ETF_REFRESH_MS) return;
 
   loadingEtfs = true;
   const res = await fetchEtfs();
   loadingEtfs = false;
   if (res.ok) {
-    ui.setEtfData(res.data);
+    setEtfs(res.data);
     try {
       localStorage.setItem(ETF_CACHE_KEY, JSON.stringify(res.data));
     } catch {
       /* sem storage ou cheio: só não guarda */
     }
   } else if (!cached) {
-    ui.setEtfData(null);
+    setEtfs(null);
   }
 }

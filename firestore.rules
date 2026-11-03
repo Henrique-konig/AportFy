@@ -130,6 +130,12 @@ service cloud.firestore {
       return isText(d.token, 4096) && d.token.size() > 0
           && isText(d.get('userAgent', ''), 300);
     }
+    // Favoritos: um documento por ticker, com alertas (até 10) de indicador ou cotação.
+    function validWatchItem(d) {
+      return isText(d.ticker, 30) && d.ticker.size() > 0
+          && d.kind in ['fiis', 'acoes', 'etfs']
+          && d.get('alerts', []).size() <= 10;
+    }
     function validDoc(collection, d) {
       return (collection == 'transactions' && validTransaction(d))
           || (collection == 'goals' && validGoal(d))
@@ -159,7 +165,8 @@ service cloud.firestore {
         allow read, delete: if request.auth != null && request.auth.uid == userId;
         allow create, update: if request.auth != null && request.auth.uid == userId
                                && (validDoc(collection, request.resource.data)
-                                   || (collection == 'pushTokens' && validPushToken(request.resource.data)));
+                                   || (collection == 'pushTokens' && validPushToken(request.resource.data))
+                                   || (collection == 'watchlist' && validWatchItem(request.resource.data)));
       }
     }
 

@@ -6,6 +6,7 @@
 import { applyScreen } from "../calc.js";
 import { fmtNum } from "../format.js";
 import { delegateClick, escapeHtml, state } from "./core.js";
+import { isWatched, onWatchlistChange, toggleWatch, watchlistItems } from "./watchlist.js";
 
 const PAGE = 50;
 // Para estes, o melhor valor é o MENOR: o 1º clique no cabeçalho ordena do menor para o maior.
@@ -20,6 +21,10 @@ const aEl = {
   moreWrap: document.getElementById("analysis-more-wrap"),
   moreBtn: document.getElementById("analysis-more-btn"),
   status: document.getElementById("analysis-status"),
+  compareBar: document.getElementById("analysis-compare-bar"),
+  compareText: document.getElementById("analysis-compare-text"),
+  compareBtn: document.getElementById("analysis-compare-btn"),
+  compareClear: document.getElementById("analysis-compare-clear"),
 };
 
 const num = (v) => (v == null ? "—" : fmtNum(v, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -41,6 +46,13 @@ const CONFIG = {
     ],
     columns: [["ticker", "Fundo"], ["segmento", "Segmento", (v) => escapeHtml(v)], ["preco", "Cotação", money], ["dy", "DY", pct], ["pvp", "P/VP", num], ["vacancia", "Vacância", pct], ["capRate", "Cap rate", pct], ["liquidez", "Liquidez/dia", bigMoney]],
     sort: { key: "dy", dir: "desc" },
+  },
+  favoritos: {
+    segment: true,
+    segmentLabel: "Tipo",
+    filters: [],
+    columns: [["ticker", "Ativo"], ["segmento", "Tipo"], ["preco", "Cotação", money], ["dy", "DY", pct], ["pvp", "P/VP", num], ["pl", "P/L", num], ["r12m", "12 meses", ret], ["alertas", "Alertas", (v) => (v ? escapeHtml(v) : "—")]],
+    sort: { key: "ticker", dir: "asc" },
   },
   etfs: {
     segment: true,
@@ -67,10 +79,20 @@ const CONFIG = {
   },
 };
 
+const COMPARE_MAX = 4;
+const selected = new Map(); // ticker -> tipo (fiis/acoes/etfs): ativos marcados para comparar, de qualquer aba
+
 let data; // undefined = carregando, null = falhou, { fiis, acoes } (cada uma pode ser null)
 let etfs; // idem, a lista de ETFs (vem de outra função, só carregada ao abrir a aba)
 // Linhas de uma aba: undefined = carregando, null = indisponível.
-const rowsOf = (name) => (name === "etfs" ? etfs : data === undefined ? undefined : (data?.[name] ?? null));
+const KIND_LABEL = { fiis: "FII", acoes: "Ação", etfs: "ETF" };
+// Favoritos: cada ativo acompanhado, com os números atuais quando já carregaram.
+const favoriteRows = () =>
+  watchlistItems().map((item) => {
+    const source = (item.kind === "etfs" ? etfs : data?.[item.kind])?.find((r) => r.ticker === item.ticker);
+    return { ...source, ticker: item.ticker, kind: item.kind, segmento: KIND_LABEL[item.kind], alertas: item.alerts?.length ? String(item.alerts.length) : "" };
+  });
+const rowsOf = (name) => (name === "favoritos" ? favoriteRows() : name === "etfs" ? etfs : data === undefined ? undefined : (data?.[name] ?? null));
 let tab = "fiis";
 const tabState = Object.fromEntries(
   Object.entries(CONFIG).map(([name, cfg]) => [name, { sort: { ...cfg.sort }, values: Object.fromEntries(cfg.filters.map((f) => [f.key, f.value])), search: "", segmento: "", limit: PAGE }])
@@ -108,6 +130,12 @@ function renderTable() {
     aEl.moreWrap.classList.add("hidden");
     return;
   }
+  if (tab === "favoritos" && rows.length === 0) {
+    aEl.table.innerHTML = `<p class="text-xs text-slate-500 py-10 text-center">Nenhum favorito ainda. Use o marcador ao lado do ticker (ou na ficha do ativo) para acompanhar e criar alertas.</p>`;
+    aEl.count.textContent = "";
+    aEl.moreWrap.classList.add("hidden");
+    return;
+  }
   if (!rows) {
     aEl.table.innerHTML = `<p class="text-xs text-slate-500 py-10 text-center">Indisponível agora. Tente de novo em instantes.</p>`;
     aEl.count.textContent = "";
@@ -136,7 +164,7 @@ function renderTable() {
             .map(
               (r) => `<tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors">${cfg.columns
                 .map(([key, , fmt], i) => {
-                  if (i === 0) return `<td class="py-2.5 pr-3 font-semibold whitespace-nowrap"><button type="button" data-analysis-open="${escapeHtml(r.ticker)}" class="font-semibold hover:text-blue-400 transition-colors">${owned.has(r.ticker) ? `<span class="text-amber-400" title="Você tem este ativo">★</span> ` : ""}${escapeHtml(r.ticker)}</button></td>`;
+                  if (i === 0) return `<td class="py-2.5 pr-3 font-semibold whitespace-nowrap"><input type="checkbox" data-analysis-compare="${escapeHtml(r.ticker)}" data-kind="${r.kind || tab}" ${selected.has(r.ticker) ? "checked" : ""} class="mr-2 accent-blue-500 align-middle" aria-label="Comparar ${escapeHtml(r.ticker)}" /><button type="button" data-analysis-watch="${escapeHtml(r.ticker)}" data-kind="${r.kind || tab}" class="mr-1.5 ${isWatched(r.ticker) ? "text-blue-400" : "text-slate-600 hover:text-slate-300"} transition-colors" aria-label="${isWatched(r.ticker) ? "Remover dos favoritos" : "Adicionar aos favoritos"}" aria-pressed="${isWatched(r.ticker)}"><i class="ph-bold ph-bookmark-simple"></i></button><button type="button" data-analysis-open="${escapeHtml(r.ticker)}" class="font-semibold hover:text-blue-400 transition-colors">${owned.has(r.ticker) ? `<span class="text-amber-400" title="Você tem este ativo">★</span> ` : ""}${escapeHtml(r.ticker)}</button></td>`;
                   return `<td class="py-2.5 px-3 whitespace-nowrap ${TEXT_COLS.has(key) ? "text-slate-400" : "text-right"}">${fmt ? fmt(r[key]) : r[key]}</td>`;
                 })
                 .join("")}</tr>`
@@ -147,6 +175,12 @@ function renderTable() {
 
 let fundamentusNote = "";
 const ETF_NOTE = "Retornos, volatilidade e maior queda calculados do histórico de 1 ano (Yahoo Finance), com cotação da Brapi. Desempenho passado não garante o futuro; não é recomendação.";
+
+function renderCompareBar() {
+  aEl.compareBar.classList.toggle("hidden", selected.size === 0);
+  aEl.compareText.textContent = selected.size < 2 ? "Marque mais um ativo para comparar (até 4)." : `${selected.size} ativos marcados (até 4).`;
+  aEl.compareBtn.disabled = selected.size < 2;
+}
 
 function renderAll() {
   aEl.tabs.forEach((btn) => btn.setAttribute("aria-pressed", String(btn.dataset.analysisTab === tab)));
@@ -169,7 +203,7 @@ export function setEtfData(next) {
 }
 
 /** `onOpen(ticker, kind, row, owned)` abre a ficha do ativo ao clicar num ticker; `onTab(nome)` avisa a troca de aba. */
-export function bindAnalysis({ onOpen, onTab } = {}) {
+export function bindAnalysis({ onOpen, onTab, onCompare } = {}) {
   if (!aEl.table) return;
   aEl.tabs.forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -199,7 +233,27 @@ export function bindAnalysis({ onOpen, onTab } = {}) {
   delegateClick(aEl.table, "[data-analysis-open]", (btn) => {
     const ticker = btn.dataset.analysisOpen;
     const row = rowsOf(tab)?.find((r) => r.ticker === ticker);
-    if (row) onOpen?.(ticker, tab, row, state.lastInvestments.some((i) => i.ticker === ticker));
+    if (row) onOpen?.(ticker, tab === "favoritos" ? row.kind : tab, row, state.lastInvestments.some((i) => i.ticker === ticker));
+  });
+  delegateClick(aEl.table, "[data-analysis-watch]", (btn) => toggleWatch(btn.dataset.analysisWatch, btn.dataset.kind));
+  onWatchlistChange(() => renderTable());
+  aEl.table.addEventListener("change", (e) => {
+    const box = e.target.closest?.("[data-analysis-compare]");
+    if (!box) return;
+    const ticker = box.dataset.analysisCompare;
+    if (!box.checked) selected.delete(ticker);
+    else if (selected.has(ticker) || selected.size < COMPARE_MAX) selected.set(ticker, box.dataset.kind);
+    else box.checked = false; // já são 4
+    renderCompareBar();
+  });
+  aEl.compareClear.addEventListener("click", () => {
+    selected.clear();
+    renderCompareBar();
+    renderTable();
+  });
+  aEl.compareBtn.addEventListener("click", () => {
+    const items = [...selected].map(([ticker, kind]) => ({ ticker, kind, row: rowsOf(kind)?.find((r) => r.ticker === ticker) })).filter((i) => i.row);
+    if (items.length >= 2) onCompare?.(items);
   });
   aEl.moreBtn.addEventListener("click", () => {
     tabState[tab].limit += PAGE;

@@ -7,7 +7,7 @@
 // sem simular um browser inteiro.
 // =========================================================
 
-import { fmtDate, formatBRL, monthShort } from "./format.js";
+import { fmtDate, fmtNum, formatBRL, monthShort } from "./format.js";
 
 /**
  * Métricas de uma posição de investimento.
@@ -1453,9 +1453,10 @@ export function priceStats(closes) {
  * Indicadores da carteira: cruza as posições abertas de FIIs e ações com a tabela do Fundamentus.
  * As médias são ponderadas pelo valor da posição (só entra quem tem o indicador); P/L e P/VP usam
  * média harmônica, que é a forma correta de tirar a média de um preço sobre lucro/patrimônio.
- * @returns {{ rows: Array<Object>, avg: { fiis: Object<string,number|null>, acoes: Object<string,number|null> }, missing: string[] }}
+ * ETFs (que o usuário costuma cadastrar como "Ações") entram quando o ticker não está nas tabelas de FIIs/ações.
+ * @returns {{ rows: Array<Object>, avg: { fiis: Object, acoes: Object, etfs: Object }, missing: string[] }}
  */
-export function portfolioIndicators(investments, fundamentals) {
+export function portfolioIndicators(investments, fundamentals, etfs = null) {
   const kinds = { FIIs: "fiis", "Ações": "acoes" };
   const open = investments.map((inv) => ({ inv, value: calcInvestmentMetrics(inv).totalValue })).filter(({ inv, value }) => kinds[inv.category] && value > 0);
   const total = open.reduce((sum, p) => sum + p.value, 0);
@@ -1464,8 +1465,10 @@ export function portfolioIndicators(investments, fundamentals) {
   for (const { inv, value } of open) {
     const kind = kinds[inv.category];
     const data = fundamentals?.[kind]?.find((r) => r.ticker === inv.ticker);
-    if (!data) missing.push(inv.ticker);
-    else rows.push({ ...data, kind, value, weight: (value / total) * 100 });
+    const etf = data ? null : etfs?.find((r) => r.ticker === inv.ticker);
+    if (data) rows.push({ ...data, kind, value, weight: (value / total) * 100 });
+    else if (etf) rows.push({ ...etf, kind: "etfs", value, weight: (value / total) * 100 });
+    else missing.push(inv.ticker);
   }
   const average = (kind, key, harmonic = false) => {
     const list = rows.filter((r) => r.kind === kind && r[key] != null && (!harmonic || r[key] > 0));
@@ -1478,6 +1481,7 @@ export function portfolioIndicators(investments, fundamentals) {
     avg: {
       fiis: { dy: average("fiis", "dy"), pvp: average("fiis", "pvp", true), vacancia: average("fiis", "vacancia") },
       acoes: { dy: average("acoes", "dy"), pl: average("acoes", "pl", true), pvp: average("acoes", "pvp", true), roe: average("acoes", "roe") },
+      etfs: { r12m: average("etfs", "r12m"), vol: average("etfs", "vol") },
     },
     missing,
   };
@@ -1527,4 +1531,71 @@ export function pickEtfs(rows, { minTurnover = 100_000, limit = 60 } = {}) {
     .filter((r) => r.liquidez >= minTurnover)
     .sort((a, b) => b.liquidez - a.liquidez)
     .slice(0, limit);
+}
+
+/** Indicadores que dá para vigiar com alerta, por tipo de ativo: [chave, rótulo, é percentual?]. */
+export const ALERT_METRICS = {
+  fiis: [["preco", "Cotação", false], ["dy", "DY", true], ["pvp", "P/VP", false], ["vacancia", "Vacância", true]],
+  acoes: [["preco", "Cotação", false], ["dy", "DY", true], ["pvp", "P/VP", false], ["pl", "P/L", false]],
+};
+
+/** Texto de um alerta: "P/VP abaixo de 0,90". */
+export function alertLabel(kind, alert) {
+  const [, label, percent] = (ALERT_METRICS[kind] || []).find(([key]) => key === alert.metric) || [alert.metric, alert.metric, false];
+  const value = alert.metric === "preco" ? formatBRL(alert.value) : `${fmtNum(alert.value, { maximumFractionDigits: 2 })}${percent ? "%" : ""}`;
+  return `${label} ${alert.op === "gt" ? "acima de" : "abaixo de"} ${value}`;
+}
+
+/**
+ * Confere os alertas dos favoritos contra a tabela do Fundamentus. Avisa quando a condição passa a valer
+ * (`on` marca que já avisou) e rearma quando ela deixa de valer, para não repetir o mesmo aviso todo dia.
+ * @param {Array<{ticker:string, kind:string, alerts?:Array<{metric:string, op:"lt"|"gt", value:number, on?:boolean}>}>} items
+ * @returns {{ notifications: Array<{ticker:string, title:string, body:string, tag:string}>, updates: Array<{ticker:string, alerts:Array}> }}
+ */
+export function evaluateAlerts(items, fundamentals) {
+  const notifications = [];
+  const updates = [];
+  for (const item of items) {
+    const row = fundamentals?.[item.kind]?.find((r) => r.ticker === item.ticker);
+    if (!row || !item.alerts?.length) continue;
+    let changed = false;
+    const alerts = item.alerts.map((alert) => {
+      const current = row[alert.metric];
+      if (current == null) return alert;
+      const met = alert.op === "gt" ? current > alert.value : current < alert.value;
+      if (met === Boolean(alert.on)) return alert;
+      changed = true;
+      if (met) {
+        const shown = alert.metric === "preco" ? formatBRL(current) : fmtNum(current, { maximumFractionDigits: 2 });
+        notifications.push({ ticker: item.ticker, title: `${item.ticker}: alerta`, body: `${alertLabel(item.kind, alert)} (agora ${shown}).`, tag: `alert-${item.ticker}-${alert.metric}-${alert.op}` });
+      }
+      return { ...alert, on: met };
+    });
+    if (changed) updates.push({ ticker: item.ticker, alerts });
+  }
+  return { notifications, updates };
+}
+
+/**
+ * Preços de vários ativos na mesma escala (início = 100), para comparar o desempenho no mesmo gráfico.
+ * @param {Array<{ticker:string, closes:Array<[string, number]>}>} series
+ * @returns {{ labels: string[], lines: Array<{ticker:string, data:Array<number|null>}> }}
+ */
+export function compareSeries(series) {
+  const valid = series.filter((s) => s.closes?.length > 1);
+  const labels = [...new Set(valid.flatMap((s) => s.closes.map((c) => c[0])))].sort();
+  const lines = valid.map((s) => {
+    const byDate = new Map(s.closes);
+    const base = s.closes[0][1];
+    return { ticker: s.ticker, data: labels.map((d) => (byDate.has(d) ? Math.round((byDate.get(d) / base) * 10000) / 100 : null)) };
+  });
+  return { labels, lines };
+}
+
+/** Índices dos melhores valores de uma linha da comparação ("high" = maior é melhor). Só vale com 2+ valores. */
+export function bestIndexes(values, better) {
+  const present = values.filter((v) => v != null);
+  if (!better || present.length < 2) return [];
+  const best = better === "high" ? Math.max(...present) : Math.min(...present);
+  return values.flatMap((v, i) => (v === best ? [i] : []));
 }

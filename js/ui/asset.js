@@ -3,10 +3,11 @@
 // Ficha do ativo: cotação, gráfico de 1 ano, indicadores e proventos de uma ação ou FII.
 // =========================================================
 
-import { dividendSummary, priceStats } from "../calc.js";
+import { ALERT_METRICS, alertLabel, dividendSummary, priceStats } from "../calc.js";
 import { fmtDate } from "../format.js";
 import { FMT } from "./analysis.js";
-import { escapeHtml } from "./core.js";
+import { delegateClick, escapeHtml } from "./core.js";
+import { isWatched, onWatchlistChange, saveWatchAlerts, toggleWatch, watchItem } from "./watchlist.js";
 
 const sEl = {
   modal: document.getElementById("asset-modal"),
@@ -20,6 +21,13 @@ const sEl = {
   canvas: document.getElementById("asset-chart"),
   indicators: document.getElementById("asset-indicators"),
   dividends: document.getElementById("asset-dividends"),
+  watchBtn: document.getElementById("asset-watch-btn"),
+  alerts: document.getElementById("asset-alerts"),
+  alertsList: document.getElementById("asset-alerts-list"),
+  alertMetric: document.getElementById("asset-alert-metric"),
+  alertOp: document.getElementById("asset-alert-op"),
+  alertValue: document.getElementById("asset-alert-value"),
+  alertAddBtn: document.getElementById("asset-alert-add-btn"),
 };
 
 // Indicadores mostrados na ficha: [chave, rótulo, formatador].
@@ -30,6 +38,7 @@ const INDICATORS = {
 };
 
 let chart = null;
+let currentKind = null;
 let current = null; // ticker aberto: respostas atrasadas de outro ativo são ignoradas
 
 const tile = (label, value, tone = "") => `<div class="rounded-xl bg-slate-900/60 border border-slate-800/60 px-3 py-2.5 min-w-0"><p class="text-[11px] text-slate-500">${label}</p><p class="text-sm font-semibold truncate ${tone}">${value}</p></div>`;
@@ -38,8 +47,28 @@ const tone = (v) => (v > 0 ? "text-emerald-400" : v < 0 ? "text-red-400" : "");
 const day = (iso, options) => fmtDate(new Date(`${iso}T12:00:00`), options);
 const loading = (text) => `<p class="text-xs text-slate-500 py-4 text-center animate-pulse">${text}</p>`;
 
+/** Estrela dos favoritos e lista de alertas (alertas só para FIIs e ações: ETF não tem esses indicadores). */
+function renderWatch() {
+  if (!current) return;
+  const watched = isWatched(current);
+  sEl.watchBtn.classList.toggle("text-blue-400", watched);
+  sEl.watchBtn.setAttribute("aria-pressed", String(watched));
+  sEl.watchBtn.setAttribute("aria-label", watched ? "Remover dos favoritos" : "Adicionar aos favoritos");
+  const metrics = ALERT_METRICS[currentKind];
+  sEl.alerts.classList.toggle("hidden", !metrics);
+  if (!metrics) return;
+  const alerts = watchItem(current)?.alerts || [];
+  sEl.alertsList.innerHTML = alerts.length
+    ? `<ul class="divide-y divide-slate-800/50 text-sm">${alerts.map((a, i) => `<li class="flex items-center justify-between py-1.5"><span>${escapeHtml(alertLabel(currentKind, a))}</span><button type="button" data-alert-remove="${i}" class="text-slate-500 hover:text-red-400 transition-colors" aria-label="Remover alerta"><i class="ph-bold ph-trash"></i></button></li>`).join("")}</ul>`
+    : `<p class="text-xs text-slate-500">Nenhum alerta.</p>`;
+}
+
 export function openAssetSheet({ ticker, kind, row, owned }) {
   current = ticker;
+  currentKind = kind;
+  sEl.alertMetric.innerHTML = (ALERT_METRICS[kind] || []).map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
+  sEl.alertValue.value = "";
+  renderWatch();
   chart?.destroy();
   chart = null;
   sEl.title.textContent = ticker;
@@ -111,6 +140,7 @@ export function setAssetDividends(ticker, res, price) {
 
 export function closeAssetSheet() {
   current = null;
+  currentKind = null;
   chart?.destroy();
   chart = null;
   sEl.modal.classList.add("hidden");
@@ -121,4 +151,17 @@ export function bindAssetSheet() {
   if (!sEl.modal) return;
   sEl.closeBtn.addEventListener("click", closeAssetSheet);
   sEl.backdrop.addEventListener("click", closeAssetSheet);
+  sEl.watchBtn.addEventListener("click", () => current && toggleWatch(current, currentKind));
+  onWatchlistChange(renderWatch);
+  sEl.alertAddBtn.addEventListener("click", () => {
+    const value = Number(sEl.alertValue.value);
+    const alerts = watchItem(current)?.alerts || [];
+    if (!current || sEl.alertValue.value === "" || !Number.isFinite(value) || value < 0 || alerts.length >= 10) return;
+    saveWatchAlerts(current, currentKind, [...alerts, { metric: sEl.alertMetric.value, op: sEl.alertOp.value, value, on: false }]);
+    sEl.alertValue.value = "";
+  });
+  delegateClick(sEl.alertsList, "[data-alert-remove]", (btn) => {
+    const alerts = watchItem(current)?.alerts || [];
+    saveWatchAlerts(current, currentKind, alerts.filter((_, i) => i !== Number(btn.dataset.alertRemove)));
+  });
 }
