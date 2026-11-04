@@ -305,8 +305,11 @@ test.describe("compras no histórico", () => {
     await page.locator('.nav-item[data-view="investments"]').click();
     await page.locator(".edit-investment-btn").first().click();
     await page.fill("#investment-quantity", "150");
+    await expect(page.locator("#investment-date")).toHaveValue(iso(0)); // a diferença é uma compra nova: data de hoje
     await page.locator("#investment-form button[type=submit]").click();
     await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`))[0].quantity).toBe(150);
+    const [saved] = await readCollection(page, `users/${UID}/investments`);
+    expect(saved.purchases.map((p) => [p.date, p.quantity])).toEqual([[iso(-60), 100], [iso(0), 50]]);
     await page.locator('.nav-item[data-view="history"]').click();
     await expect(buys(page)).toHaveCount(2);
   });

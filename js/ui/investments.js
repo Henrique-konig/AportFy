@@ -509,13 +509,17 @@ export function onEditInvestment(handler) {
   editInvestmentHandler = handler;
 }
 
+const EDIT_MERGE_HINT = "Você está editando esta posição diretamente — quantidade e preço médio serão substituídos pelos valores informados. Se aumentar a quantidade, a diferença aparece no Histórico como uma nova compra.";
+let editOriginal = null; // quantidade e data da posição aberta para edição (null = ativo novo)
+
 export function openInvestmentModal(investment = null) {
   el.investmentForm.reset();
+  editOriginal = investment ? { quantity: Number(investment.quantity) || 0, date: investment.purchaseDate } : null;
 
   if (investment) {
     el.investmentModalTitle.textContent = "Editar Ativo";
     el.investmentSubmitLabel.textContent = "Salvar Alterações";
-    el.investmentMergeHint.textContent = "Você está editando esta posição diretamente — quantidade e preço médio serão substituídos pelos valores informados. Se aumentar a quantidade, a diferença aparece no Histórico como uma nova compra.";
+    el.investmentMergeHint.textContent = EDIT_MERGE_HINT;
     el.investmentId.value = investment.id;
     el.investmentTicker.value = investment.ticker;
     el.investmentCategory.value = investment.category;
@@ -605,6 +609,20 @@ export function bindInvestmentModal() {
     }
     priceManuallyEdited = false;
     fetchB3PriceHandler?.(ticker, category);
+  });
+
+  // Editando e aumentando a quantidade: a diferença é uma compra nova, então a data passa a ser a de hoje
+  // (o usuário ajusta se foi outro dia). Voltando à quantidade de antes, volta a data de antes.
+  el.investmentQuantity?.addEventListener("input", () => {
+    if (!editOriginal) return;
+    const quantity = parseFloat(el.investmentQuantity.value);
+    const more = quantity > editOriginal.quantity;
+    const dateId = ["investment-date", "investment-date-label"];
+    if (more && el.investmentDate.value === editOriginal.date) setDatePickerValue(...dateId, todayISO(), INVESTMENT_DATE_PLACEHOLDER);
+    else if (!more && el.investmentDate.value === todayISO()) setDatePickerValue(...dateId, editOriginal.date, INVESTMENT_DATE_PLACEHOLDER);
+    el.investmentMergeHint.textContent = more
+      ? `+${formatQuantity(quantity - editOriginal.quantity)} entram no Histórico como uma nova compra, na data abaixo. Ajuste a data se a compra foi em outro dia.`
+      : EDIT_MERGE_HINT;
   });
 
   // Se o usuário digitar um valor à mão, o próximo blur do ticker não
