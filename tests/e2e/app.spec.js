@@ -280,3 +280,34 @@ test.describe("cotações, casal, restauração e conta", () => {
     expect(dividend).toMatchObject({ ticker: "MXRF11", amount: 10, date: iso(-10), shares: 100 });
   });
 });
+
+test.describe("compras no histórico", () => {
+  const seed = {
+    [`users/${UID}/investments/i1`]: { ticker: "MXRF11", category: "FIIs", quantity: 100, avgPrice: 10, currentPrice: 10, purchaseDate: iso(-60), purchases: [{ date: iso(-60), quantity: 100, price: 10 }] },
+  };
+  const buys = (page) => page.locator("#hist-list [data-hist-row]", { hasText: "Compra · MXRF11" });
+
+  test("comprar mais do mesmo ativo aparece como nova compra no Histórico", async ({ page }) => {
+    await openApp(page, { seed });
+    await page.locator('.nav-item[data-view="investments"]').click();
+    await page.locator("#new-investment-btn").click();
+    await page.fill("#investment-ticker", "MXRF11");
+    await page.fill("#investment-quantity", "50");
+    await page.fill("#investment-price", "12");
+    await page.locator("#investment-form button[type=submit]").click();
+    await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`))[0].quantity).toBe(150);
+    await page.locator('.nav-item[data-view="history"]').click();
+    await expect(buys(page)).toHaveCount(2);
+  });
+
+  test("editar a quantidade para mais também registra a diferença como nova compra", async ({ page }) => {
+    await openApp(page, { seed });
+    await page.locator('.nav-item[data-view="investments"]').click();
+    await page.locator(".edit-investment-btn").first().click();
+    await page.fill("#investment-quantity", "150");
+    await page.locator("#investment-form button[type=submit]").click();
+    await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`))[0].quantity).toBe(150);
+    await page.locator('.nav-item[data-view="history"]').click();
+    await expect(buys(page)).toHaveCount(2);
+  });
+});

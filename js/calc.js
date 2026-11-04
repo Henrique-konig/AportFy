@@ -95,6 +95,27 @@ export function getInvestmentSales(inv) {
 const roundQty = (q) => Math.round(q * 1e8) / 1e8;
 
 /**
+ * Histórico de compras de uma posição depois de EDITAR quantidade, preço médio ou data diretamente.
+ * Aumentou a quantidade (mesmo ativo): mantém as compras e registra só a diferença como uma nova compra,
+ * com o preço que faz o preço médio final bater com o informado. Qualquer outra mudança (diminuiu a
+ * quantidade, corrigiu preço ou data) vira uma compra única, somando o que já foi vendido para que
+ * compras − vendas continue batendo com a quantidade atual.
+ * @param {Object} current posição antes da edição
+ * @param {{quantity:number, price:number, purchaseDate:string}} edited valores informados (price = preço médio)
+ */
+export function editedInvestmentPurchases(current, { quantity, price, purchaseDate }) {
+  const oldQty = Number(current.quantity) || 0;
+  const oldAvg = Number(current.avgPrice) || 0;
+  const delta = roundQty(quantity - oldQty);
+  const deltaPrice = delta > 0 ? (quantity * price - oldQty * oldAvg) / delta : 0;
+  if (oldQty > 0 && deltaPrice > 0 && Number.isFinite(deltaPrice)) {
+    return [...getInvestmentPurchases(current), { date: purchaseDate, quantity: delta, price: Math.round(deltaPrice * 1e8) / 1e8 }];
+  }
+  const sold = getInvestmentSales(current).reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+  return [{ date: purchaseDate, quantity: roundQty(quantity + sold), price }];
+}
+
+/**
  * Atualização de uma posição ao registrar uma venda: reduz a quantidade e
  * guarda a venda com o preço médio da época (o preço médio não muda ao vender).
  * Também grava o histórico de compras, para posições antigas não perderem a
@@ -1274,7 +1295,9 @@ const toNumber = (v) => {
  * papéis com giro financeiro pequeno (uma negociação de 2 ações faz "+85%" e não significa nada) e, com `nameMatch`,
  * o que não bate com o nome (a lista "fund" da Brapi mistura FIIs e ETFs).
  * @param {Array<{stock:string, name?:string, close:number, change:number, volume:number}>} rows
- * @returns {{ up: Array, down: Array }} cada item: { ticker, name, price, change }
+ * Dia de mercado só de queda (ou só de alta): a lista vazia vem substituída por `mildUp` (as que menos caíram) ou
+ * `mildDown` (as que menos subiram), para a tela não ficar em branco.
+ * @returns {{ up: Array, down: Array, mildUp?: Array, mildDown?: Array }} cada item: { ticker, name, price, change }
  */
 export function pickMovers(rows, { minTurnover = 1_000_000, top = 5, nameMatch = null } = {}) {
   const liquid = (Array.isArray(rows) ? rows : [])
@@ -1282,7 +1305,9 @@ export function pickMovers(rows, { minTurnover = 1_000_000, top = 5, nameMatch =
     .filter((r) => /^[A-Z]{4}\d{1,2}$/.test(String(r.stock || "")) && Number.isFinite(r.change) && Number(r.close) > 0 && Number(r.volume) * Number(r.close) >= minTurnover)
     .map((r) => ({ ticker: r.stock, name: r.name || r.stock, price: Number(r.close), change: Number(r.change) }))
     .sort((a, b) => b.change - a.change);
-  return { up: liquid.filter((r) => r.change > 0).slice(0, top), down: liquid.filter((r) => r.change < 0).reverse().slice(0, top) };
+  const up = liquid.filter((r) => r.change > 0).slice(0, top);
+  const down = liquid.filter((r) => r.change < 0).reverse().slice(0, top);
+  return { up, down, ...(up.length === 0 && { mildUp: liquid.slice(0, top) }), ...(down.length === 0 && { mildDown: [...liquid].reverse().slice(0, top) }) };
 }
 
 /** Títulos do Tesouro Direto à venda (só os tradicionais: Selic, Prefixado e IPCA+). */

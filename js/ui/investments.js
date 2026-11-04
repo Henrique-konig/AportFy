@@ -515,7 +515,7 @@ export function openInvestmentModal(investment = null) {
   if (investment) {
     el.investmentModalTitle.textContent = "Editar Ativo";
     el.investmentSubmitLabel.textContent = "Salvar Alterações";
-    el.investmentMergeHint.textContent = "Você está editando esta posição diretamente — quantidade e preço médio serão substituídos pelos valores informados.";
+    el.investmentMergeHint.textContent = "Você está editando esta posição diretamente — quantidade e preço médio serão substituídos pelos valores informados. Se aumentar a quantidade, a diferença aparece no Histórico como uma nova compra.";
     el.investmentId.value = investment.id;
     el.investmentTicker.value = investment.ticker;
     el.investmentCategory.value = investment.category;

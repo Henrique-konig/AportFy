@@ -5,7 +5,7 @@
 
 import * as ui from "../ui.js";
 import { CRYPTO_CATEGORY, fetchCryptoQuotes, fetchQuotes } from "../api.js";
-import { applyInvestmentSale, getInvestmentPurchases, getInvestmentSales, mergeInvestmentPurchase } from "../calc.js";
+import { applyInvestmentSale, editedInvestmentPurchases, getInvestmentPurchases, mergeInvestmentPurchase } from "../calc.js";
 import { addDividend, addInvestment, savePortfolioSettings, updateDividend, updateInvestment } from "../db.js";
 import { importDividendsFromB3, refreshUpcomingDividends } from "./dividend-sync.js";
 import { buildPriceHistory, refreshQuotes } from "./quotes.js";
@@ -34,19 +34,9 @@ export function bindInvestments() {
           quantity: data.quantity,
           avgPrice: data.price,
           purchaseDate: data.purchaseDate,
-          // Se só ticker/categoria mudaram, o histórico de aportes é mantido;
-          // se quantidade/preço/data foram sobrescritos, ele vira uma compra única.
-          // As vendas registradas são mantidas; a compra única soma o que já foi vendido
-          // para que compras − vendas continue batendo com a quantidade atual.
-          ...(numbersChanged && {
-            purchases: [
-              {
-                date: data.purchaseDate,
-                quantity: data.quantity + getInvestmentSales(current || {}).reduce((sum, s) => sum + (Number(s.quantity) || 0), 0),
-                price: data.price,
-              },
-            ],
-          }),
+          // Se só ticker/categoria mudaram, o histórico de aportes é mantido. Se a quantidade aumentou, a diferença
+          // entra como uma nova compra; outras mudanças viram uma compra única (ver editedInvestmentPurchases).
+          ...(numbersChanged && { purchases: editedInvestmentPurchases(current || {}, data) }),
         });
         ui.showToast("Ativo atualizado com sucesso!", "success");
       } else {

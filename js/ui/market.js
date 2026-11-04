@@ -67,7 +67,7 @@ function renderMovers(overview) {
       <h4 class="font-bold text-sm mb-3">${title}</h4>
       ${
         data
-          ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">${moverList("Maiores altas", data.up, "Nenhuma em alta entre as mais negociadas.")}${moverList("Maiores baixas", data.down, "Nenhuma em queda entre as mais negociadas.")}</div>`
+          ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">${data.up.length || !data.mildUp?.length ? moverList("Maiores altas", data.up, "Nenhuma em alta entre as mais negociadas.") : moverList("Menores quedas (nenhuma em alta hoje)", data.mildUp, "")}${data.down.length || !data.mildDown?.length ? moverList("Maiores baixas", data.down, "Nenhuma em queda entre as mais negociadas.") : moverList("Menores altas (nenhuma em queda hoje)", data.mildDown, "")}</div>`
           : placeholder(overview)
       }
     </div>`;

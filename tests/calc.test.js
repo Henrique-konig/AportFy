@@ -69,6 +69,7 @@ import {
   evaluateAlerts,
   compareSeries,
   bestIndexes,
+  editedInvestmentPurchases,
 } from "../js/calc.js";
 
 describe("applyInvestmentSale", () => {
@@ -922,6 +923,20 @@ describe("radar do mercado", () => {
     expect(acoes.down.map((r) => r.ticker)).toEqual(["DDDD4"]);
     const fiis = pickMovers(rows, { minTurnover: 2_000_000, nameMatch: /IMOBILI/i });
     expect(fiis.up.map((r) => r.ticker)).toEqual(["EEEE11"]);
+    expect(fiis.mildUp).toBeUndefined();
+  });
+
+  it("pickMovers: dia só de queda mostra as que menos caíram no lugar das altas", () => {
+    const rows = [
+      { stock: "AAAA11", name: "FII A", close: 10, change: -1, volume: 1_000_000 },
+      { stock: "BBBB11", name: "FII B", close: 10, change: -5, volume: 1_000_000 },
+      { stock: "CCCC11", name: "FII C", close: 10, change: -3, volume: 1_000_000 },
+    ];
+    const r = pickMovers(rows, { minTurnover: 1, top: 2 });
+    expect(r.up).toEqual([]);
+    expect(r.mildUp.map((x) => x.ticker)).toEqual(["AAAA11", "CCCC11"]);
+    expect(r.down.map((x) => x.ticker)).toEqual(["BBBB11", "CCCC11"]);
+    expect(r.mildDown).toBeUndefined();
   });
 
   it("parseTesouro: só os títulos tradicionais, com tipo e taxa", () => {
@@ -1200,5 +1215,30 @@ describe("Alertas de ETF", () => {
     const r = evaluateAlerts([{ ticker: "BOVA11", kind: "etfs", alerts: [{ metric: "vol", op: "gt", value: 20, on: false }] }], { etfs: [{ ticker: "BOVA11", vol: 25 }] });
     expect(r.notifications).toHaveLength(1);
     expect(r.notifications[0].body).toContain("Volatilidade acima de 20%");
+  });
+});
+
+describe("editar posição preserva o histórico", () => {
+  const current = { quantity: 100, avgPrice: 10, purchases: [{ date: "2026-09-01", quantity: 100, price: 10 }] };
+
+  it("aumentar a quantidade registra a diferença como nova compra, mantendo o preço médio informado", () => {
+    const purchases = editedInvestmentPurchases(current, { quantity: 150, price: 10.6666667, purchaseDate: "2026-11-04" });
+    expect(purchases).toHaveLength(2);
+    expect(purchases[0]).toEqual(current.purchases[0]);
+    expect(purchases[1]).toMatchObject({ date: "2026-11-04", quantity: 50 });
+    expect(purchases[1].price).toBeCloseTo(12, 4);
+    const avg = purchases.reduce((s, p) => s + p.quantity * p.price, 0) / purchases.reduce((s, p) => s + p.quantity, 0);
+    expect(avg).toBeCloseTo(10.6666667, 4);
+  });
+
+  it("diminuir a quantidade ou corrigir só o preço vira compra única, somando o que já foi vendido", () => {
+    const withSale = { ...current, quantity: 70, sales: [{ date: "2026-10-01", quantity: 30, price: 11, avgPrice: 10 }] };
+    expect(editedInvestmentPurchases(withSale, { quantity: 60, price: 10, purchaseDate: "2026-11-04" })).toEqual([{ date: "2026-11-04", quantity: 90, price: 10 }]);
+    expect(editedInvestmentPurchases(current, { quantity: 100, price: 9, purchaseDate: "2026-09-02" })).toEqual([{ date: "2026-09-02", quantity: 100, price: 9 }]);
+  });
+
+  it("preço médio que exigiria compra de preço zero ou negativo cai no caso da compra única", () => {
+    expect(editedInvestmentPurchases(current, { quantity: 150, price: 6, purchaseDate: "2026-11-04" })).toEqual([{ date: "2026-11-04", quantity: 150, price: 6 }]);
+    expect(editedInvestmentPurchases({}, { quantity: 5, price: 2, purchaseDate: "2026-11-04" })).toEqual([{ date: "2026-11-04", quantity: 5, price: 2 }]);
   });
 });

@@ -1370,3 +1370,15 @@ describe("comparar ativos (tela)", () => {
     expect($("analysis-compare-bar").classList.contains("hidden")).toBe(true);
   });
 });
+
+describe("radar: dia só de queda", () => {
+  it("sem nenhuma em alta, mostra as que menos caíram em vez de uma lista vazia", () => {
+    const down = [{ ticker: "AAAA11", name: "FII A", price: 10, change: -1 }];
+    ui.renderRadar({
+      overview: { updatedAt: "2026-11-03T15:00:00Z", acoes: { up: [], down: [] }, fiis: { up: [], down, mildUp: down }, tesouro: [], taxas: {} },
+      indices: null,
+    });
+    expect(text("radar-movers")).toContain("Menores quedas (nenhuma em alta hoje)");
+    expect(text("radar-movers")).toContain("AAAA11");
+  });
+});
