@@ -483,7 +483,7 @@ export function escapeHtml(str) {
 /* ---------------------------------------------------------------
    Toasts
 --------------------------------------------------------------- */
-export function showToast(message, type = "success") {
+export function showToast(message, type = "success", action = null) {
   const icons = {
     success: "ph-fill ph-check-circle text-emerald-400",
     error: "ph-fill ph-x-circle text-red-400",
@@ -493,6 +493,17 @@ export function showToast(message, type = "success") {
   toast.className =
     "animate-toast-in glass-card rounded-xl px-4 py-3.5 flex items-center gap-3 text-sm font-medium min-w-[260px] shadow-2xl";
   toast.innerHTML = `<i class="${icons[type] || icons.info} text-lg shrink-0"></i><span>${escapeHtml(message)}</span>`;
+  if (action) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ml-auto pl-3 text-blue-400 font-semibold hover:text-blue-300";
+    btn.textContent = action.label;
+    btn.addEventListener("click", () => {
+      toast.remove();
+      action.onClick();
+    });
+    toast.appendChild(btn);
+  }
   el.toastContainer.appendChild(toast);
 
   setTimeout(() => {
@@ -500,7 +511,7 @@ export function showToast(message, type = "success") {
     toast.style.opacity = "0";
     toast.style.transform = "translateX(24px)";
     setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  }, action ? 8000 : 3500);
 }
 
 /* ---------------------------------------------------------------

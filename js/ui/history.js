@@ -4,8 +4,8 @@
 // =========================================================
 
 import { refreshDropdown } from "../dropdown.js";
-import { buildInvestmentHistory, summarizeHistory } from "../calc.js";
-import { escapeHtml, fadeInClass, formatCurrency, state } from "./core.js";
+import { buildInvestmentHistory, estimateSalesTax, historyToCsv, summarizeHistory } from "../calc.js";
+import { escapeHtml, fadeInClass, formatCurrency, showToast, state } from "./core.js";
 import { formatMonthLabel } from "./dividends.js";
 import { formatQuantity } from "./investments.js";
 import { formatPerShare } from "../format.js";
@@ -30,6 +30,8 @@ export const histEl = {
   empty: document.getElementById("hist-empty"),
   emptyTitle: document.getElementById("hist-empty-title"),
   emptyDesc: document.getElementById("hist-empty-desc"),
+  tax: document.getElementById("hist-tax"),
+  exportCsv: document.getElementById("hist-export-csv"),
   moreWrap: document.getElementById("hist-more-wrap"),
   moreBtn: document.getElementById("hist-more-btn"),
   moreRemaining: document.getElementById("hist-more-remaining"),
@@ -37,6 +39,7 @@ export const histEl = {
 export const HIST_PAGE_SIZE = 40;
 export let histKind = "all";
 export let histLimit = HIST_PAGE_SIZE;
+let lastScoped = [];
 
 export const HIST_KIND_META = {
   buy: { label: "Compra", icon: "ph-shopping-cart-simple", color: "#3b82f6" },
@@ -128,6 +131,14 @@ export function renderHistory() {
   histEl.totalResult.classList.toggle("text-red-400", totals.realized < 0);
   histEl.totalResultCount.textContent = count("sell") > 0 ? "Lucro/prejuízo realizado nas vendas" : "Nenhuma venda no filtro";
   histEl.tabs.forEach((b) => b.classList.toggle("active-filter", b.dataset.histKind === histKind));
+  lastScoped = scoped;
+
+  const tax = estimateSalesTax(scoped);
+  const taxed = tax.rows.filter((r) => r.tax > 0);
+  histEl.tax.classList.toggle("hidden", tax.rows.length === 0);
+  histEl.tax.textContent = taxed.length
+    ? `IR estimado nas vendas: ${formatCurrency(tax.total)} (${taxed.map((r) => `${formatMonthLabel(r.month)}: ${r.category} ${formatCurrency(r.tax)}`).join(" · ")}). Estimativa, sem compensar prejuízos de outros meses; confira o DARF.`
+    : "IR estimado nas vendas: R$ 0,00 (vendas isentas ou com prejuízo). Ações são isentas até R$ 20 mil vendidos no mês.";
 
   const visible = events.slice(0, histLimit);
   histEl.empty.classList.toggle("hidden", visible.length > 0);
@@ -186,6 +197,16 @@ export function bindHistory() {
   histEl.search?.addEventListener("input", reset);
   histEl.asset?.addEventListener("change", reset);
   histEl.month?.addEventListener("change", reset);
+  histEl.exportCsv?.addEventListener("click", () => {
+    if (lastScoped.length === 0) return showToast("Nenhuma movimentação para exportar.", "info");
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob([historyToCsv(lastScoped)], { type: "text/csv;charset=utf-8" })),
+      download: "aportfy-historico.csv",
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast(`${lastScoped.length} movimentações exportadas.`, "success");
+  });
   histEl.moreBtn?.addEventListener("click", () => {
     histLimit += HIST_PAGE_SIZE;
     renderHistory();

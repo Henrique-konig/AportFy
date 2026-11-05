@@ -1233,6 +1233,60 @@ export function transactionsToCsv(transactions) {
   return "﻿" + [header, ...rows].map((r) => r.map(csvCell).join(";")).join("\r\n");
 }
 
+/** CSV do Histórico de movimentações (compras, vendas e proventos), mesmo padrão do Excel em português. */
+export function historyToCsv(events) {
+  const kinds = { buy: "Compra", sell: "Venda", dividend: "Provento" };
+  const header = ["Data", "Tipo", "Ativo", "Categoria", "Quantidade", "Preço", "Valor", "Resultado"];
+  const rows = events
+    .slice()
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .map((e) => [
+      e.date ? `${e.date.slice(8, 10)}/${e.date.slice(5, 7)}/${e.date.slice(0, 4)}` : "",
+      kinds[e.kind] || e.kind,
+      e.ticker,
+      e.category,
+      e.quantity == null ? "" : String(e.quantity).replace(".", ","),
+      e.price == null ? "" : csvNumber(e.price),
+      csvNumber(e.amount),
+      e.kind === "sell" ? csvNumber(e.result) : "",
+    ]);
+  return "\uFEFF" + [header, ...rows].map((r) => r.map(csvCell).join(";")).join("\r\n");
+}
+
+/* =========================================================
+   IR estimado sobre vendas (renda variável)
+   ========================================================= */
+
+export const STOCK_EXEMPT_MONTHLY_SALES = 20000;
+const TAX_RATE = { "Ações": 0.15, FIIs: 0.2 };
+
+/**
+ * Estimativa do IR das vendas, por mês e categoria: ações até R$ 20 mil vendidos no mês são isentas (swing trade),
+ * acima disso 15% do lucro; FIIs 20% do lucro, sem isenção. Prejuízo do mês zera o imposto do mês (não compensa
+ * meses anteriores — por isso é estimativa, não substitui a apuração oficial/DARF).
+ * @returns {{total:number, rows:Array<{month:string, category:string, sold:number, result:number, rate:number, exempt:boolean, tax:number}>}}
+ */
+export function estimateSalesTax(events) {
+  const groups = new Map();
+  events
+    .filter((e) => e.kind === "sell" && TAX_RATE[e.category])
+    .forEach((e) => {
+      const key = `${e.date.slice(0, 7)}|${e.category}`;
+      const g = groups.get(key) || { month: e.date.slice(0, 7), category: e.category, sold: 0, result: 0 };
+      g.sold += e.amount;
+      g.result += e.result || 0;
+      groups.set(key, g);
+    });
+  const rows = [...groups.values()]
+    .map((g) => {
+      const rate = TAX_RATE[g.category];
+      const exempt = g.category === "Ações" && g.sold <= STOCK_EXEMPT_MONTHLY_SALES;
+      return { ...g, rate, exempt, tax: exempt || g.result <= 0 ? 0 : g.result * rate };
+    })
+    .sort((a, b) => b.month.localeCompare(a.month));
+  return { total: rows.reduce((sum, r) => sum + r.tax, 0), rows };
+}
+
 /* =========================================================
    Lembretes por notificação (servidor, uma vez por dia)
    ========================================================= */

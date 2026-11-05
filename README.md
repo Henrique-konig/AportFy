@@ -85,6 +85,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 **Histórico**
 - Linha do tempo de compras, vendas e proventos, agrupada por mês, no estilo de extrato.
 - Filtros por tipo (compras, vendas, proventos), ativo, mês e busca, com totais comprados, vendidos, proventos recebidos e resultado das vendas.
+- **Exportar CSV** do que está filtrado (Excel em português) e **IR estimado nas vendas**: ações isentas até R$ 20 mil vendidos no mês, 15% do lucro acima disso; FIIs 20% do lucro. É estimativa mensal, sem compensar prejuízos de outros meses; confira o DARF.
 
 **Radar do Mercado** (antiga aba Notícias)
 - **Índices:** Ibovespa e IFIX com o valor, a variação do dia, de 30 dias e de 12 meses.
@@ -376,7 +377,7 @@ Depois do primeiro deploy, adicione o domínio gerado em **Firebase Console → 
 - **Excluir conta no Modo Casal:** se o espaço tem mais de uma pessoa, ele continua com a outra (os dados compartilhados não são apagados); só os seus dados pessoais e a sua conta saem.
 - **Modo Casal:** só o dono aprova novos membros, e membros não podem ser removidos pela interface (a lista só cresce). O código sozinho não dá acesso, mas ainda vale compartilhá-lo só com quem você confia.
 - **Nome do projeto Firebase:** o ID do projeto (`ecofy-c332d`) é de antes do rebrand e não pode ser renomeado; só o nome de exibição muda (Console do Firebase → Configurações do projeto). Usuários e dados ficam nele.
-- **Histórico de aportes:** posições criadas antes do campo `purchases` aparecem como uma única compra, na data da última compra. Editar quantidade, preço ou data de um ativo também resume o histórico em uma compra única.
+- **Histórico de aportes:** posições criadas antes do campo `purchases` aparecem como uma única compra, na data da última compra. Editar preço ou data, ou diminuir a quantidade, resume o histórico em uma compra única; aumentar a quantidade mantém as compras e registra a diferença como nova compra. Depois de editar, o aviso tem **Desfazer**.
 - **Cotações e notícias** dependem de APIs gratuitas de terceiros, sujeitas a limites de uso e indisponibilidade.
 - **Proventos** vêm da API pública (não documentada) da B3 por meio de uma função serverless; o formato pode mudar sem aviso. O cálculo usa o histórico de aportes (`purchases`) para saber as cotas na data-com — para posições antigas sem histórico, vale a data da última compra.
 - **Excluir um ativo** apaga também as compras e vendas dele do histórico (os proventos lançados continuam). Para encerrar uma posição mantendo o histórico, registre a venda.

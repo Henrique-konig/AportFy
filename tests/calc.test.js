@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   calcInvestmentMetrics,
+  estimateSalesTax,
+  historyToCsv,
   mergeInvestmentPurchase,
   pctChange,
   buildMonthlySeries,
@@ -1240,5 +1242,22 @@ describe("editar posição preserva o histórico", () => {
   it("preço médio que exigiria compra de preço zero ou negativo cai no caso da compra única", () => {
     expect(editedInvestmentPurchases(current, { quantity: 150, price: 6, purchaseDate: "2026-11-04" })).toEqual([{ date: "2026-11-04", quantity: 150, price: 6 }]);
     expect(editedInvestmentPurchases({}, { quantity: 5, price: 2, purchaseDate: "2026-11-04" })).toEqual([{ date: "2026-11-04", quantity: 5, price: 2 }]);
+  });
+});
+
+describe("IR das vendas e CSV do histórico", () => {
+  const sell = (date, category, amount, result) => ({ kind: "sell", date, category, ticker: "X", amount, result });
+  it("ações até R$ 20 mil no mês são isentas; acima paga 15% do lucro", () => {
+    expect(estimateSalesTax([sell("2026-10-05", "Ações", 15000, 3000)]).total).toBe(0);
+    expect(estimateSalesTax([sell("2026-10-05", "Ações", 25000, 3000)]).total).toBe(450);
+  });
+  it("FIIs pagam 20% sem isenção e prejuízo não gera imposto", () => {
+    expect(estimateSalesTax([sell("2026-10-05", "FIIs", 1000, 500), sell("2026-10-09", "FIIs", 1000, -100)]).total).toBe(80);
+    expect(estimateSalesTax([sell("2026-10-05", "FIIs", 1000, -100)]).total).toBe(0);
+  });
+  it("CSV do histórico usa ; e vírgula decimal", () => {
+    const csv = historyToCsv([{ kind: "buy", date: "2026-10-28", ticker: "MXRF11", category: "FIIs", quantity: 10, price: 9.5, amount: 95 }]);
+    expect(csv).toContain("Data;Tipo;Ativo");
+    expect(csv).toContain("28/10/2026;Compra;MXRF11;FIIs;10;9,50;95,00;");
   });
 });

@@ -38,7 +38,15 @@ export function bindInvestments() {
           // entra como uma nova compra; outras mudanças viram uma compra única (ver editedInvestmentPurchases).
           ...(numbersChanged && { purchases: editedInvestmentPurchases(current || {}, data) }),
         });
-        ui.showToast("Ativo atualizado com sucesso!", "success");
+        const { ticker, category, quantity, avgPrice, purchaseDate, purchases } = current || {};
+        const previous = { ticker, category, quantity, avgPrice, purchaseDate, ...(purchases && { purchases }) };
+        ui.showToast("Ativo atualizado com sucesso!", "success", current && {
+          label: "Desfazer",
+          onClick: () =>
+            updateInvestment(session.activeMode, id, editingId, { purchases: null, ...previous })
+              .then(() => ui.showToast("Edição desfeita.", "success"))
+              .catch(() => ui.showToast("Não foi possível desfazer.", "error")),
+        });
       } else {
         // Mesmo ativo já existe na carteira? Mescla a compra em vez de
         // criar uma posição duplicada, recalculando o preço médio:
