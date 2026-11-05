@@ -327,4 +327,15 @@ test.describe("compras no histórico", () => {
     const [saved] = await readCollection(page, `users/${UID}/investments`);
     expect(saved.purchases.map((p) => [p.date, p.quantity])).toEqual([[iso(-60), 100]]);
   });
+
+  test("Patrimônio aparece no Dashboard e a importação da B3 cria a posição", async ({ page }) => {
+    await openApp(page, { seed });
+    await expect(page.locator("#networth-card")).toBeVisible();
+    await expect(page.locator("#networth-total")).toContainText("R$");
+    await page.locator('.nav-item[data-view="investments"]').click();
+    page.on("dialog", (d) => d.accept());
+    const csv = "Data do Negócio;Tipo de Movimentação;Código de Negociação;Quantidade;Preço\n28/10/2025;Compra;HGLG11F;5;160,00\n";
+    await page.setInputFiles("#import-b3-file", { name: "negociacao.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`)).map((i) => i.ticker).sort()).toEqual(["HGLG11", "MXRF11"]);
+  });
 });

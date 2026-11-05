@@ -35,4 +35,5 @@ export * from "./ui/analysis.js";
 export * from "./ui/asset.js";
 export * from "./ui/portfolio-indicators.js";
 export * from "./ui/watchlist.js";
+export * from "./ui/share-card.js";
 export * from "./ui/compare.js";

@@ -7,6 +7,7 @@ import * as ui from "../ui.js";
 import { CRYPTO_CATEGORY, fetchCryptoQuotes, fetchQuotes } from "../api.js";
 import { applyInvestmentSale, editedInvestmentPurchases, getInvestmentPurchases, mergeInvestmentPurchase } from "../calc.js";
 import { addDividend, addInvestment, savePortfolioSettings, updateDividend, updateInvestment } from "../db.js";
+import { bindB3Import } from "./b3-import.js";
 import { importDividendsFromB3, refreshUpcomingDividends } from "./dividend-sync.js";
 import { buildPriceHistory, refreshQuotes } from "./quotes.js";
 import { session } from "./session.js";
@@ -153,6 +154,7 @@ export function bindInvestments() {
   ui.onEditDividend((dividend) => ui.openDividendModal(dividend));
 
   ui.onImportDividends(() => importDividendsFromB3());
+  bindB3Import();
 
   /* -------------------- Saúde da Carteira -------------------- */
   ui.onFinancialIndependenceTargetChange(async (fiMonthlyIncome) => {

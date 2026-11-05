@@ -72,6 +72,9 @@
   <link rel="modulepreload" href="js/app/session.js" />
   <link rel="modulepreload" href="js/app/subscriptions.js" />
   <link rel="modulepreload" href="js/app/watchlist.js" />
+  <link rel="modulepreload" href="js/ui/networth.js" />
+  <link rel="modulepreload" href="js/ui/share-card.js" />
+  <link rel="modulepreload" href="js/app/b3-import.js" />
   <link rel="modulepreload" href="js/auth.js" />
   <link rel="modulepreload" href="js/calc.js" />
   <link rel="modulepreload" href="js/datepicker.js" />
@@ -382,6 +385,24 @@
 
           <!-- ======================= VIEW: DASHBOARD ======================= -->
           <div id="view-dashboard" class="view-section space-y-6">
+
+            <!-- PATRIMÔNIO -->
+            <section id="networth-card" class="hidden glass-card rounded-2xl p-5 sm:p-6 animate-slide-up" aria-labelledby="networth-title">
+              <div class="flex flex-wrap items-end justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 id="networth-title" class="text-xs font-medium text-slate-400">Patrimônio</h3>
+                  <p class="text-3xl font-extrabold tracking-tight" id="networth-total">R$ 0,00</p>
+                </div>
+                <div class="grid grid-cols-3 gap-4 text-right">
+                  <div><p class="text-[11px] text-slate-500">Em conta</p><p class="text-sm font-bold" id="networth-cash">—</p></div>
+                  <div><p class="text-[11px] text-slate-500">Carteira</p><p class="text-sm font-bold" id="networth-portfolio">—</p></div>
+                  <div><p class="text-[11px] text-slate-500">Resultado</p><p class="text-sm font-bold" id="networth-result">—</p></div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-3" id="networth-next"></p>
+              <div class="h-44 mt-4"><canvas id="networth-chart"></canvas></div>
+              <p class="text-[11px] text-slate-600 mt-2">Evolução a custo (saldo das transações + valor investido); o total acima usa a cotação de hoje.</p>
+            </section>
 
             <!-- PRIMEIROS PASSOS -->
             <section id="onboarding-card" class="hidden glass-card rounded-2xl p-5 sm:p-6 animate-slide-up" aria-labelledby="onboarding-title">
@@ -809,6 +830,13 @@
                 </select>
 
                 <div class="flex items-center gap-2 lg:ml-auto">
+                  <input id="import-b3-file" type="file" accept=".csv,text/csv" class="hidden" />
+                  <button id="share-card-btn" type="button" title="Gerar imagem da carteira (só percentuais)" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0"><i class="ph-bold ph-share-network text-base"></i><span class="hidden sm:inline">Compartilhar</span></button>
+                  <button id="import-b3-btn" type="button" title="Importar negociações (CSV da Área do Investidor da B3)"
+                    class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
+                    <i class="ph-bold ph-upload-simple text-base"></i>
+                    <span class="hidden sm:inline">Importar B3</span>
+                  </button>
                   <button id="refresh-quotes-btn"
                     class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-[0.97] shrink-0">
                     <i id="refresh-quotes-icon" class="ph-bold ph-arrows-clockwise text-base"></i>

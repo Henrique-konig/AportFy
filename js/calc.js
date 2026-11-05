@@ -220,6 +220,29 @@ export function buildUpcomingDividends(investments, calendars, today) {
   return items.sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.ticker.localeCompare(b.ticker));
 }
 
+/**
+ * Evolução do patrimônio mês a mês: saldo acumulado das transações + valor investido a custo (compras menos
+ * o custo do que foi vendido, até o fim de cada mês). A custo porque o app não guarda cotações antigas.
+ * @returns {Array<{key:string, label:string, cash:number, invested:number, total:number}>}
+ */
+export function netWorthSeries(transactions, investments, monthsCount = 12, referenceDate = new Date()) {
+  const first = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - monthsCount + 1, 1);
+  return Array.from({ length: monthsCount }, (_, i) => {
+    const d = new Date(first.getFullYear(), first.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const until = (x) => String(x.date).slice(0, 7) <= key;
+    const cash = transactions.filter(until).reduce((sum, t) => sum + (t.type === "income" ? 1 : -1) * (Number(t.amount) || 0), 0);
+    const invested = investments.reduce(
+      (sum, inv) =>
+        sum +
+        getInvestmentPurchases(inv).filter(until).reduce((s, p) => s + (Number(p.quantity) || 0) * (Number(p.price) || 0), 0) -
+        getInvestmentSales(inv).filter(until).reduce((s, x) => s + (Number(x.quantity) || 0) * (Number(x.avgPrice) || 0), 0),
+      0
+    );
+    return { key, label: monthShort(d), cash, invested, total: cash + invested };
+  });
+}
+
 /** Variação percentual entre dois valores (usado nos KPIs do dashboard). */
 export function pctChange(current, previous) {
   if (!previous) return current > 0 ? 100 : 0;
@@ -1285,6 +1308,108 @@ export function estimateSalesTax(events) {
     })
     .sort((a, b) => b.month.localeCompare(a.month));
   return { total: rows.reduce((sum, r) => sum + r.tax, 0), rows };
+}
+
+/* =========================================================
+   Importação de negociações (CSV da Área do Investidor da B3)
+   ========================================================= */
+
+const norm = (s) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const moneyNumber = (t) => {
+  const s = String(t ?? "").replace(/R\$|\s/g, "");
+  return s.includes(",") ? brNumber(s) : Number(s) || null;
+};
+const importDate = (t) => {
+  const s = String(t ?? "").trim();
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+};
+const splitCsvLine = (line, sep) => {
+  const out = [];
+  let cur = "";
+  let quoted = false;
+  for (const ch of line) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === sep && !quoted) (out.push(cur), (cur = ""));
+    else cur += ch;
+  }
+  return [...out, cur].map((c) => c.trim());
+};
+
+/**
+ * Lê o CSV de negociações (B3 > Extratos > Negociação, salvo como CSV; também aceita um CSV simples com
+ * data, tipo, código, quantidade e preço). Só ações/FIIs/ETFs (código tipo PETR4, MXRF11; o "F" do fracionário sai).
+ * @returns {{trades: Array<{date:string, side:"buy"|"sell", ticker:string, category:string, quantity:number, price:number}>, skipped:number}}
+ */
+export function parseB3Trades(text) {
+  const lines = String(text ?? "").replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return { trades: [], skipped: 0 };
+  const sep = [";", "\t", ","].map((c) => [c, lines[0].split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const head = splitCsvLine(lines[0], sep).map(norm);
+  const find = (re) => head.findIndex((h) => re.test(h));
+  const col = {
+    date: find(/^data/),
+    side: find(/tipo de mov|^tipo$|opera|^c\/v$/),
+    code: find(/codigo de neg|ticker|ativo|^codigo/),
+    qty: find(/^quantidade$|^qtd/),
+    price: find(/^preco/),
+  };
+  if (col.date < 0 || col.code < 0 || col.qty < 0 || col.price < 0) return { trades: [], skipped: lines.length - 1 };
+  const trades = [];
+  let skipped = 0;
+  lines.slice(1).forEach((line) => {
+    const c = splitCsvLine(line, sep);
+    const ticker = String(c[col.code] || "").toUpperCase().replace(/^([A-Z]{4}\d{1,2})F$/, "$1");
+    const side = col.side < 0 ? "buy" : /^v/.test(norm(c[col.side])) ? "sell" : /^c/.test(norm(c[col.side])) ? "buy" : null;
+    const date = importDate(c[col.date]);
+    const quantity = moneyNumber(c[col.qty]);
+    const price = moneyNumber(c[col.price]);
+    if (!/^[A-Z]{4}\d{1,2}$/.test(ticker) || !side || !date || !(quantity > 0) || !(price > 0)) return void skipped++;
+    trades.push({ date, side, ticker, category: ticker.endsWith("11") ? "FIIs" : "Ações", quantity, price });
+  });
+  return { trades, skipped };
+}
+
+/**
+ * Aplica as negociações sobre a carteira atual, em ordem de data, sem duplicar o que já está lá (mesma data,
+ * quantidade e preço) — importar o mesmo arquivo duas vezes não muda nada. Venda maior que a quantidade em
+ * carteira é ignorada.
+ * @returns {{changes: Array<{ticker:string, id:string|null, data:Object}>, added:number, duplicates:number, rejected:number}}
+ */
+export function planB3Import(trades, investments) {
+  const same = (a, b) => a.date === b.date && roundQty(a.quantity) === roundQty(b.quantity) && Math.abs(a.price - b.price) < 0.005;
+  const byTicker = new Map();
+  trades.forEach((t) => byTicker.set(t.ticker, [...(byTicker.get(t.ticker) || []), t]));
+  const plan = { changes: [], added: 0, duplicates: 0, rejected: 0 };
+  byTicker.forEach((list, ticker) => {
+    const existing = investments.find((i) => i.ticker.toUpperCase() === ticker);
+    let cur = existing
+      ? { ...existing, purchases: getInvestmentPurchases(existing), sales: getInvestmentSales(existing) }
+      : { quantity: 0, avgPrice: 0, purchaseDate: "", purchases: [], sales: [] };
+    let touched = false;
+    list
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.side === "buy" ? -1 : 1))
+      .forEach((t) => {
+        if ((t.side === "buy" ? cur.purchases : cur.sales).some((x) => same(x, t))) return void plan.duplicates++;
+        if (t.side === "buy") {
+          const purchases = [...cur.purchases, { date: t.date, quantity: t.quantity, price: t.price }];
+          cur = { ...cur, ...mergeInvestmentPurchase(cur, { quantity: t.quantity, price: t.price, purchaseDate: t.date }), purchases };
+        } else {
+          if (roundQty(t.quantity) > roundQty(cur.quantity)) return void plan.rejected++;
+          cur = { ...cur, ...applyInvestmentSale(cur, t) };
+        }
+        touched = true;
+        plan.added++;
+      });
+    if (!touched) return;
+    const { quantity, avgPrice, purchaseDate, purchases, sales } = cur;
+    const data = { quantity, avgPrice, purchaseDate, purchases, sales };
+    if (!existing) Object.assign(data, { ticker, category: list[0].category, currentPrice: list[list.length - 1].price, lastQuoteAt: null, lastQuoteError: false });
+    plan.changes.push({ ticker, id: existing?.id ?? null, data });
+  });
+  return plan;
 }
 
 /* =========================================================

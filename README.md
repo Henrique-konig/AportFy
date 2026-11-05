@@ -41,6 +41,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 ## Funcionalidades
 
 **Dashboard**
+- **Patrimônio:** total de hoje (saldo + carteira a preço atual), resultado da carteira, próximo provento e a evolução dos últimos 12 meses a custo.
 - KPIs de saldo, receitas, despesas e progresso de metas, com comparação em relação ao mês anterior.
 - Filtro por mês/ano ou **Todos os meses** (acumulado). Ao escolher um mês, o saldo mostra o resultado daquele mês.
 - Fluxo de caixa dos últimos 6 meses e despesas por categoria do período selecionado.
@@ -67,6 +68,8 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 - Limite de gasto por categoria, com acompanhamento do consumo no mês.
 
 **Investimentos**
+- **Importar B3:** lê o CSV de negociações da Área do Investidor (Extratos > Negociação, salvo como CSV), recalcula preço médio, compras e vendas, e não duplica se importar o mesmo arquivo de novo. Só ações e FIIs.
+- **Compartilhar:** gera uma imagem 1080x1080 da carteira com percentuais por categoria, sem valores em reais.
 - Carteira por ativo, com preço médio recalculado a cada nova compra do mesmo ativo.
 - **Indicadores da carteira:** DY, P/VP, P/L, ROE e vacância dos seus FIIs e ações (Fundamentus), com médias ponderadas pelo valor de cada posição e peso de cada ativo. ETFs cadastrados como ações entram com retorno de 12 meses e volatilidade. Clique no ativo para abrir a ficha.
 - **Vendas:** registro de venda parcial ou total com o lucro/prejuízo realizado (o preço médio não muda na venda). Posições vendidas por completo saem da carteira, mas continuam no Histórico.

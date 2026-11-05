@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   calcInvestmentMetrics,
   estimateSalesTax,
+  netWorthSeries,
+  parseB3Trades,
+  planB3Import,
   historyToCsv,
   mergeInvestmentPurchase,
   pctChange,
@@ -1259,5 +1262,50 @@ describe("IR das vendas e CSV do histórico", () => {
     const csv = historyToCsv([{ kind: "buy", date: "2026-10-28", ticker: "MXRF11", category: "FIIs", quantity: 10, price: 9.5, amount: 95 }]);
     expect(csv).toContain("Data;Tipo;Ativo");
     expect(csv).toContain("28/10/2026;Compra;MXRF11;FIIs;10;9,50;95,00;");
+  });
+});
+
+describe("importação de negociações da B3", () => {
+  const csv = [
+    "Data do Negócio;Tipo de Movimentação;Mercado;Prazo/Vencimento;Instituição;Código de Negociação;Quantidade;Preço;Valor",
+    "28/10/2025;Compra;Mercado à Vista;-;XP;MXRF11F;10;9,50;95,00",
+    "29/10/2025;Compra;Mercado à Vista;-;XP;MXRF11;10;10,50;105,00",
+    "30/10/2025;Venda;Mercado à Vista;-;XP;MXRF11;5;11,00;55,00",
+    "30/10/2025;Compra;Mercado à Vista;-;XP;TESOURO SELIC;1;100,00;100,00",
+  ].join("\n");
+
+  it("lê compras e vendas, tira o F do fracionário e ignora o que não é ação/FII", () => {
+    const { trades, skipped } = parseB3Trades(csv);
+    expect(trades.map((t) => [t.ticker, t.side, t.quantity, t.price])).toEqual([
+      ["MXRF11", "buy", 10, 9.5],
+      ["MXRF11", "buy", 10, 10.5],
+      ["MXRF11", "sell", 5, 11],
+    ]);
+    expect(skipped).toBe(1);
+  });
+  it("monta a posição com preço médio e vendas; importar de novo não duplica", () => {
+    const { changes, added } = planB3Import(parseB3Trades(csv).trades, []);
+    expect(added).toBe(3);
+    expect(changes[0].data).toMatchObject({ ticker: "MXRF11", category: "FIIs", quantity: 15, avgPrice: 10 });
+    expect(changes[0].data.purchases).toHaveLength(2);
+    const again = planB3Import(parseB3Trades(csv).trades, [{ id: "a", ticker: "MXRF11", ...changes[0].data }]);
+    expect(again.added).toBe(0);
+    expect(again.duplicates).toBe(3);
+  });
+});
+
+describe("evolução do patrimônio", () => {
+  it("soma o saldo das transações e o investido a custo até o fim de cada mês", () => {
+    const tx = [
+      { date: "2026-09-10", type: "income", amount: 1000 },
+      { date: "2026-10-05", type: "expense", amount: 300 },
+    ];
+    const inv = [{ purchases: [{ date: "2026-10-28", quantity: 10, price: 10 }], sales: [{ date: "2026-11-02", quantity: 4, price: 12, avgPrice: 10 }] }];
+    const s = netWorthSeries(tx, inv, 3, new Date(2026, 10, 15));
+    expect(s.map((p) => [p.key, p.cash, p.invested, p.total])).toEqual([
+      ["2026-09", 1000, 0, 1000],
+      ["2026-10", 700, 100, 800],
+      ["2026-11", 700, 60, 760],
+    ]);
   });
 });
