@@ -60,6 +60,8 @@ import {
   transactionsToCsv,
   buildPushReminders,
   splitBalance,
+  unrecordedQuantity,
+  registerPurchase,
   FUNDAMENTUS_FII_COLUMNS,
   brNumber,
   parseFundamentusTable,
@@ -917,6 +919,31 @@ describe("avisos extras: antecipado de contas e resumo da semana", () => {
     const transactions = [{ type: "expense", amount: 100, date: "2026-10-14" }];
     expect(buildPushReminders({ today: "2026-10-20", transactions })).toEqual([]);
     expect(buildPushReminders({ today: "2026-10-19" })).toEqual([]);
+  });
+});
+
+describe("compra feita só editando a quantidade", () => {
+  it("cotas sem compra no histórico viram uma compra nova, sem mexer nas antigas", () => {
+    const inv = { quantity: 233, avgPrice: 10, purchaseDate: "2026-08-01", purchases: [{ date: "2026-08-01", quantity: 232, price: 10 }] };
+    expect(unrecordedQuantity(inv)).toBe(1);
+    const r = registerPurchase(inv, { quantity: 1, price: 10.5, date: "2026-11-05" });
+    expect(r.purchases).toEqual([{ date: "2026-08-01", quantity: 232, price: 10 }, { date: "2026-11-05", quantity: 1, price: 10.5 }]);
+    expect(r.purchaseDate).toBe("2026-11-05");
+  });
+
+  it("posição antiga (compra única e sintética): a compra sai da mais recente para o total não dobrar", () => {
+    const inv = { quantity: 233, avgPrice: 10, purchaseDate: "2026-08-01" };
+    expect(unrecordedQuantity(inv)).toBe(0);
+    const r = registerPurchase(inv, { quantity: 1, price: 11, date: "2026-11-05" });
+    expect(r.purchases).toEqual([{ date: "2026-08-01", quantity: 232, price: 10 }, { date: "2026-11-05", quantity: 1, price: 11 }]);
+    expect(r.purchases.reduce((t, p) => t + p.quantity, 0)).toBe(233);
+  });
+
+  it("vendas entram na conta e dados inválidos são recusados", () => {
+    const inv = { quantity: 90, avgPrice: 10, purchaseDate: "2026-08-01", purchases: [{ date: "2026-08-01", quantity: 100, price: 10 }], sales: [{ date: "2026-09-01", quantity: 10, price: 12, avgPrice: 10 }] };
+    expect(unrecordedQuantity(inv)).toBe(0);
+    expect(() => registerPurchase(inv, { quantity: 0, price: 10, date: "2026-11-05" })).toThrow();
+    expect(() => registerPurchase(inv, { quantity: 91, price: 10, date: "2026-11-05" })).toThrow();
   });
 });
 

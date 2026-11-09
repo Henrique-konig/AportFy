@@ -5,7 +5,7 @@
 
 import * as ui from "../ui.js";
 import { CRYPTO_CATEGORY, fetchCryptoQuotes, fetchQuotes } from "../api.js";
-import { applyInvestmentSale, editedInvestmentPurchases, getInvestmentPurchases, mergeInvestmentPurchase } from "../calc.js";
+import { applyInvestmentSale, editedInvestmentPurchases, getInvestmentPurchases, mergeInvestmentPurchase, registerPurchase } from "../calc.js";
 import { addDividend, addInvestment, savePortfolioSettings, updateDividend, updateInvestment } from "../db.js";
 import { bindB3Import } from "./b3-import.js";
 import { importDividendsFromB3, refreshUpcomingDividends } from "./dividend-sync.js";
@@ -95,6 +95,17 @@ export function bindInvestments() {
   });
 
   ui.onEditInvestment((investment) => ui.openInvestmentModal(investment));
+
+  ui.onRegisterPurchase(async ({ id: investmentId, quantity, price, date }) => {
+    try {
+      const inv = session.latestInvestments.find((i) => i.id === investmentId);
+      if (!inv) throw new Error("Ativo não encontrado.");
+      await updateInvestment(session.activeMode, session.activeMode === "couple" ? session.activeCoupleId : session.activeUser.uid, investmentId, registerPurchase(inv, { quantity, price, date }));
+      ui.showToast("Compra registrada no histórico.", "success");
+    } catch (err) {
+      ui.showToast(["Dados da compra inválidos.", "Mais cotas do que a posição tem."].includes(err.message) ? err.message : "Erro ao registrar a compra.", "error");
+    }
+  });
 
   ui.onSellSubmit(async ({ id: investmentId, quantity, price, date }) => {
     try {

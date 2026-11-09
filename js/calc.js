@@ -115,6 +115,34 @@ export function editedInvestmentPurchases(current, { quantity, price, purchaseDa
   return [{ date: purchaseDate, quantity: roundQty(quantity + sold), price }];
 }
 
+/** Cotas da posição que não estão em nenhuma compra do histórico (ex.: quantidade editada antes de o app registrar a diferença). */
+export function unrecordedQuantity(inv) {
+  const sum = (list) => list.reduce((s, x) => s + (Number(x.quantity) || 0), 0);
+  return Math.max(0, roundQty((Number(inv.quantity) || 0) - (sum(getInvestmentPurchases(inv)) - sum(getInvestmentSales(inv)))));
+}
+
+/**
+ * Registra no histórico uma compra que já está na quantidade da posição (feita só editando a quantidade).
+ * Usa primeiro as cotas sem compra registrada; o que faltar sai das compras mais recentes, para o total não dobrar.
+ * @returns {{purchases:Array, purchaseDate:string}} campos para gravar na posição
+ */
+export function registerPurchase(inv, { quantity, price, date }) {
+  if (!(quantity > 0) || !(price >= 0) || !date) throw new Error("Dados da compra inválidos.");
+  if (roundQty(quantity) > roundQty(Number(inv.quantity) || 0)) throw new Error("Mais cotas do que a posição tem.");
+  const purchases = getInvestmentPurchases(inv).map((p) => ({ ...p }));
+  let take = Math.max(0, roundQty(quantity - unrecordedQuantity(inv)));
+  for (const p of [...purchases].sort((a, b) => b.date.localeCompare(a.date))) {
+    if (take <= 0) break;
+    const cut = Math.min(Number(p.quantity) || 0, take);
+    p.quantity = roundQty(p.quantity - cut);
+    take = roundQty(take - cut);
+  }
+  return {
+    purchases: [...purchases.filter((p) => p.quantity > 0), { date, quantity, price }],
+    purchaseDate: date > (inv.purchaseDate || "") ? date : inv.purchaseDate,
+  };
+}
+
 /**
  * Atualização de uma posição ao registrar uma venda: reduz a quantidade e
  * guarda a venda com o preço médio da época (o preço médio não muda ao vender).
