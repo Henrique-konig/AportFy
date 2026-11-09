@@ -1421,11 +1421,11 @@ export function planB3Import(trades, investments) {
  * proventos que caem amanhã.
  * @returns {Array<{tag:string, title:string, body:string, view:string}>}
  */
-export function buildPushReminders({ today, bills = [], invoices = [], upcomingDividends = [] }) {
+export function buildPushReminders({ today, bills = [], invoices = [], upcomingDividends = [], transactions = [], dividends = [] }) {
   const tomorrow = addDays(today, 1);
   const yesterday = addDays(today, -1);
-  const window = [yesterday, today, tomorrow];
-  const when = (date) => (date === today ? "hoje" : "amanhã");
+  const window = [yesterday, today, tomorrow, addDays(today, 3)]; // + um aviso antecipado, 3 dias antes
+  const when = (date) => (date === today ? "hoje" : date === tomorrow ? "amanhã" : "em 3 dias");
   const reminders = [];
 
   bills
@@ -1455,7 +1455,37 @@ export function buildPushReminders({ today, bills = [], invoices = [], upcomingD
     const total = divTomorrow.reduce((s, d) => s + (Number(d.total) || 0), 0);
     reminders.push({ tag: `div-${tomorrow}`, title: `${brl(total)} em proventos amanhã`, body: listTickers(divTomorrow), view: "investments" });
   }
+
+  const week = weeklyRange(today);
+  const inWeek = (d) => week && d >= week.from && d <= week.to;
+  const sum = (list) => list.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const spent = sum(transactions.filter((t) => t.type === "expense" && inWeek(t.date)));
+  const earned = sum(transactions.filter((t) => t.type === "income" && inWeek(t.date)));
+  const divs = sum(dividends.filter((d) => inWeek(d.date)));
+  if (spent || earned || divs) {
+    reminders.push({
+      tag: `week-${today}`,
+      title: "Resumo da semana",
+      body: `Gastou ${brl(spent)} · recebeu ${brl(earned)}${divs ? ` · ${brl(divs)} de proventos` : ""}`,
+      view: "dashboard",
+    });
+  }
   return reminders;
+}
+
+/** Semana de segunda a domingo que acabou (resumo vai na segunda); fora da segunda, null. */
+export function weeklyRange(today) {
+  if (new Date(`${today}T12:00:00Z`).getUTCDay() !== 1) return null;
+  return { from: addDays(today, -7), to: addDays(today, -1) };
+}
+
+/** Divisão meio a meio das despesas do casal ainda não acertadas. owed > 0: o parceiro deve ao usuário. */
+export function splitBalance(transactions, uid) {
+  const open = (transactions || []).filter((t) => t.type === "expense" && t.paidBy && !t.settled);
+  const sum = (list) => list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const mine = sum(open.filter((t) => t.paidBy === uid));
+  const theirs = sum(open) - mine;
+  return { mine, theirs, owed: Math.round(((mine - theirs) / 2) * 100) / 100, ids: open.map((t) => t.id) };
 }
 
 /* =========================================================

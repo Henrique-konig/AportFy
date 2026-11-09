@@ -16,7 +16,8 @@ export function bindFinance() {
         await updateTransaction(session.activeMode, id, editingId, data);
         ui.showToast("Transação atualizada com sucesso!", "success");
       } else {
-        await addTransaction(session.activeMode, id, data);
+        // No casal, quem lança a despesa é quem pagou (base do acerto de contas).
+        await addTransaction(session.activeMode, id, session.activeMode === "couple" && data.type === "expense" ? { ...data, paidBy: session.activeUser.uid } : data);
         ui.showToast("Transação adicionada com sucesso!", "success");
       }
       ui.closeTransactionModal();
@@ -25,6 +26,8 @@ export function bindFinance() {
       ui.showToast("Erro ao salvar transação.", "error");
     }
   });
+
+  ui.onSplitSettle((ids) => Promise.all(ids.map((tid) => updateTransaction(session.activeMode, session.activeCoupleId, tid, { settled: true }))));
 
   ui.onEditTransaction((transaction) => ui.openTransactionModal(transaction));
 

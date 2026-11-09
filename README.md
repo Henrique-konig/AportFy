@@ -119,14 +119,14 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 **Conta e dados**
 - Login com e-mail e senha ou **com Google** (o e-mail já vem verificado, sem depender do e-mail de confirmação), perfil e redefinição de senha por e-mail (em Configurações). Contas novas exigem senha de 8+ caracteres com letras e números e **confirmação do e-mail** (um aviso no topo permite reenviar o link).
 - **Excluir conta** (em Configurações): apaga todos os seus dados e a conta, pedindo a senha para confirmar.
-- **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal. Para pedir entrada é preciso ter o e-mail confirmado.
+- **Espaço do Casal**: o parceiro(a) usa o seu código para **pedir** entrada e você aprova ou recusa em Configurações; só quem você aprovar vê os mesmos dados no Modo Casal. As despesas lançadas no Modo Casal guardam quem pagou, e a aba Transações mostra o **acerto do casal**: as despesas são divididas meio a meio, o card diz quem deve a quem e *Marcar como acertado* zera a conta (receitas e despesas antigas, sem "quem pagou", ficam de fora). Para pedir entrada é preciso ter o e-mail confirmado.
 - **Backup e restauração** de transações, metas, investimentos, proventos, **contas, cartões, compras e faturas** em arquivo `.json`. Ao restaurar, cartões ganham ids novos e as compras e faturas são religadas a eles.
 
 **App e acessibilidade**
 - **Instalável (PWA):** pode ser instalado no celular ou no computador e abre como aplicativo; a interface carrega mesmo sem internet e os dados já vistos ficam disponíveis offline (cache do Firestore).
 - **Tema claro, escuro ou do sistema**, pelo botão no cabeçalho ou em Configurações.
 - **Modo privacidade** (ícone de olho no cabeçalho): esconde todos os valores em reais e borra os gráficos, para usar o app em público. A escolha fica salva no aparelho.
-- **Notificações** com o app fechado (Configurações → Notificações): uma vez por dia, de manhã, lembra das contas e faturas que vencem hoje ou amanhã (ou venceram ontem) e dos proventos que caem no dia seguinte. Tocar na notificação abre a aba certa.
+- **Notificações** com o app fechado (Configurações → Notificações): uma vez por dia, de manhã, lembra das contas e faturas que vencem hoje ou amanhã (ou venceram ontem) e dos proventos que caem no dia seguinte, e avisa com 3 dias de antecedência das contas e faturas que vão vencer. Toda segunda-feira vem também o **resumo da semana** (quanto gastou, recebeu e quanto entrou de proventos). Tocar na notificação abre a aba certa.
 - Navegação por teclado (selects customizados, modais com Esc e foco preso), link "Pular para o conteúdo", rótulos para leitores de tela e respeito a "reduzir movimento".
 
 ## Stack

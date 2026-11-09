@@ -210,6 +210,33 @@ test.describe("cotações, casal, restauração e conta", () => {
     await expect(page.locator("#transactions-tbody")).toContainText("Só meu");
   });
 
+  test("Modo Casal: despesa grava quem pagou e o acerto divide meio a meio", async ({ page }) => {
+    await openApp(page, {
+      seed: {
+        [`couples/${UID}`]: { members: [UID] },
+        [`couples/${UID}/transactions/c1`]: { description: "Mercado", amount: 100, type: "expense", category: "Alimentação", date: iso(0), paidBy: UID },
+        [`couples/${UID}/transactions/c2`]: { description: "Luz", amount: 40, type: "expense", category: "Moradia", date: iso(0), paidBy: "parceiro" },
+      },
+    });
+    await page.locator('.nav-item[data-view="transactions"]').click();
+    await expect(page.locator("#split-card")).toBeHidden(); // modo pessoal
+    await page.locator('.mode-btn[data-mode="couple"]').click();
+    await expect(page.locator("#split-text")).toContainText("deve R$ 30,00 a você");
+
+    await page.locator("#new-transaction-btn").click();
+    await page.locator('#transaction-modal [data-type="expense"]').click();
+    await page.fill("#transaction-desc", "Cinema");
+    await page.fill("#transaction-amount", "20");
+    await page.locator("#transaction-submit-btn").click();
+    await expect.poll(async () => (await readCollection(page, `couples/${UID}/transactions`)).find((t) => t.description === "Cinema")?.paidBy).toBe(UID);
+    await expect(page.locator("#split-text")).toContainText("deve R$ 40,00 a você");
+
+    await page.locator("#split-settle").click();
+    await expect(page.locator("#split-card")).toBeHidden();
+    const all = await readCollection(page, `couples/${UID}/transactions`);
+    expect(all.every((t) => t.settled === true)).toBe(true);
+  });
+
   test("restaurar backup recria cartões e religa compras e faturas ao novo id", async ({ page }) => {
     await openApp(page);
     await page.locator('.nav-item[data-view="settings"]').click();

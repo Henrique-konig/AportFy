@@ -59,6 +59,7 @@ import {
   reserveAmount,
   transactionsToCsv,
   buildPushReminders,
+  splitBalance,
   FUNDAMENTUS_FII_COLUMNS,
   brNumber,
   parseFundamentusTable,
@@ -888,6 +889,54 @@ describe("buildPushReminders", () => {
     ]);
     expect(r[4].body).toBe("MXRF11, HGLG11");
     expect(r.every((x) => x.tag && x.view)).toBe(true);
+  });
+});
+
+describe("avisos extras: antecipado de contas e resumo da semana", () => {
+  it("conta que vence em 3 dias avisa antes; em 2 ou 4 dias, não", () => {
+    const bills = [3, 2, 4].map((d, i) => ({ id: "b" + i, description: "Conta" + d, amount: 10, dueDate: `2026-10-${String(19 + d).padStart(2, "0")}`, paid: false }));
+    const r = buildPushReminders({ today: "2026-10-19", bills });
+    expect(r.map((x) => x.title)).toEqual(["Conta3 vence em 3 dias"]);
+  });
+
+  it("segunda-feira: resume a semana anterior (gastos, receitas e proventos)", () => {
+    const transactions = [
+      { type: "expense", amount: 100, date: "2026-10-14" },
+      { type: "expense", amount: 50.5, date: "2026-10-18" },
+      { type: "income", amount: 300, date: "2026-10-15" },
+      { type: "expense", amount: 999, date: "2026-10-10" }, // semana antes: fora
+      { type: "expense", amount: 999, date: "2026-10-19" }, // hoje: fora
+    ];
+    const dividends = [{ amount: 12.34, date: "2026-10-16" }];
+    const [r] = buildPushReminders({ today: "2026-10-19", transactions, dividends });
+    expect(r.title).toBe("Resumo da semana");
+    expect(r.body.replace(/\s/g, " ")).toBe("Gastou R$ 150,50 · recebeu R$ 300,00 · R$ 12,34 de proventos");
+  });
+
+  it("fora da segunda ou sem movimento: não manda resumo", () => {
+    const transactions = [{ type: "expense", amount: 100, date: "2026-10-14" }];
+    expect(buildPushReminders({ today: "2026-10-20", transactions })).toEqual([]);
+    expect(buildPushReminders({ today: "2026-10-19" })).toEqual([]);
+  });
+});
+
+describe("splitBalance (acerto do casal)", () => {
+  const t = (id, paidBy, amount, extra = {}) => ({ id, type: "expense", paidBy, amount, ...extra });
+
+  it("divide meio a meio: quem pagou mais recebe a diferença", () => {
+    const b = splitBalance([t("1", "eu", 100), t("2", "ela", 40), t("3", "eu", 20)], "eu");
+    expect(b).toMatchObject({ mine: 120, theirs: 40, owed: 40 });
+    expect(b.ids).toEqual(["1", "2", "3"]);
+  });
+
+  it("devendo: valor negativo; sem paidBy, acertadas e receitas ficam de fora", () => {
+    const b = splitBalance([t("1", "ela", 90), t("2", undefined, 500), t("3", "eu", 500, { settled: true }), { id: "4", type: "income", paidBy: "eu", amount: 500 }], "eu");
+    expect(b).toMatchObject({ mine: 0, theirs: 90, owed: -45, ids: ["1"] });
+  });
+
+  it("vazio: tudo zero", () => {
+    expect(splitBalance([], "eu")).toEqual({ mine: 0, theirs: 0, owed: 0, ids: [] });
+    expect(splitBalance(undefined, "eu").owed).toBe(0);
   });
 });
 

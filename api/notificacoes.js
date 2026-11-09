@@ -4,6 +4,7 @@
 // cada aparelho que ativou as notificações:
 //   - contas e faturas de cartão que vencem hoje/amanhã (ou ontem);
 //   - proventos que caem amanhã;
+//   - resumo da semana (gastos, receitas e proventos), às segundas;
 //   - alertas dos favoritos (indicador ou cotação que passou do alvo, pelo último fechamento).
 // Lê os dados com o Firebase Admin (credencial de serviço na variável
 // FIREBASE_SERVICE_ACCOUNT) e só aceita chamadas com o CRON_SECRET
@@ -13,7 +14,7 @@
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
-import { buildPushReminders, buildUpcomingDividends, evaluateAlerts, unpaidInvoices } from "../js/calc.js";
+import { buildPushReminders, buildUpcomingDividends, evaluateAlerts, unpaidInvoices, weeklyRange } from "../js/calc.js";
 import { loadEtfs } from "./_lib/etfs.js";
 import { loadFundamentals } from "./_lib/fundamentus.js";
 import { fetchTickerDividends, TICKER_PATTERN } from "./_lib/b3.js";
@@ -99,6 +100,10 @@ export default async function handler(req, res) {
           const [bills, cards, purchases, paidInvoices, investments] = await Promise.all(
             ["bills", "cards", "cardPurchases", "cardInvoices", "investments"].map((name) => docsOf(db, `${space.path}/${name}`))
           );
+          const week = weeklyRange(today);
+          const [transactions, dividends] = week
+            ? await Promise.all(["transactions", "dividends"].map(async (name) => (await db.collection(`${space.path}/${name}`).where("date", ">=", week.from).get()).docs.map((d) => d.data())))
+            : [];
           const eligible = investments.filter((inv) => DIVIDEND_CATEGORIES.includes(inv.category) && (Number(inv.quantity) || 0) > 0);
           const calendars = {};
           await Promise.all(eligible.map(async (inv) => (calendars[inv.ticker] = await calendarOf(inv))));
@@ -107,6 +112,8 @@ export default async function handler(req, res) {
             bills,
             invoices: unpaidInvoices(cards, purchases, paidInvoices),
             upcomingDividends: buildUpcomingDividends(eligible, calendars, today),
+            transactions,
+            dividends,
           }).forEach((r) => reminders.push({ ...r, title: space.label + r.title }));
         }
 

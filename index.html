@@ -73,6 +73,7 @@
   <link rel="modulepreload" href="js/app/subscriptions.js" />
   <link rel="modulepreload" href="js/app/watchlist.js" />
   <link rel="modulepreload" href="js/ui/networth.js" />
+  <link rel="modulepreload" href="js/ui/split.js" />
   <link rel="modulepreload" href="js/ui/share-card.js" />
   <link rel="modulepreload" href="js/app/b3-import.js" />
   <link rel="modulepreload" href="js/auth.js" />
@@ -611,6 +612,13 @@
 
           <!-- ======================= VIEW: TRANSAÇÕES ======================= -->
           <div id="view-transactions" class="view-section hidden space-y-6">
+            <section id="split-card" class="hidden glass-card rounded-2xl p-4 sm:p-5 animate-slide-up flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="font-bold text-base">Acerto do casal</h3>
+                <p id="split-text" class="text-xs text-slate-400 mt-0.5"></p>
+              </div>
+              <button type="button" id="split-settle" class="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold">Marcar como acertado</button>
+            </section>
             <section class="glass-card rounded-2xl p-4 sm:p-5 animate-slide-up">
               <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                 <div class="flex items-center gap-2 bg-slate-900/70 border border-slate-800 rounded-xl p-1 shrink-0">

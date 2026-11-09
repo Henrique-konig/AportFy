@@ -76,6 +76,7 @@ export function initUIBindings() {
   ui.bindCompareSheet();
   ui.bindShareCard();
   ui.bindNetWorth();
+  ui.bindSplit();
   ui.bindPortfolioIndicators({ onOpen: openAsset });
 
   ui.onNavChange((view) => {

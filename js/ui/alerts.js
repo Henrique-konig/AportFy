@@ -12,6 +12,7 @@ import { renderOnboarding } from "./onboarding.js";
 import { billsState, currentUnpaidInvoices } from "./bills.js";
 import { renderPlanning } from "./planning.js";
 import { renderNetWorth } from "./networth.js";
+import { renderSplit } from "./split.js";
 import { maskMoneyText } from "./privacy.js";
 
 const alertsEl = {
@@ -68,6 +69,7 @@ export function renderAlerts() {
   renderOnboarding(); // os primeiros passos dependem dos mesmos dados
   renderPlanning(); // saldo projetado e reserva também
   renderNetWorth();
+  renderSplit();
   if (!alertsEl.btn) return;
   currentAlerts = buildAlerts({
     today: new Date().toLocaleDateString("sv-SE"),

@@ -10,6 +10,7 @@ import { formatBRL } from "../format.js";
 --------------------------------------------------------------- */
 export const state = {
   currentMode: "personal",
+  uid: "",
   isRegisterMode: false,
   lastTransactions: [],
   lastGoals: [],
@@ -523,6 +524,7 @@ export function showLoginScreen() {
 }
 
 export function showAppShell(user) {
+  state.uid = user.uid;
   el.loginScreen.classList.add("hidden");
   el.appShell.classList.remove("hidden");
 
