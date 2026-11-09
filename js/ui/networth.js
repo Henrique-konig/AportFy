@@ -23,6 +23,26 @@ const nw = {
   rows: document.getElementById("networth-account-rows"),
 };
 export const MAX_ACCOUNTS = 20;
+const compact = (v) => (Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toFixed(Math.abs(v) >= 100000 ? 0 : 1).replace(".", ",")} mil` : `R$ ${v}`);
+const chartOptions = () => ({
+  ...baseLineOptions,
+  layout: { padding: { top: 4, right: 8 } },
+  plugins: {
+    ...baseLineOptions.plugins,
+    legend: { display: true, align: "end", labels: { color: "#94a3b8", usePointStyle: true, boxWidth: 8, boxHeight: 8, font: { size: 11 } } },
+    tooltip: { ...baseLineOptions.plugins.tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${formatCurrency(c.parsed.y)}` } },
+  },
+  scales: { ...baseLineOptions.scales, y: { ...baseLineOptions.scales.y, grid: { color: "rgba(51,65,85,0.25)", drawTicks: false }, border: { display: false }, ticks: { ...baseLineOptions.scales.y.ticks, callback: compact, maxTicksLimit: 5 } } },
+});
+/** Degradê azul que some em direção ao eixo. */
+const fadeFill = ({ chart: c }) => {
+  const { ctx, chartArea } = c;
+  if (!chartArea) return hexToRgba("#3b82f6", 0.15);
+  const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+  g.addColorStop(0, hexToRgba("#3b82f6", 0.35));
+  g.addColorStop(1, hexToRgba("#3b82f6", 0));
+  return g;
+};
 let accounts = []; // [{name, balance}] salvas em settings/portfolio
 let chart = null;
 let saveHandler = null;
@@ -95,7 +115,7 @@ export function renderNetWorth() {
   nw.total.textContent = formatCurrency(cash + portfolio);
   nw.cash.textContent = accounts.length ? formatCurrency(cash) : "Adicionar";
   nw.edit.title = accounts.map((a) => `${a.name}: ${formatCurrency(a.balance)}`).join("\n") || "Informe seus saldos (Nubank, PicPay…)";
-  nw.chartTitle.textContent = "Patrimônio mês a mês. A linha azul usa os totais que o app guarda todo mês (começa a partir de agora); a tracejada é uma estimativa dos meses anteriores: carteira a custo + suas contas de hoje.";
+  nw.chartTitle.textContent = "Azul: totais que o app guarda todo mês (começam agora). Tracejada: estimativa dos meses anteriores, com a carteira a custo + suas contas de hoje.";
   nw.portfolio.textContent = formatCurrency(portfolio);
   nw.result.textContent = formatCurrency(profit);
   nw.result.classList.toggle("text-emerald-400", profit > 0);
@@ -111,13 +131,13 @@ export function renderNetWorth() {
   const data = {
     labels: series.map((p) => p.label),
     datasets: [
-      { label: "Patrimônio", data: series.map((p, i) => (i === last ? total : history[p.key] ?? null)), spanGaps: true, borderColor: "#3b82f6", backgroundColor: hexToRgba("#3b82f6", 0.15), fill: true, tension: 0.35, pointRadius: 3 },
-      { label: "Estimativa", data: series.map((p, i) => (i === last ? total : p.invested + cash)), borderColor: "#64748b", borderDash: [5, 5], fill: false, tension: 0.35, pointRadius: 0 },
+      { label: "Estimativa", data: series.map((p, i) => (i === last ? total : p.invested + cash)), borderColor: "#64748b", borderDash: [5, 5], borderWidth: 2, backgroundColor: fadeFill, fill: "origin", tension: 0.4, pointRadius: 0, pointHoverRadius: 4 },
+      { label: "Patrimônio", data: series.map((p, i) => (i === last ? total : history[p.key] ?? null)), spanGaps: true, borderColor: "#60a5fa", borderWidth: 3, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: "#60a5fa", pointBorderColor: "#0f172a", pointBorderWidth: 2 },
     ],
   };
   saveSnapshot(series[last].key, total);
   if (chart) {
     chart.data = data;
     chart.update("none");
-  } else chart = new Chart(nw.canvas.getContext("2d"), { type: "line", data, options: baseLineOptions });
+  } else chart = new Chart(nw.canvas.getContext("2d"), { type: "line", data, options: chartOptions() });
 }
