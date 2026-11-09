@@ -331,6 +331,7 @@ test.describe("compras no histórico", () => {
     await openApp(page, { seed });
     await page.locator('.nav-item[data-view="investments"]').click();
     await page.locator(".edit-investment-btn").first().click();
+    await expect(page.locator("#investment-ticker")).toBeFocused(); // o modal foca o 1º campo no próximo quadro; digitar antes disso cai no campo errado
     await page.fill("#investment-quantity", "150");
     await expect(page.locator("#investment-date")).toHaveValue(iso(0)); // a diferença é uma compra nova: data de hoje
     await page.locator("#investment-form button[type=submit]").click();
@@ -357,6 +358,7 @@ test.describe("compras no histórico", () => {
     await openApp(page, { seed });
     await page.locator('.nav-item[data-view="investments"]').click();
     await page.locator(".edit-investment-btn").first().click();
+    await expect(page.locator("#investment-ticker")).toBeFocused(); // o modal foca o 1º campo no próximo quadro; digitar antes disso cai no campo errado
     await page.fill("#investment-quantity", "150");
     await expect(page.locator("#investment-date")).toHaveValue(iso(0));
     await page.locator("#investment-form button[type=submit]").click();
