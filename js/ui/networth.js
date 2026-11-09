@@ -17,6 +17,7 @@ const nw = {
   result: document.getElementById("networth-result"),
   next: document.getElementById("networth-next"),
   canvas: document.getElementById("networth-chart"),
+  chartTitle: document.getElementById("networth-chart-title"),
   edit: document.getElementById("networth-edit"),
   panel: document.getElementById("networth-accounts"),
   rows: document.getElementById("networth-account-rows"),
@@ -76,6 +77,8 @@ export function renderNetWorth() {
   nw.total.textContent = formatCurrency(cash + portfolio);
   nw.cash.textContent = accounts.length ? formatCurrency(cash) : "Adicionar";
   nw.edit.title = accounts.map((a) => `${a.name}: ${formatCurrency(a.balance)}`).join("\n") || "Informe seus saldos (Nubank, PicPay…)";
+  const invested = metrics.reduce((s, m) => s + m.costBasis, 0);
+  nw.chartTitle.textContent = `Evolução do que você investiu (a custo, sem a valorização): ${formatCurrency(invested)} pagos; hoje a carteira vale ${formatCurrency(portfolio)}.`;
   nw.portfolio.textContent = formatCurrency(portfolio);
   nw.result.textContent = formatCurrency(profit);
   nw.result.classList.toggle("text-emerald-400", profit > 0);
