@@ -371,9 +371,10 @@ export function listenToInvestments(mode, id, callback) {
 
   return onSnapshot(
     q,
+    { includeMetadataChanges: true },
     (snapshot) => {
       const investments = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      callback(investments);
+      callback(investments, null, { fromCache: snapshot.metadata.fromCache });
     },
     (error) => {
       console.error("Erro ao escutar investimentos:", error);

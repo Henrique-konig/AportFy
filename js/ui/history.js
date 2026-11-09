@@ -4,7 +4,7 @@
 // =========================================================
 
 import { refreshDropdown } from "../dropdown.js";
-import { buildInvestmentHistory, estimateSalesTax, historyToCsv, summarizeHistory, unrecordedQuantity } from "../calc.js";
+import { buildInvestmentHistory, estimateSalesTax, historyToCsv, summarizeHistory } from "../calc.js";
 import { escapeHtml, fadeInClass, formatCurrency, showToast, state } from "./core.js";
 import { formatMonthLabel } from "./dividends.js";
 import { formatQuantity } from "./investments.js";
@@ -32,13 +32,6 @@ export const histEl = {
   emptyDesc: document.getElementById("hist-empty-desc"),
   tax: document.getElementById("hist-tax"),
   exportCsv: document.getElementById("hist-export-csv"),
-  fix: document.getElementById("hist-fix"),
-  fixNote: document.getElementById("hist-fix-note"),
-  fixForm: document.getElementById("hist-fix-form"),
-  fixAsset: document.getElementById("hist-fix-asset"),
-  fixQty: document.getElementById("hist-fix-qty"),
-  fixDate: document.getElementById("hist-fix-date"),
-  fixPrice: document.getElementById("hist-fix-price"),
   moreWrap: document.getElementById("hist-more-wrap"),
   moreBtn: document.getElementById("hist-more-btn"),
   moreRemaining: document.getElementById("hist-more-remaining"),
@@ -47,32 +40,6 @@ export const HIST_PAGE_SIZE = 40;
 export let histKind = "all";
 export let histLimit = HIST_PAGE_SIZE;
 let lastScoped = [];
-let registerPurchaseHandler = null;
-
-export const onRegisterPurchase = (handler) => (registerPurchaseHandler = handler);
-
-/** Formulário "comprei só editando a quantidade": lista os ativos e avisa de cotas sem compra no histórico. */
-function renderPurchaseFix() {
-  if (!histEl.fix) return;
-  const invs = state.lastInvestments.filter((i) => Number(i.quantity) > 0);
-  const gaps = invs.map((i) => ({ i, gap: unrecordedQuantity(i) })).filter((g) => g.gap > 0);
-  const selected = histEl.fixAsset.value;
-  histEl.fixAsset.innerHTML = invs.map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.ticker)}</option>`).join("");
-  if (invs.some((i) => i.id === selected)) histEl.fixAsset.value = selected;
-  histEl.fix.classList.toggle("hidden", invs.length === 0);
-  if (gaps.length) histEl.fix.open = true;
-  histEl.fixNote.textContent = gaps.length
-    ? `Cotas sem compra no histórico: ${gaps.map((g) => `${g.i.ticker} (${formatQuantity(g.gap)})`).join(", ")}. Escolha o ativo, a data e o preço pagos.`
-    : "Se você aumentou a quantidade de um ativo editando antes (sem lançar a compra), informe aqui as cotas, a data e o preço pagos: elas passam a aparecer nos aportes mensais e no histórico.";
-}
-
-function prefillPurchaseFix() {
-  const inv = state.lastInvestments.find((i) => i.id === histEl.fixAsset.value);
-  if (!inv) return;
-  histEl.fixQty.value = unrecordedQuantity(inv) || "";
-  histEl.fixPrice.value = Number(inv.avgPrice) || "";
-}
-
 export const HIST_KIND_META = {
   buy: { label: "Compra", icon: "ph-shopping-cart-simple", color: "#3b82f6" },
   sell: { label: "Venda", icon: "ph-hand-coins", color: "#f59e0b" },
@@ -164,7 +131,6 @@ export function renderHistory() {
   histEl.totalResultCount.textContent = count("sell") > 0 ? "Lucro/prejuízo realizado nas vendas" : "Nenhuma venda no filtro";
   histEl.tabs.forEach((b) => b.classList.toggle("active-filter", b.dataset.histKind === histKind));
   lastScoped = scoped;
-  renderPurchaseFix();
 
   const tax = estimateSalesTax(scoped);
   const taxed = tax.rows.filter((r) => r.tax > 0);
@@ -230,15 +196,6 @@ export function bindHistory() {
   histEl.search?.addEventListener("input", reset);
   histEl.asset?.addEventListener("change", reset);
   histEl.month?.addEventListener("change", reset);
-  histEl.fixAsset?.addEventListener("change", prefillPurchaseFix);
-  histEl.fix?.addEventListener("toggle", () => histEl.fix.open && !histEl.fixQty.value && prefillPurchaseFix());
-  histEl.fixForm?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    Promise.resolve(registerPurchaseHandler?.({ id: histEl.fixAsset.value, quantity: parseFloat(histEl.fixQty.value), price: parseFloat(histEl.fixPrice.value), date: histEl.fixDate.value })).then(() => {
-      histEl.fixQty.value = "";
-      histEl.fixDate.value = "";
-    });
-  });
   histEl.exportCsv?.addEventListener("click", () => {
     if (lastScoped.length === 0) return showToast("Nenhuma movimentação para exportar.", "info");
     const a = Object.assign(document.createElement("a"), {

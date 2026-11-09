@@ -4,12 +4,27 @@
 // =========================================================
 
 import * as ui from "../ui.js";
-import { recurrenceDateForMonth } from "../calc.js";
-import { addTransaction, listenToBudgets, listenToDividends, listenToGoals, listenToInvestments, listenToPortfolioSettings, listenToRecurrences, listenToTransactions, updateRecurrence } from "../db.js";
+import { recurrenceDateForMonth, registerPurchase, unrecordedQuantity } from "../calc.js";
+import { addTransaction, listenToBudgets, listenToDividends, listenToGoals, listenToInvestments, listenToPortfolioSettings, listenToRecurrences, listenToTransactions, updateInvestments, updateRecurrence } from "../db.js";
 import { stopExtras, subscribeExtras } from "./bills-actions.js";
 import { refreshUpcomingDividends } from "./dividend-sync.js";
 import { refreshMarketIndices } from "./quotes.js";
 import { gate, session } from "./session.js";
+
+const reconciled = new Set(); // posições já conferidas nesta sessão
+
+/** Cotas que estão na posição mas em nenhuma compra (quantidade editada antes do app registrar a diferença) entram como compra de hoje. */
+function recordMissingPurchases(investments, id) {
+  const today = new Date().toLocaleDateString("sv-SE");
+  const changes = investments
+    .filter((i) => Array.isArray(i.purchases) && !reconciled.has(i.id) && unrecordedQuantity(i) > 0)
+    .map((i) => ({ id: i.id, ticker: i.ticker, quantity: unrecordedQuantity(i), updates: registerPurchase(i, { quantity: unrecordedQuantity(i), price: Number(i.avgPrice) || 0, date: today }) }));
+  if (!changes.length) return;
+  changes.forEach((c) => reconciled.add(c.id));
+  updateInvestments(session.activeMode, id, changes)
+    .then(() => ui.showToast(`Cotas sem compra no histórico registradas hoje: ${changes.map((c) => `${c.ticker} (${c.quantity})`).join(", ")}.`, "info"))
+    .catch(() => changes.forEach((c) => reconciled.delete(c.id)));
+}
 
 let unsubscribeTransactions = null;
 let unsubscribeGoals = null;
@@ -139,12 +154,13 @@ export function subscribeToActiveCollection() {
     ui.updateKPIs(session.latestTransactions, session.latestGoals);
   }));
 
-  unsubscribeInvestments = listenToInvestments(session.activeMode, id, gate((investments, error) => {
+  unsubscribeInvestments = listenToInvestments(session.activeMode, id, gate((investments, error, meta) => {
     if (error) {
       ui.showToast("Erro ao carregar investimentos em tempo real.", "error");
       return;
     }
     session.latestInvestments = investments;
+    if (!meta?.fromCache) recordMissingPurchases(investments, id);
     ui.renderInvestments(investments);
     refreshUpcomingDividends();
     refreshMarketIndices();

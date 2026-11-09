@@ -341,18 +341,15 @@ test.describe("compras no histórico", () => {
     await expect(buys(page)).toHaveCount(2);
   });
 
-  test("Histórico: registrar compra feita só editando a quantidade entra nos aportes", async ({ page }) => {
-    await openApp(page, { seed });
-    await page.locator('.nav-item[data-view="history"]').click();
-    await page.locator("#hist-fix summary").click();
-    await page.fill("#hist-fix-qty", "10");
-    await page.fill("#hist-fix-date", iso(-5));
-    await page.fill("#hist-fix-price", "11");
-    await page.locator("#hist-fix-form button[type=submit]").click();
-    await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`))[0].purchases?.length).toBe(2);
+  test("cotas que faltam no histórico (quantidade editada antes) entram como compra de hoje", async ({ page }) => {
+    await openApp(page, {
+      seed: { [`users/${UID}/investments/i1`]: { ticker: "MXRF11", category: "FIIs", quantity: 100, avgPrice: 10, currentPrice: 10, purchaseDate: iso(-60), purchases: [{ date: iso(-60), quantity: 90, price: 10 }] } },
+    });
+    await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`))[0].purchases.length).toBe(2);
     const [saved] = await readCollection(page, `users/${UID}/investments`);
     expect(saved.quantity).toBe(100);
-    expect(saved.purchases.map((p) => [p.date, p.quantity])).toEqual([[iso(-60), 90], [iso(-5), 10]]);
+    expect(saved.purchases.map((p) => [p.date, p.quantity])).toEqual([[iso(-60), 90], [iso(0), 10]]);
+    await page.locator('.nav-item[data-view="history"]').click();
     await expect(buys(page)).toHaveCount(2);
   });
 
