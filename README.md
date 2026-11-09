@@ -41,7 +41,7 @@ O AportFy reúne em um só painel o dia a dia financeiro (receitas, despesas, me
 ## Funcionalidades
 
 **Dashboard**
-- **Patrimônio:** total de hoje (saldo + carteira a preço atual), resultado da carteira, próximo provento e a evolução dos últimos 12 meses a custo.
+- **Patrimônio:** soma os saldos que você informa em cada conta (Nubank, PicPay…, pelo lápis em "Contas") com a carteira a preço de hoje, e mostra o resultado da carteira, o próximo provento e quanto você já investiu mês a mês.
 - KPIs de saldo, receitas, despesas e progresso de metas, com comparação em relação ao mês anterior.
 - Filtro por mês/ano ou **Todos os meses** (acumulado). Ao escolher um mês, o saldo mostra o resultado daquele mês.
 - Fluxo de caixa dos últimos 6 meses e despesas por categoria do período selecionado.

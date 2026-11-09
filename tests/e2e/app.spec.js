@@ -338,4 +338,17 @@ test.describe("compras no histórico", () => {
     await page.setInputFiles("#import-b3-file", { name: "negociacao.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
     await expect.poll(async () => (await readCollection(page, `users/${UID}/investments`)).map((i) => i.ticker).sort()).toEqual(["HGLG11", "MXRF11"]);
   });
+
+  test("Patrimônio soma as contas informadas (Nubank, PicPay) à carteira", async ({ page }) => {
+    await openApp(page, { seed });
+    await page.locator("#networth-edit").click();
+    await page.fill("[data-nw-name]", "Nubank");
+    await page.fill("[data-nw-balance]", "1000");
+    await page.locator("#networth-add").click();
+    await page.locator("[data-nw-name]").nth(1).fill("PicPay");
+    await page.locator("[data-nw-balance]").nth(1).fill("500");
+    await page.locator("#networth-save").click();
+    await expect(page.locator("#networth-cash")).toContainText("1.500,00");
+    await expect(page.locator("#networth-accounts")).toBeHidden();
+  });
 });

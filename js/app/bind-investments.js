@@ -155,6 +155,9 @@ export function bindInvestments() {
 
   ui.onImportDividends(() => importDividendsFromB3());
   bindB3Import();
+  ui.onAccountsSave((accounts) =>
+    savePortfolioSettings(session.activeMode, session.activeMode === "couple" ? session.activeCoupleId : session.activeUser.uid, { accounts })
+  );
 
   /* -------------------- Saúde da Carteira -------------------- */
   ui.onFinancialIndependenceTargetChange(async (fiMonthlyIncome) => {

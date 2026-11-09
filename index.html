@@ -394,14 +394,23 @@
                   <p class="text-3xl font-extrabold tracking-tight" id="networth-total">R$ 0,00</p>
                 </div>
                 <div class="grid grid-cols-3 gap-4 text-right">
-                  <div><p class="text-[11px] text-slate-500">Em conta</p><p class="text-sm font-bold" id="networth-cash">—</p></div>
+                  <button type="button" id="networth-edit" class="text-right hover:opacity-80"><p class="text-[11px] text-slate-500">Contas <i class="ph-bold ph-pencil-simple"></i></p><p class="text-sm font-bold" id="networth-cash">—</p></button>
                   <div><p class="text-[11px] text-slate-500">Carteira</p><p class="text-sm font-bold" id="networth-portfolio">—</p></div>
                   <div><p class="text-[11px] text-slate-500">Resultado</p><p class="text-sm font-bold" id="networth-result">—</p></div>
                 </div>
               </div>
+              <div id="networth-accounts" class="hidden mt-4 space-y-2">
+                <p class="text-xs text-slate-400">Saldo em cada banco ou carteira (Nubank, PicPay…). Atualize quando quiser; o total soma tudo.</p>
+                <div id="networth-account-rows" class="space-y-2"></div>
+                <div class="flex flex-wrap gap-2 pt-1">
+                  <button type="button" id="networth-add" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold">+ Conta</button>
+                  <button type="button" id="networth-save" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold">Salvar</button>
+                  <button type="button" id="networth-cancel" class="px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white">Cancelar</button>
+                </div>
+              </div>
               <p class="text-xs text-slate-500 mt-3" id="networth-next"></p>
               <div class="h-44 mt-4"><canvas id="networth-chart"></canvas></div>
-              <p class="text-[11px] text-slate-600 mt-2">Evolução a custo (saldo das transações + valor investido); o total acima usa a cotação de hoje.</p>
+              <p class="text-[11px] text-slate-600 mt-2">Gráfico: quanto você já investiu (a custo), mês a mês. O total acima = suas contas + a carteira a preço de hoje.</p>
             </section>
 
             <!-- PRIMEIROS PASSOS -->

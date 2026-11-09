@@ -171,6 +171,7 @@ export function subscribeToActiveCollection() {
       return;
     }
     ui.setPortfolioSettings(settings);
+    ui.setNetWorthAccounts(settings?.accounts);
   });
 
   unsubscribeBudgets = listenToBudgets(session.activeMode, id, gate((budgets, error) => {
