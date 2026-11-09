@@ -77,8 +77,7 @@ export function renderNetWorth() {
   nw.total.textContent = formatCurrency(cash + portfolio);
   nw.cash.textContent = accounts.length ? formatCurrency(cash) : "Adicionar";
   nw.edit.title = accounts.map((a) => `${a.name}: ${formatCurrency(a.balance)}`).join("\n") || "Informe seus saldos (Nubank, PicPay…)";
-  const invested = metrics.reduce((s, m) => s + m.costBasis, 0);
-  nw.chartTitle.textContent = `Evolução do que você investiu (a custo, sem a valorização): ${formatCurrency(invested)} pagos; hoje a carteira vale ${formatCurrency(portfolio)}.`;
+  nw.chartTitle.textContent = `Gráfico: só a carteira, mês a mês (meses antigos a custo; o último ponto é o valor de hoje, igual ao card Carteira). Os R$ ${cash.toFixed(2).replace(".", ",")} das contas entram só no total acima.`;
   nw.portfolio.textContent = formatCurrency(portfolio);
   nw.result.textContent = formatCurrency(profit);
   nw.result.classList.toggle("text-emerald-400", profit > 0);
@@ -91,7 +90,7 @@ export function renderNetWorth() {
   const series = netWorthSeries(transactions, investments);
   const data = {
     labels: series.map((p) => p.label),
-    datasets: [{ data: series.map((p) => p.invested), borderColor: "#3b82f6", backgroundColor: hexToRgba("#3b82f6", 0.15), fill: true, tension: 0.35, pointRadius: 2 }],
+    datasets: [{ label: "Carteira", data: series.map((p, i) => (i === series.length - 1 ? portfolio : p.invested)), borderColor: "#3b82f6", backgroundColor: hexToRgba("#3b82f6", 0.15), fill: true, tension: 0.35, pointRadius: 2 }],
   };
   if (chart) {
     chart.data = data;
