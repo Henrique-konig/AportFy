@@ -155,6 +155,9 @@ export function bindInvestments() {
 
   ui.onImportDividends(() => importDividendsFromB3());
   bindB3Import();
+  ui.onNetWorthSnapshot((month, total) =>
+    savePortfolioSettings(session.activeMode, session.activeMode === "couple" ? session.activeCoupleId : session.activeUser.uid, { networthHistory: { [month]: total } })
+  );
   ui.onAccountsSave((accounts) =>
     savePortfolioSettings(session.activeMode, session.activeMode === "couple" ? session.activeCoupleId : session.activeUser.uid, { accounts })
   );

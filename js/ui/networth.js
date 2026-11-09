@@ -26,11 +26,19 @@ export const MAX_ACCOUNTS = 20;
 let accounts = []; // [{name, balance}] salvas em settings/portfolio
 let chart = null;
 let saveHandler = null;
+let snapshotHandler = null;
+let history = {}; // {"2026-11": patrimônio total} — um ponto por mês, gravado pelo próprio app
+let settingsLoaded = false;
+let lastSnapshotAt = 0;
+const SNAPSHOT_EVERY_MS = 10 * 60 * 1000;
 
 export const onAccountsSave = (handler) => (saveHandler = handler);
+export const onNetWorthSnapshot = (handler) => (snapshotHandler = handler);
 
 /** Chamado quando as configurações salvas mudam. */
-export function setNetWorthAccounts(list) {
+export function setNetWorthAccounts(list, savedHistory) {
+  settingsLoaded = true;
+  history = savedHistory && typeof savedHistory === "object" ? savedHistory : {};
   accounts = (Array.isArray(list) ? list : []).map((a) => ({ name: String(a.name || ""), balance: Number(a.balance) || 0 }));
   if (nw.panel?.classList.contains("hidden")) renderNetWorth();
 }
@@ -63,6 +71,16 @@ export function bindNetWorth() {
   });
 }
 
+/** Grava o patrimônio do mês (no máximo a cada 10 min, e só se mudou) para o gráfico ter histórico real. */
+function saveSnapshot(month, total) {
+  const value = Math.round(total * 100) / 100;
+  if (!settingsLoaded || !snapshotHandler || !(value > 0) || history[month] === value) return;
+  if (month in history && Date.now() - lastSnapshotAt < SNAPSHOT_EVERY_MS) return;
+  lastSnapshotAt = Date.now();
+  history = { ...history, [month]: value };
+  snapshotHandler(month, value).catch(() => {});
+}
+
 export function renderNetWorth() {
   if (!nw.card) return;
   const investments = state.lastInvestments || [];
@@ -77,7 +95,7 @@ export function renderNetWorth() {
   nw.total.textContent = formatCurrency(cash + portfolio);
   nw.cash.textContent = accounts.length ? formatCurrency(cash) : "Adicionar";
   nw.edit.title = accounts.map((a) => `${a.name}: ${formatCurrency(a.balance)}`).join("\n") || "Informe seus saldos (Nubank, PicPay…)";
-  nw.chartTitle.textContent = `Gráfico: só a carteira, mês a mês (meses antigos a custo; o último ponto é o valor de hoje, igual ao card Carteira). Os R$ ${cash.toFixed(2).replace(".", ",")} das contas entram só no total acima.`;
+  nw.chartTitle.textContent = "Patrimônio mês a mês. A linha azul usa os totais que o app guarda todo mês (começa a partir de agora); a tracejada é uma estimativa dos meses anteriores: carteira a custo + suas contas de hoje.";
   nw.portfolio.textContent = formatCurrency(portfolio);
   nw.result.textContent = formatCurrency(profit);
   nw.result.classList.toggle("text-emerald-400", profit > 0);
@@ -88,10 +106,16 @@ export function renderNetWorth() {
 
   if (!window.Chart || !nw.canvas) return;
   const series = netWorthSeries(transactions, investments);
+  const last = series.length - 1;
+  const total = cash + portfolio;
   const data = {
     labels: series.map((p) => p.label),
-    datasets: [{ label: "Carteira", data: series.map((p, i) => (i === series.length - 1 ? portfolio : p.invested)), borderColor: "#3b82f6", backgroundColor: hexToRgba("#3b82f6", 0.15), fill: true, tension: 0.35, pointRadius: 2 }],
+    datasets: [
+      { label: "Patrimônio", data: series.map((p, i) => (i === last ? total : history[p.key] ?? null)), spanGaps: true, borderColor: "#3b82f6", backgroundColor: hexToRgba("#3b82f6", 0.15), fill: true, tension: 0.35, pointRadius: 3 },
+      { label: "Estimativa", data: series.map((p, i) => (i === last ? total : p.invested + cash)), borderColor: "#64748b", borderDash: [5, 5], fill: false, tension: 0.35, pointRadius: 0 },
+    ],
   };
+  saveSnapshot(series[last].key, total);
   if (chart) {
     chart.data = data;
     chart.update("none");

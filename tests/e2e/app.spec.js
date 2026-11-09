@@ -350,5 +350,6 @@ test.describe("compras no histórico", () => {
     await page.locator("#networth-save").click();
     await expect(page.locator("#networth-cash")).toContainText("1.500,00");
     await expect(page.locator("#networth-accounts")).toBeHidden();
+    await expect.poll(async () => (await readCollection(page, `users/${UID}/settings`)).some((d) => d.networthHistory && Object.keys(d.networthHistory).length === 1)).toBe(true);
   });
 });
