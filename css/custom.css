@@ -11,7 +11,7 @@ html {
 
 body {
   background-image:
-    radial-gradient(at 0% 0%, rgba(154, 43, 226, 0.06) 0px, transparent 50%),
+    radial-gradient(at 0% 0%, rgba(25, 245, 138, 0.06) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.05) 0px, transparent 50%);
   background-attachment: fixed;
 }
@@ -63,7 +63,7 @@ header.backdrop-blur-xl {
 .glow-orb-blue {
   top: -360px;
   left: -320px;
-  background: radial-gradient(closest-side, rgba(154, 43, 226, 0.87) 0%, rgba(154, 43, 226, 0.79) 25%, rgba(154, 43, 226, 0.42) 50%, rgba(154, 43, 226, 0.24) 62.5%, rgba(154, 43, 226, 0.12) 75%, rgba(154, 43, 226, 0.05) 87.5%, rgba(154, 43, 226, 0) 100%);
+  background: radial-gradient(closest-side, rgba(25, 245, 138, 0.87) 0%, rgba(25, 245, 138, 0.79) 25%, rgba(25, 245, 138, 0.42) 50%, rgba(25, 245, 138, 0.24) 62.5%, rgba(25, 245, 138, 0.12) 75%, rgba(25, 245, 138, 0.05) 87.5%, rgba(25, 245, 138, 0) 100%);
 }
 
 .glow-orb-purple {
@@ -163,10 +163,10 @@ header.backdrop-blur-xl {
 }
 
 .nav-item.active-nav {
-  background: linear-gradient(135deg, rgba(154, 43, 226, 0.18), rgba(154, 43, 226, 0.05));
-  color: #bb6af0;
-  border: 1px solid rgba(154, 43, 226, 0.3);
-  box-shadow: 0 0 20px rgba(154, 43, 226, 0.1);
+  background: linear-gradient(135deg, rgba(25, 245, 138, 0.18), rgba(25, 245, 138, 0.05));
+  color: #5bffa8;
+  border: 1px solid rgba(25, 245, 138, 0.3);
+  box-shadow: 0 0 20px rgba(25, 245, 138, 0.1);
 }
 
 body.mode-couple .nav-item.active-nav {
@@ -388,9 +388,9 @@ body.mode-couple select:focus {
 .txn-filter-btn.active-filter,
 .div-tab-btn.active-filter,
 .hist-tab-btn.active-filter {
-  background: rgba(154, 43, 226, 0.18);
-  color: #bb6af0;
-  box-shadow: inset 0 0 0 1px rgba(154, 43, 226, 0.35);
+  background: rgba(25, 245, 138, 0.18);
+  color: #5bffa8;
+  box-shadow: inset 0 0 0 1px rgba(25, 245, 138, 0.35);
 }
 
 body.mode-couple .txn-filter-btn.active-filter,
@@ -407,9 +407,9 @@ body.mode-couple .hist-tab-btn.active-filter {
 }
 
 .news-tab-btn.active-news-tab {
-  background: rgba(154, 43, 226, 0.18);
-  color: #bb6af0;
-  box-shadow: inset 0 0 0 1px rgba(154, 43, 226, 0.35);
+  background: rgba(25, 245, 138, 0.18);
+  color: #5bffa8;
+  box-shadow: inset 0 0 0 1px rgba(25, 245, 138, 0.35);
 }
 
 body.mode-couple .news-tab-btn.active-news-tab {
@@ -501,8 +501,8 @@ input[type="number"] {
 }
 
 .dp-trigger-open {
-  border-color: #9a2be2 !important;
-  box-shadow: 0 0 0 2px rgba(154, 43, 226, 0.45);
+  border-color: #19f58a !important;
+  box-shadow: 0 0 0 2px rgba(25, 245, 138, 0.45);
 }
 
 body.mode-couple .dp-trigger-open {
@@ -535,8 +535,8 @@ body.mode-couple .dp-trigger-open {
 }
 
 .dp-day:not(.dp-day-selected):hover {
-  background: rgba(154, 43, 226, 0.15);
-  color: #bb6af0;
+  background: rgba(25, 245, 138, 0.15);
+  color: #5bffa8;
 }
 
 body.mode-couple .dp-day:not(.dp-day-selected):hover {
@@ -549,8 +549,8 @@ body.mode-couple .dp-day:not(.dp-day-selected):hover {
 }
 
 .dp-day-today {
-  box-shadow: inset 0 0 0 1.5px #9a2be2;
-  color: #bb6af0 !important;
+  box-shadow: inset 0 0 0 1.5px #19f58a;
+  color: #5bffa8 !important;
 }
 
 body.mode-couple .dp-day-today {
@@ -559,10 +559,10 @@ body.mode-couple .dp-day-today {
 }
 
 .dp-day-selected {
-  background: linear-gradient(135deg, #860ad3, #9a2be2);
+  background: linear-gradient(135deg, #00d66f, #19f58a);
   color: #fff !important;
   font-weight: 700;
-  box-shadow: 0 4px 12px -2px rgba(154, 43, 226, 0.5);
+  box-shadow: 0 4px 12px -2px rgba(25, 245, 138, 0.5);
 }
 
 body.mode-couple .dp-day-selected {
@@ -600,8 +600,8 @@ body.mode-couple .dp-day-selected {
 }
 
 .dd-option:hover {
-  background: rgba(154, 43, 226, 0.15);
-  color: #bb6af0;
+  background: rgba(25, 245, 138, 0.15);
+  color: #5bffa8;
 }
 
 body.mode-couple .dd-option:hover {
@@ -610,7 +610,7 @@ body.mode-couple .dd-option:hover {
 }
 
 .dd-option-selected {
-  background: linear-gradient(135deg, #860ad3, #9a2be2) !important;
+  background: linear-gradient(135deg, #00d66f, #19f58a) !important;
   color: #fff !important;
   font-weight: 600;
 }
@@ -624,9 +624,9 @@ body.mode-couple .dd-option-selected {
   color: #94a3b8;
 }
 .theme-opt-btn[aria-pressed="true"] {
-  background: rgba(154, 43, 226, 0.18);
-  color: #bb6af0;
-  box-shadow: inset 0 0 0 1px rgba(154, 43, 226, 0.35);
+  background: rgba(25, 245, 138, 0.18);
+  color: #5bffa8;
+  box-shadow: inset 0 0 0 1px rgba(25, 245, 138, 0.35);
 }
 html.theme-light .theme-opt-btn {
   color: #64748b;
@@ -642,7 +642,7 @@ button:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible,
 .date-trigger:focus-visible {
-  outline: 2px solid #bb6af0;
+  outline: 2px solid #5bffa8;
   outline-offset: 2px;
 }
 
@@ -654,7 +654,7 @@ a:focus-visible,
   transform: translateY(-200%);
   padding: 0.6rem 1rem;
   border-radius: 0.75rem;
-  background: #860ad3;
+  background: #00d66f;
   color: #fff;
   font-size: 0.875rem;
   font-weight: 600;
@@ -685,7 +685,7 @@ html.theme-light {
 html.theme-light body {
   background-color: #f1f5f9;
   color: #0f172a;
-  background-image: radial-gradient(at 0% 0%, rgba(154, 43, 226, 0.08) 0px, transparent 50%), radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.06) 0px, transparent 50%);
+  background-image: radial-gradient(at 0% 0%, rgba(25, 245, 138, 0.08) 0px, transparent 50%), radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.06) 0px, transparent 50%);
 }
 html.theme-light .glow-orb {
   opacity: 0.25;
@@ -806,7 +806,7 @@ html.theme-light .text-amber-400 {
 }
 html.theme-light .text-blue-400,
 html.theme-light .hover\:text-blue-300:hover {
-  color: #860ad3;
+  color: #00d66f;
 }
 html.theme-light .text-purple-400,
 html.theme-light .text-purple-300 {
@@ -923,9 +923,9 @@ html.theme-light .notif-panel {
   color: #94a3b8;
 }
 .bill-filter-btn[aria-pressed="true"] {
-  background: rgba(154, 43, 226, 0.18);
-  color: #bb6af0;
-  box-shadow: inset 0 0 0 1px rgba(154, 43, 226, 0.35);
+  background: rgba(25, 245, 138, 0.18);
+  color: #5bffa8;
+  box-shadow: inset 0 0 0 1px rgba(25, 245, 138, 0.35);
 }
 html.theme-light .bill-filter-btn {
   color: #64748b;
@@ -943,7 +943,7 @@ html.privacy-on canvas {
   pointer-events: none;
 }
 html.privacy-on #privacy-toggle {
-  color: #bb6af0;
+  color: #5bffa8;
 }
 
 /* =========================================================
@@ -1115,4 +1115,55 @@ button.bg-blue-600:hover {
 .goal-progress-bar,
 [id$="-bar"] {
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* =========================================================
+   Verde neon (modo Pessoal): superfícies verdes pedem texto escuro.
+   No Casal (rosa) o texto continua branco.
+   ========================================================= */
+body:not(.mode-couple) button.bg-blue-600,
+body:not(.mode-couple) button[class*="from-blue-"],
+body:not(.mode-couple) .mode-btn[data-mode="personal"].active-mode,
+body:not(.mode-couple) #sidebar-logo-badge,
+body:not(.mode-couple) #profile-avatar {
+  color: #03150a;
+}
+body:not(.mode-couple) #sidebar-logo-badge i,
+body:not(.mode-couple) button.bg-blue-600 i,
+body:not(.mode-couple) button[class*="from-blue-"] i {
+  color: inherit;
+}
+body:not(.mode-couple) button.bg-blue-600:hover,
+body:not(.mode-couple) button[class*="from-blue-"]:hover {
+  box-shadow: 0 8px 26px -8px rgb(25 245 138 / 0.55);
+}
+
+/* Tema claro: o verde neon não lê sobre branco, usa um verde mais fechado. */
+html.theme-light .text-blue-300,
+html.theme-light .text-blue-400,
+html.theme-light .text-blue-500 {
+  color: #00a855;
+}
+html.theme-light .hover\:text-blue-300:hover {
+  color: #00763c;
+}
+
+/* Modo Casal: botões, textos de destaque e brilho de fundo também em rosa. */
+body.mode-couple button.bg-blue-600,
+body.mode-couple button[class*="from-blue-"] {
+  background-image: linear-gradient(to right, #db2777, #ec4899);
+  background-color: #db2777;
+  color: #fff;
+}
+body.mode-couple button.bg-blue-600:hover,
+body.mode-couple button[class*="from-blue-"]:hover {
+  box-shadow: 0 8px 26px -8px rgb(236 72 153 / 0.55);
+}
+body.mode-couple .text-blue-300,
+body.mode-couple .text-blue-400,
+body.mode-couple .text-blue-500 {
+  color: #f472b6;
+}
+body.mode-couple .glow-orb-blue {
+  opacity: 0 !important;
 }

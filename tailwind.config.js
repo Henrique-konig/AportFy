@@ -13,9 +13,9 @@ export default {
         sans: ["Inter", "system-ui", "sans-serif"],
       },
       colors: {
-        // Paleta preta com detalhes vibrantes (inspirada no roxo do Nubank).
+        // Paleta preta com detalhes vibrantes (verde neon no modo Pessoal, rosa no Casal).
         slate: { 50: "#fafafa", 100: "#f4f4f5", 200: "#e4e4e7", 300: "#d4d4d8", 400: "#a1a1aa", 500: "#71717a", 600: "#52525b", 700: "#3a3a42", 800: "#1f1f26", 900: "#0e0e12", 950: "#000000" },
-        blue: { 50: "#faf5ff", 100: "#f3e8ff", 200: "#e9d5ff", 300: "#d8a6f7", 400: "#bb6af0", 500: "#9a2be2", 600: "#860ad3", 700: "#6d06ab", 800: "#560587", 900: "#3b035c", 950: "#25023a" },
+        blue: { 50: "#ecfff5", 100: "#d1ffe6", 200: "#a3ffcf", 300: "#69ffb0", 400: "#2dff8f", 500: "#19f58a", 600: "#00d66f", 700: "#00a855", 800: "#00763c", 900: "#00532b", 950: "#003119" },
         purple: { 300: "#f9a8d4", 400: "#f472b6", 500: "#ec4899", 600: "#db2777", 700: "#be185d" },
         couple: {
           50: "#fdf2f8",

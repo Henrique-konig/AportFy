@@ -34,13 +34,13 @@ const chartOptions = () => ({
   },
   scales: { ...baseLineOptions.scales, y: { ...baseLineOptions.scales.y, grid: { color: "rgba(51,65,85,0.25)", drawTicks: false }, border: { display: false }, ticks: { ...baseLineOptions.scales.y.ticks, callback: compact, maxTicksLimit: 5 } } },
 });
-/** Degradê azul que some em direção ao eixo. */
+/** Degradê que some em direção ao eixo. */
 const fadeFill = ({ chart: c }) => {
   const { ctx, chartArea } = c;
-  if (!chartArea) return hexToRgba("#9a2be2", 0.15);
+  if (!chartArea) return hexToRgba("#19f58a", 0.15);
   const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-  g.addColorStop(0, hexToRgba("#9a2be2", 0.35));
-  g.addColorStop(1, hexToRgba("#9a2be2", 0));
+  g.addColorStop(0, hexToRgba("#19f58a", 0.35));
+  g.addColorStop(1, hexToRgba("#19f58a", 0));
   return g;
 };
 let accounts = []; // [{name, balance}] salvas em settings/portfolio
@@ -115,7 +115,7 @@ export function renderNetWorth() {
   nw.total.textContent = formatCurrency(cash + portfolio);
   nw.cash.textContent = accounts.length ? formatCurrency(cash) : "Adicionar";
   nw.edit.title = accounts.map((a) => `${a.name}: ${formatCurrency(a.balance)}`).join("\n") || "Informe seus saldos (Nubank, PicPay…)";
-  nw.chartTitle.textContent = "Roxa: totais que o app guarda todo mês (começam agora). Tracejada: estimativa dos meses anteriores, com a carteira a custo + suas contas de hoje.";
+  nw.chartTitle.textContent = "Verde: totais que o app guarda todo mês (começam agora). Tracejada: estimativa dos meses anteriores, com a carteira a custo + suas contas de hoje.";
   nw.portfolio.textContent = formatCurrency(portfolio);
   nw.result.textContent = formatCurrency(profit);
   nw.result.classList.toggle("text-emerald-400", profit > 0);
@@ -132,7 +132,7 @@ export function renderNetWorth() {
     labels: series.map((p) => p.label),
     datasets: [
       { label: "Estimativa", data: series.map((p, i) => (i === last ? total : p.invested + cash)), borderColor: "#64748b", borderDash: [5, 5], borderWidth: 2, backgroundColor: fadeFill, fill: "origin", tension: 0.4, pointRadius: 0, pointHoverRadius: 4 },
-      { label: "Patrimônio", data: series.map((p, i) => (i === last ? total : history[p.key] ?? null)), spanGaps: true, borderColor: "#bb6af0", borderWidth: 3, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: "#bb6af0", pointBorderColor: "#0f172a", pointBorderWidth: 2 },
+      { label: "Patrimônio", data: series.map((p, i) => (i === last ? total : history[p.key] ?? null)), spanGaps: true, borderColor: "#5bffa8", borderWidth: 3, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: "#5bffa8", pointBorderColor: "#0f172a", pointBorderWidth: 2 },
     ],
   };
   saveSnapshot(series[last].key, total);

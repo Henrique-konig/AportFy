@@ -352,7 +352,7 @@ export const el = {
 export const TXN_PAGE_SIZE = 100;
 
 export const CATEGORY_COLORS = {
-  "Salário": "#9a2be2",
+  "Salário": "#19f58a",
   "Freelance": "#22d3ee",
   "Investimentos": "#34d399",
   "Alimentação": "#f97316",
@@ -365,7 +365,7 @@ export const CATEGORY_COLORS = {
 };
 
 export const INVESTMENT_CATEGORY_COLORS = {
-  "Ações": "#9a2be2",
+  "Ações": "#19f58a",
   "FIIs": "#f97316",
   "Renda Fixa": "#34d399",
   "Criptomoedas": "#eab308",
@@ -409,7 +409,7 @@ export const DELETE_META = {
 export const EXPENSE_CATEGORIES = ["Alimentação", "Transporte", "Moradia", "Lazer", "Saúde", "Educação", "Outros"];
 
 export const DIVIDEND_TYPE_COLORS = {
-  "Dividendo": "#9a2be2",
+  "Dividendo": "#19f58a",
   "JCP": "#ec4899",
   "Rendimento": "#f97316",
   "Outro": "#64748b",
@@ -467,7 +467,7 @@ export function formatDate(isoDate) {
 }
 
 export function getModeColor(mode = state.currentMode) {
-  return mode === "couple" ? "#ec4899" : "#9a2be2";
+  return mode === "couple" ? "#ec4899" : "#19f58a";
 }
 
 export function todayISO() {
