@@ -82,9 +82,12 @@ export function initUIBindings() {
 
   ui.onNavChange((view) => {
     ui.setActiveView(view);
-    if (view === "investments") refreshQuotes({ silent: true });
-    if (view === "investments" || view === "analysis") loadFundamentals().then(() => ui.portfolioNeedsEtfs() && loadEtfs());
-    if (view === "news") loadNewsView();
+    // Busca e redesenho pesados só depois da animação de entrada da tela (senão ela engasga).
+    setTimeout(() => {
+      if (view === "investments") refreshQuotes({ silent: true });
+      if (view === "investments" || view === "analysis") loadFundamentals().then(() => ui.portfolioNeedsEtfs() && loadEtfs());
+      if (view === "news") loadNewsView();
+    }, 400);
   });
   ui.onModeToggle((mode) => switchMode(mode));
 

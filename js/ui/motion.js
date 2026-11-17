@@ -15,7 +15,7 @@ export function bindMotion() {
   document.addEventListener(
     "pointermove",
     (e) => {
-      const card = e.pointerType === "mouse" && e.target.closest?.(".glass-card");
+      const card = e.pointerType === "mouse" && e.target.closest?.(".kpi-card");
       if (!card) return;
       if (!pending) requestAnimationFrame(() => {
         const { card, x, y } = pending;
@@ -34,12 +34,11 @@ export function bindMotion() {
     new Set(mutations.map((m) => (m.target.nodeType === 1 ? m.target : m.target.parentElement).closest(BUMP_TARGETS))).forEach((el) => {
       if (!el) return;
       el.classList.remove("value-bump");
-      void el.offsetWidth;
-      el.classList.add("value-bump");
+      requestAnimationFrame(() => el.classList.add("value-bump"));
     });
   });
   document.querySelectorAll(BUMP_TARGETS).forEach((el) => bump.observe(el, { childList: true, characterData: true, subtree: true }));
 
   // Gráficos: entrada mais longa e com desaceleração suave.
-  if (window.Chart) Object.assign(window.Chart.defaults.animation, { duration: 900, easing: "easeOutQuart" });
+  if (window.Chart) Object.assign(window.Chart.defaults.animation, { duration: 650, easing: "easeOutQuart" });
 }
