@@ -1116,13 +1116,3 @@ button.bg-blue-600:hover {
 [id$="-bar"] {
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
-/* Fundo: luzes ambiente se movem devagar (só no computador, em camada própria). */
-@keyframes orbDrift {
-  to { transform: translate3d(80px, 60px, 0); }
-}
-@media (min-width: 1024px) {
-  .glow-orb { will-change: transform; }
-  .glow-orb-blue { animation: orbDrift 30s ease-in-out infinite alternate; }
-  .glow-orb-purple { animation: orbDrift 34s ease-in-out infinite alternate-reverse; }
-}
