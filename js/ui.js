@@ -38,4 +38,5 @@ export * from "./ui/watchlist.js";
 export * from "./ui/share-card.js";
 export * from "./ui/networth.js";
 export * from "./ui/split.js";
+export * from "./ui/motion.js";
 export * from "./ui/compare.js";

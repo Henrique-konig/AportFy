@@ -1015,3 +1015,129 @@ html.privacy-on #privacy-toggle {
     transform: none !important;
   }
 }
+
+/* =========================================================
+   Movimento: brilho que segue o mouse, hovers e entradas
+   (tudo some com "reduzir movimento" do sistema, regra acima)
+   ========================================================= */
+@property --spot {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+body {
+  --spot-rgb: 96 165 250;
+}
+body.mode-couple {
+  --spot-rgb: 192 132 252;
+}
+
+/* Cartões: luz suave na posição do mouse (motion.js passa --mx/--my) e borda acesa no hover. */
+:root body .glass-card {
+  background-image: radial-gradient(480px circle at var(--mx, 50%) var(--my, -20%), rgb(var(--spot-rgb) / calc(var(--spot) * 0.1)), transparent 65%);
+  transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), --spot 0.45s ease;
+}
+:root body .glass-card:hover {
+  --spot: 1;
+  border-color: rgb(var(--spot-rgb) / 0.28);
+  box-shadow: 0 20px 45px -28px rgb(var(--spot-rgb) / 0.45);
+}
+
+/* Entrada das telas: cada bloco sobe em sequência ao trocar de aba. */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+}
+.view-section:not(.hidden) > *,
+.view-section:not(.hidden) .kpi-card {
+  animation: riseIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.view-section > :nth-child(2) { animation-delay: 0.06s; }
+.view-section > :nth-child(3) { animation-delay: 0.12s; }
+.view-section > :nth-child(4) { animation-delay: 0.18s; }
+.view-section > :nth-child(5) { animation-delay: 0.24s; }
+.view-section > :nth-child(n + 6) { animation-delay: 0.3s; }
+.kpi-card:nth-child(2) { animation-delay: 0.07s; }
+.kpi-card:nth-child(3) { animation-delay: 0.14s; }
+.kpi-card:nth-child(4) { animation-delay: 0.21s; }
+
+/* KPIs: o card sobe um pouco mais e o ícone gira com mola. */
+.kpi-card:hover {
+  transform: translateY(-4px);
+}
+.kpi-icon {
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Valor que muda dá um "pulo" (motion.js liga a classe). */
+@keyframes valueBump {
+  from { opacity: 0.35; transform: translateY(6px); filter: blur(3px); }
+}
+.value-bump {
+  animation: valueBump 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Menu lateral: ícone desliza; clique afunda. */
+.nav-item {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+.nav-item i {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nav-item:hover i {
+  transform: translateX(3px) scale(1.12);
+}
+.nav-item:active {
+  transform: scale(0.97);
+}
+
+/* Botões principais: sobem, brilham e ganham sombra colorida. */
+button[class*="bg-gradient-to-r"],
+button.bg-blue-600 {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, filter 0.3s ease, background-color 0.25s ease;
+}
+button[class*="bg-gradient-to-r"]:hover,
+button.bg-blue-600:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1) saturate(1.1);
+  box-shadow: 0 10px 24px -10px rgb(var(--spot-rgb) / 0.7);
+}
+
+/* Ações das linhas e linhas das tabelas. */
+.row-action-btn {
+  transition: color 0.2s ease, background-color 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.row-action-btn:hover {
+  transform: translateY(-1px) scale(1.12);
+}
+tbody tr {
+  transition: background-color 0.25s ease;
+}
+
+/* Notícias e metas sobem no hover. */
+.news-card:hover {
+  transform: translateY(-3px);
+}
+
+/* Modais: fundo escurece suave; o painel entra com mola. */
+[id$="-modal"]:not(.hidden) > [id$="-backdrop"] {
+  animation: fadeIn 0.3s ease both;
+}
+[id$="-modal"] .animate-scale-in {
+  animation: scaleIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Barras de progresso enchem com calma. */
+.goal-progress-bar,
+[id$="-bar"] {
+  transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Fundo: as luzes ambiente se movem devagar (só no computador). */
+@keyframes orbDrift {
+  to { transform: translate3d(90px, 70px, 0) scale(1.1); }
+}
+@media (min-width: 1024px) {
+  .glow-orb-blue { animation: orbDrift 24s ease-in-out infinite alternate; }
+  .glow-orb-purple { animation: orbDrift 28s ease-in-out infinite alternate-reverse; }
+}
