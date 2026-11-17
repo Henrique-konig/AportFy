@@ -34,7 +34,7 @@ export function applyTheme(preference = getThemePreference()) {
   const root = document.documentElement;
   root.classList.toggle("theme-light", theme === "light");
   root.classList.toggle("dark", theme !== "light");
-  themeEl.meta?.setAttribute("content", theme === "light" ? "#f1f5f9" : "#020617");
+  themeEl.meta?.setAttribute("content", theme === "light" ? "#f1f5f9" : "#000000");
 
   if (themeEl.toggle) {
     const next = theme === "light" ? "escuro" : "claro";

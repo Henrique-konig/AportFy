@@ -41,7 +41,7 @@ export let histKind = "all";
 export let histLimit = HIST_PAGE_SIZE;
 let lastScoped = [];
 export const HIST_KIND_META = {
-  buy: { label: "Compra", icon: "ph-shopping-cart-simple", color: "#3b82f6" },
+  buy: { label: "Compra", icon: "ph-shopping-cart-simple", color: "#9a2be2" },
   sell: { label: "Venda", icon: "ph-hand-coins", color: "#f59e0b" },
   dividend: { label: "Provento", icon: "ph-coins", color: "#34d399" },
 };

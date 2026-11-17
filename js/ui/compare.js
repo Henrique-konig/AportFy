@@ -17,7 +17,7 @@ const cEl = {
   status: document.getElementById("compare-status"),
 };
 
-const COLORS = ["#3b82f6", "#f97316", "#34d399", "#eab308"];
+const COLORS = ["#9a2be2", "#f97316", "#34d399", "#eab308"];
 // [chave, rótulo, formatador, melhor]: "high" = maior é melhor, "low" = menor é melhor, null = sem juízo de valor.
 const ROWS = [
   ["preco", "Cotação", FMT.money, null],
